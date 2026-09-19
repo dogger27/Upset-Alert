@@ -9,12 +9,27 @@
  * website learned this and says nothing; so does this.
  */
 
+/* TWO DIFFERENT SENTENCES, BECAUSE THEY ARE TWO DIFFERENT FACTS (owner,
+   2026-09-19). A draw on the original rule locks at a MOMENT, so it gets
+   "Locks in: 52 hrs" — a quantity that counts down. A match-by-match draw
+   locks at an EVENT nobody can time, so it gets "Lock at: End of R1" — a
+   place in the tournament, not a clock. The old wording ran the unit after
+   the number as a suffix ("52 hrs until lock"), which read as a caption on
+   the number rather than a statement about the draw.
+
+   A LABEL AND A VALUE, so the card can set the value loud and the label
+   quiet: the value is the part you can miss. */
+const mk = (label, value, urgent = false) =>
+  ({ label, value, text: `${label} ${value}`.trim(), urgent })
+
 export function lockLabel(t, now = Date.now()) {
   if (!t) return null
-  if (t.is_locked) return { value: 'Closed', suffix: '', text: 'Picks closed', urgent: false }
+  if (t.is_locked) return mk('Picks', 'closed')
   if (t.pick_lock_mode === 'r1_progressive') {
-    // No number, on purpose — see above. The suffix carries the whole meaning.
-    return { value: 'R1', suffix: 'closes as round 1 finishes', text: 'Closes as round 1 finishes', urgent: false }
+    /* NO CLOCK, on purpose — see the note at the top of the file. The first
+       round finishes when the tennis says so, and naming an hour for it would
+       promise something exact and wrong. */
+    return mk('Lock at:', 'End of R1')
   }
   if (!t.closing_time) return null
 
@@ -22,21 +37,20 @@ export function lockLabel(t, now = Date.now()) {
   const at = new Date(t.closing_time.endsWith('Z') ? t.closing_time : t.closing_time + 'Z')
   const ms = at.getTime() - now
   if (Number.isNaN(ms)) return null
-  if (ms <= 0) return { value: 'Closed', suffix: '', text: 'Picks closed', urgent: false }
+  if (ms <= 0) return mk('Picks', 'closed')
 
   const mins = Math.floor(ms / 60000)
   const hrs = Math.floor(mins / 60)
   const days = Math.floor(hrs / 24)
 
-  // Split so the card can set the NUMBER large and the unit small — the number
-  // is the thing you can miss, and it should be the loudest thing on the card.
-  const mk = (value, suffix, urgent = false) =>
-    ({ value, suffix, text: `${value} ${suffix}`.trim(), urgent })
-
-  if (days >= 2) return mk(String(days), 'days to lock')
-  if (hrs >= 24) return mk('1', 'day to lock')
-  if (hrs >= 1) return mk(`${hrs}h ${mins % 60}m`, 'to lock', hrs < 6)
-  return mk(`${mins}m`, 'to lock', true)
+  /* HOURS RIGHT OUT TO THREE DAYS, where this used to switch to days at one
+     (owner's own example was "52 hrs"). Two days out, "52 hrs" is both the
+     more precise reading and the more urgent one, which is what this line is
+     for; past that the number stops meaning anything and days take over. */
+  if (hrs >= 72) return mk('Locks in:', `${days} days`)
+  if (hrs >= 24) return mk('Locks in:', `${hrs} hrs`)
+  if (hrs >= 1) return mk('Locks in:', `${hrs}h ${mins % 60}m`, hrs < 6)
+  return mk('Locks in:', `${mins}m`, true)
 }
 
 

@@ -415,10 +415,15 @@ function OpenRow({ draws, status, now, label }) {
         {label ? <Text style={[s.footTour, { color: inks.faint }]}>{label}</Text> : null}
         {lock ? (
           <>
-            {/* URGENT STAYS CLAY. It is the brand's one warm note and it reads
+            {/* THE LABEL LEADS, THE VALUE STAYS LOUD (owner, 2026-09-19):
+                "Locks in: 52 hrs", "Lock at: End of R1". The words come first
+                because they say WHICH of the two kinds of deadline this draw
+                has — a clock or a place in the tournament — and the value
+                keeps the weight because it is the part you can miss.
+                URGENT STAYS CLAY. It is the brand's one warm note and it reads
                 on either card; the ramp is for the ink that is merely quiet. */}
+            <Text style={[T.tiny, { color: inks.faint }]}>{lock.label}</Text>
             <Text style={[T.score, { color: lock.urgent ? C.clay : inks.ink }]}>{lock.value}</Text>
-            <Text style={[T.tiny, { color: inks.faint }]}>{lock.suffix}</Text>
           </>
         ) : null}
       </View>
@@ -477,7 +482,9 @@ function OpenCard({ draws, status, now }) {
      differing is a reason to show both lines. */
   const rows = distinctBy(draws, d => {
     const lock = lockLabel(d, now)
-    return `${lock ? `${lock.value} ${lock.suffix}` : ''}|${pickChip(status?.[d.id])[1]}`
+    // `text` IS the whole sentence, so this key follows the wording rather
+    // than reassembling it from the pieces and going stale when they change.
+    return `${lock?.text || ''}|${pickChip(status?.[d.id])[1]}`
   })
   return (
         <TourCard
