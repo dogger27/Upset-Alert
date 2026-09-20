@@ -819,7 +819,16 @@ function LineTag({ first, alt, style, textStyle, children }) {
    It is also why a long tournament name cannot reach the round. The name is
    confined to its own cell, which ends where the round's begins; it shrinks
    inside it rather than growing across. Overlap is not something to avoid
-   here, it is unrepresentable. */
+   here, it is unrepresentable.
+
+   MEASURED, not assumed (2026-09-20). The owner asked whether a one- or
+   two-digit hour shifts it, which it did under the gap-centred version. Every
+   round label on the page now reports the same centre — x=187.5 on a 393pt
+   screen, which is the strip's own middle between 10 and 365 — across rows
+   clocked "8:00 p.m.", "10:00 p.m." and "12:00 a.m.", across cards headed
+   "Korea Open" and "Singapore Open", and across rows with no clock at all.
+   One distinct centre in every case, because nothing on either side can reach
+   the middle cell. */
 function LineTags({ first, alt, when, round, tournament }) {
   if (!when && !round && !tournament) return null
   return (
