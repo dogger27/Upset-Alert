@@ -739,24 +739,20 @@ export default function ScheduleScreen() {
                     IS rather than the room the name took — as the cards'
                     titleSlot (u.fitSlot). Without it the stamp is pushed off
                     the right edge by a long name instead of squeezing it. */}
-                <View style={s.tournHeadSlot}>
-                  {/* ADMINS RENAME THE EVENT FROM HERE (owner, 2026-09-20),
-                      the way they rename a court: the pencil rides on the
-                      name, and the sheet takes both the name and the SHORT
-                      name for the places a name does not fit. */}
+                {/* ADMINS RENAME THE EVENT BY TAPPING ITS NAME (owner,
+                    2026-09-20). The name is the button and looks exactly as
+                    it did — no pencil, no second colour, no underline: an
+                    affordance drawn for the one reader in a thousand who can
+                    use it is furniture for everybody else. A reader who is
+                    not an admin gets a plain View, so there is nothing to
+                    press and nothing announced. */}
+                <HeadTap style={s.tournHeadSlot} onPress={isAdmin ? () => setRenamingEvent(eventNaming(list, title)) : undefined}
+                         label={isAdmin ? `Rename ${title}` : undefined}>
                   <FitText style={(dense ? TOURN_SMALL : TOURN).style} track={(dense ? TOURN_SMALL : TOURN).track} min={9}
-                           alt={shortNameOf(list)}
-                           after={isAdmin ? (
-                             <Pressable
-                               onPress={() => setRenamingEvent(eventNaming(list, title))}
-                               hitSlop={8} style={s.courtEdit} accessibilityRole="button"
-                               accessibilityLabel={`Rename ${title}`}>
-                               <Ionicons name="pencil" size={14} color={C.clayLight} />
-                             </Pressable>
-                           ) : null}>
+                           alt={shortNameOf(list)}>
                     {title.toUpperCase()}
                   </FitText>
-                </View>
+                </HeadTap>
                 <TournStamps stamps={stampsOf(list)} name={title} small={dense} />
               </View>
             ) : null}
@@ -771,25 +767,17 @@ export default function ScheduleScreen() {
                 that is drawn. */}
             {court ? (
               <View style={s.courtHead}>
-                {/* ADMINS RENAME A COURT FROM HERE (owner, 2026-09-17): the
-                    pencil opens the sheet; the name it sets is the court's
-                    everywhere the schedule is served. The sheet's own name is
-                    the key, carried on every row as court_key.
-
-                    IT RIDES ON THE NAME, not at the end of the row (owner,
-                    2026-09-20) — `after` puts it inside the fitting slot, so
-                    it follows "GRANDSTAND" instead of sitting 200pt away
-                    against the screen's edge. */}
-                <FitText style={(dense ? COURT_SMALL : COURT).style} track={(dense ? COURT_SMALL : COURT).track} min={9}
-                         after={isAdmin ? (
-                           <Pressable
-                             onPress={() => setRenaming({ tournament_id: list[0].tournament_id, court_key: list[0].court_key || court, current: court })}
-                             hitSlop={8} style={s.courtEdit} accessibilityRole="button" accessibilityLabel={`Rename ${court}`}>
-                             <Ionicons name="pencil" size={14} color={C.muted} />
-                           </Pressable>
-                         ) : null}>
-                  {court.toUpperCase()}
-                </FitText>
+                {/* ADMINS RENAME A COURT BY TAPPING IT (owner, 2026-09-17 for
+                    the sheet, 2026-09-20 for the tap): the name it sets is
+                    the court's everywhere the schedule is served, and the
+                    sheet's own name stays the key — carried on every row as
+                    court_key. */}
+                <HeadTap style={s.courtHeadSlot} onPress={isAdmin ? () => setRenaming({ tournament_id: list[0].tournament_id, court_key: list[0].court_key || court, current: court }) : undefined}
+                         label={isAdmin ? `Rename ${court}` : undefined}>
+                  <FitText style={(dense ? COURT_SMALL : COURT).style} track={(dense ? COURT_SMALL : COURT).track} min={9}>
+                    {court.toUpperCase()}
+                  </FitText>
+                </HeadTap>
               </View>
             ) : null}
             {density === 'mid'
@@ -940,6 +928,27 @@ function LineTag({ first, alt, style, textStyle, children }) {
    "Korea Open" and "Singapore Open", and across rows with no clock at all.
    One distinct centre in every case, because nothing on either side can reach
    the middle cell. */
+/* A HEADING THAT AN ADMIN CAN TAP, and that nobody else can.
+ *
+ * `onPress` undefined gives a plain View: no press, no button role, nothing
+ * announced to a screen reader — the heading is exactly what it was. With a
+ * handler it is a Pressable of the same shape, so the layout and the type are
+ * untouched either way. The hit slop is the only concession: a heading's line
+ * box is around 20pt tall and a tap wants 44 (theme.js TOUCH).
+ *
+ * The style must keep the fitting slot's flex, or FitText measures the room
+ * the TEXT took rather than the room there is — see cards.jsx u.fitSlot.
+ */
+function HeadTap({ style, onPress, label, children }) {
+  if (!onPress) return <View style={style}>{children}</View>
+  return (
+    <Pressable style={style} onPress={onPress} hitSlop={{ top: 10, bottom: 10, left: 4, right: 12 }}
+               accessibilityRole="button" accessibilityLabel={label}>
+      {children}
+    </Pressable>
+  )
+}
+
 /* THE EVENT'S TIER STAMP, hard right on the row that names the tournament
    (owner, 2026-09-20) — the same artwork, plate and sizing the dashboard's
    cards carry, so the two surfaces name a tournament the same way. `small`
@@ -1297,10 +1306,12 @@ const s = StyleSheet.create({
   // report the room the name MAY use, so a long name shrinks to fit beside
   // the stamp instead of pushing it off the edge.
   tournHeadSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
+  // The court's name fills its row the same way, so tapping anywhere along
+  // the line opens the sheet rather than only the glyphs themselves.
+  courtHeadSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
   tournHeadStamps: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   subHead: { marginBottom: -S.sm },                // flush to the card beneath; the line box's own descent is the air (owner, 2026-09-17)
   subHeadFirst: { marginTop: -(S.sm + 2) },        // 10pt from the card above, not 20
-  courtEdit: { paddingHorizontal: 4, paddingVertical: 2 },
   // The scroll body's own gap and growth, restated: the wrapper took its children.
   swipeBody: { flexGrow: 1, gap: S.md },
   arrowOff: { opacity: 0.3 },
