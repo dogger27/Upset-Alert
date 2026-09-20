@@ -48,6 +48,7 @@ import { groupPastDay } from '../../pastGroups'
 import { stampsFor } from '../../logos'
 import { longRound } from '../../rounds'
 import { CourtRenameSheet, TournamentRenameSheet } from '../../rename'
+import { MatchMenu, actionsFor } from '../../matchMenu'
 import { ScoreHistorySheet } from '../../scoreHistory'
 import { C, R, S, T } from '../../theme'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title, eyebrowType } from '../../ui'
@@ -135,6 +136,7 @@ export default function ScheduleScreen() {
   // The court being renamed by an admin: { tournament_id, court_key, current }, or null.
   const [renaming, setRenaming] = useState(null)
   const [renamingEvent, setRenamingEvent] = useState(null)
+  const [menuFor, setMenuFor] = useState(null)
 
   /* WHICH TOURNAMENTS THE TAB CHOSE (scheduleFilter). A schedule row always
      carries a tournament_id — unlike draw_id, which is null for qualifying and
@@ -287,6 +289,8 @@ export default function ScheduleScreen() {
   const openRenameEvent = useMemo(() => unlessSwiping(setRenamingEvent), [])
   const openH2H = useMemo(() => unlessSwiping(setH2H), [])
   const openPredictors = useMemo(() => unlessSwiping(setPredictors), [])
+  // A long press at the end of a swipe is still the swipe's (swipeGuard).
+  const openMenu = useMemo(() => unlessSwiping(setMenuFor), [])
   const day = useApi(`schedule:${date}`, () => getScheduleDay(date))
   /* Refetch the day whenever any tournament on it changes — the site's rule.
      A day can span two tournaments, and subscribing to only the first would
@@ -789,7 +793,7 @@ export default function ScheduleScreen() {
             {density === 'mid'
               ? (
                 <MiniRows list={list} tagsOf={e => miniTags(e, { past, tournament: !past && view !== 'court' && manyTournaments ? e.tournament_name : null, venueMode, venueTz: venueTzOf(e) })}>
-                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={past} tournament={!past && view !== 'court' && manyTournaments ? e.tournament_name : null} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} onH2H={openH2H} onPredictors={openPredictors} />)}
+                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={past} tournament={!past && view !== 'court' && manyTournaments ? e.tournament_name : null} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} onH2H={openH2H} onPredictors={openPredictors} onMenu={openMenu} />)}
                 </MiniRows>
               )
               : compact
@@ -807,6 +811,8 @@ export default function ScheduleScreen() {
       {champion && <ChampionFanfare key={champion} width={screenW} />}
       <CourtRenameSheet court={renaming} onClose={() => setRenaming(null)} />
       <TournamentRenameSheet event={renamingEvent} onClose={() => setRenamingEvent(null)} />
+      <MatchMenu target={menuFor} onClose={() => setMenuFor(null)}
+                 onH2H={setH2H} onPredictors={setPredictors} onHistory={setHist} />
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
           and women's draws on one day, so there is no single draw to pass. */}
@@ -1035,11 +1041,21 @@ function MiniRows({ list, tagsOf, children }) {
   )
 }
 
-function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueTz, onHistory, onH2H, onPredictors }) {
+function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueTz, onHistory, onH2H, onPredictors, onMenu }) {
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
-  const Wrap = openable ? Pressable : View
   const pair = onH2H ? h2hPairOf(e) : null
   const picks = onPredictors && e.match_id != null
+  /* HELD, NOT WORN (owner, 2026-09-20): what this match can open used to be
+     a 24pt column of buttons down the right of every row. The row is a thing
+     to read; the actions are a thing to ask for. matchMenu.jsx.
+
+     The gesture is armed only when there is something in the menu, so a row
+     with no head-to-head, no picks and nothing played does not answer a long
+     press with an empty sheet. */
+  const menu = onMenu && actionsFor({ pair, picks, openable, finished: e.winner_side != null }).length
+    ? () => onMenu({ e, pair, picks, openable, match: matchFromEntry(e) })
+    : null
+  const Wrap = openable || menu ? Pressable : View
   /* THE START TIME ON THE TOP BORDER, towards the left (owner, 2026-09-17),
      for an upcoming match; a past day is a record: no clock. THE TOURNAMENT
      on the same line, far right, when the page mixes tournaments (owner,
@@ -1049,28 +1065,15 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
   const tagged = Boolean(when || round || tournament)
   return (
     <Wrap style={[s.miniRow, !first && s.miniNext, alt && s.rowAlt]} onPress={openable ? () => onHistory(e) : undefined}
-          accessibilityRole={openable ? 'button' : undefined}
+          onLongPress={menu || undefined} delayLongPress={320}
+          accessibilityRole={openable || menu ? 'button' : undefined}
+          accessibilityHint={menu ? 'Hold for head to head and predictions' : undefined}
           accessibilityLabel={tagged ? [when, round, matchLine(e).names, tournament].filter(Boolean).join(' ') : undefined}>
       {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
       {/* The first row's tags are drawn by MiniRows, over the card's edge. */}
       {!first ? <LineTags alt={alt} when={when} round={round} tournament={tournament} /> : null}
       <View style={s.miniCard}>
         <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
-      </View>
-      {/* ONE COLUMN ON THE RIGHT, split in two (owner, 2026-09-18): H2H above,
-          the group below, the icon turned to lie the way the word does. The
-          column runs divider to divider with only its inside line; a half
-          with nothing to open stays empty. */}
-      <View style={[s.miniBar, s.miniBarRight, (pair || picks) && s.miniPill, (pair || picks) && s.miniPillRight]}>
-        <Pressable style={s.miniHalf} onPress={pair ? () => onH2H(pair) : undefined} hitSlop={4}
-                   disabled={!pair} accessibilityRole={pair ? 'button' : undefined} accessibilityLabel={pair ? 'Head to head' : undefined}>
-          {pair ? <Text style={s.miniBarText}>H2H</Text> : null}
-        </Pressable>
-        <Pressable style={[s.miniHalf, pair && picks && s.miniHalfBelow]} onPress={picks ? () => onPredictors(matchFromEntry(e)) : undefined} hitSlop={4}
-                   disabled={!picks} accessibilityRole={picks ? 'button' : undefined}
-                   accessibilityLabel={picks ? (e.winner_side != null ? 'Who called it' : 'Who’s still in it') : undefined}>
-          {picks ? <Ionicons name="people" size={16} color={CHIP.text} style={s.miniIconTurned} /> : null}
-        </Pressable>
       </View>
     </Wrap>
   )
@@ -1284,8 +1287,6 @@ const TOURN_SMALL = eyebrowType({ size: 18, color: C.clayLight })
 
 // The tour chips' own colours, for the bar.
 const TOUR_BAR = { ATP: '#2563eb', WTA: '#db2777' }
-// The bracket's chip inks (bracket.jsx): --green-500 line, --brand-text word.
-const CHIP = { line: '#40916c', text: '#5fbf8f' }
 
 const s = StyleSheet.create({
   /* FAR LESS AIR AROUND A COURT NAME (owner, 2026-09-17): the group's
@@ -1412,14 +1413,6 @@ const s = StyleSheet.create({
   /* TO THE CARD'S SIDE EDGES (owner, 2026-09-17): the tab's outer edge is
      the card's own, so its only line is the inside one; the dividers above
      and below are its ends. The tour bar rides over its outer 3pt. */
-  miniBar: { position: 'absolute', top: 0, bottom: 0, width: 24, zIndex: 1 },
-  miniBarRight: { right: 0 },
-  miniPill: { borderColor: CHIP.line, backgroundColor: C.card },
-  miniPillRight: { borderLeftWidth: 1 },
-  miniHalf: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  miniHalfBelow: { borderTopWidth: 1, borderTopColor: CHIP.line },
-  miniIconTurned: { transform: [{ rotate: '-90deg' }] },
-  miniBarText: { fontFamily: 'Archivo_700Bold', fontSize: 12, lineHeight: leading(16), letterSpacing: 0.25, color: CHIP.text, width: 40, textAlign: 'center', transform: [{ rotate: '-90deg' }] },
   // 16 tall, centred on the 2px line above: 8 above it, 8 below.
   /* THE STRIP THE THREE TAGS SHARE. Its ends are where the single left and
      right tags used to be anchored (10 and 28), so nothing moved; the round
