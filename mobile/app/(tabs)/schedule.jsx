@@ -789,12 +789,38 @@ function rowColumns(list, past, innerW) {
    half backgrounds - the row above's over the top half, this row's under the
    bottom - so the zebra stays honest on both sides. The first row's line is
    the card's own edge, which clips, so its tag sits inside. */
-function LineTag({ first, alt, right, children }) {
+function LineTag({ first, alt, style, textStyle, children }) {
   return (
-    <View style={[s.miniTag, right ? s.miniTagRight : s.miniTagLeft]} pointerEvents="none">
+    <View style={[s.miniTag, style]} pointerEvents="none">
       <View style={[s.miniTagHalf, { top: 0, backgroundColor: first ? C.bg : alt ? C.card : C.raised }]} />
       <View style={[s.miniTagHalf, { bottom: 0, backgroundColor: alt ? C.raised : C.card }]} />
-      <Text style={s.rowWhen} numberOfLines={1}>{children}</Text>
+      <Text style={[s.rowWhen, textStyle]} numberOfLines={1}>{children}</Text>
+    </View>
+  )
+}
+
+/* THE THREE TAGS ON ONE LINE, and the ROUND CENTRED IN WHATEVER GAP THE OTHER
+   TWO LEAVE (owner, 2026-09-20).
+
+   Laid out as a flex row rather than three absolutely-placed tags, which is
+   what makes "centred between them" exact and free: the middle cell takes the
+   space the clock and the tournament do not, and centres in it. Anchoring the
+   round at a fixed offset would have centred it between the tags' ANCHORS, so
+   a long tournament name or a venue clock would slide the real gap out from
+   under it — and could overlap it. Here overlap cannot happen: they are
+   siblings in a row.
+   
+   A missing tag gives its space up, so the round centres to the strip's own
+   edge when there is nothing on that side. */
+function LineTags({ first, alt, when, round, tournament }) {
+  if (!when && !round && !tournament) return null
+  return (
+    <View style={s.miniTagRow} pointerEvents="none">
+      {when ? <LineTag first={first} alt={alt}>{when}</LineTag> : null}
+      <View style={s.miniTagMid}>
+        {round ? <LineTag first={first} alt={alt} textStyle={s.miniTagRound}>{round}</LineTag> : null}
+      </View>
+      {tournament ? <LineTag first={first} alt={alt}>{tournament}</LineTag> : null}
     </View>
   )
 }
@@ -814,10 +840,18 @@ function h2hPairOf(e) {
    aiming. The bars keep their width on every row so the cells line up; a
    row with nothing to open there (doubles has no H2H, a match with no
    bracket match has no picks) leaves the bar empty. */
-/* What a cell's two tags say: the clock for an upcoming match (a past day is
-   a record: none), the tournament when the page mixes them. */
+/* What a cell's tags say: the clock for an upcoming match (a past day is a
+   record: none), the ROUND, and the tournament when the page mixes them.
+   
+   The round only on a day still to come (owner, 2026-09-20). A past day is
+   grouped BY round already — the heading above the cards says it, and saying
+   it twice on every card would be noise. */
 function miniTags(e, { past, tournament, venueMode, venueTz }) {
-  return { when: past || hasStarted(e) ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode), tournament }
+  return {
+    when: past || hasStarted(e) ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode),
+    round: past ? '' : matchLine(e).round,
+    tournament,
+  }
 }
 
 /* THE FIRST ROW'S TAGS SIT ON THE CARD'S OWN EDGE (owner, 2026-09-17: "the top
@@ -826,11 +860,10 @@ function miniTags(e, { past, tournament, venueMode, venueTz }) {
    wrapper draws the first row's tags over the card's edge from outside, and
    the first row keeps the same padding as every other. */
 function MiniRows({ list, tagsOf, children }) {
-  const tags = list.length ? tagsOf(list[0]) : { when: '', tournament: null }
+  const tags = list.length ? tagsOf(list[0]) : { when: '', round: '', tournament: null }
   return (
     <View style={s.miniWrap}>
-      {tags.when ? <LineTag first>{tags.when}</LineTag> : null}
-      {tags.tournament ? <LineTag first right>{tags.tournament}</LineTag> : null}
+      <LineTags first when={tags.when} round={tags.round} tournament={tags.tournament} />
       <View style={[s.rows, s.rowsInWrap]}>{children}</View>
     </View>
   )
@@ -846,16 +879,15 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
      on the same line, far right, when the page mixes tournaments (owner,
      2026-09-17) - the past day groups by tournament instead, the court view
      heads each tournament's courts. */
-  const { when } = miniTags(e, { past, tournament, venueMode, venueTz })
-  const tagged = Boolean(when || tournament)
+  const { when, round } = miniTags(e, { past, tournament, venueMode, venueTz })
+  const tagged = Boolean(when || round || tournament)
   return (
     <Wrap style={[s.miniRow, !first && s.miniNext, alt && s.rowAlt]} onPress={openable ? () => onHistory(e) : undefined}
           accessibilityRole={openable ? 'button' : undefined}
-          accessibilityLabel={tagged ? [when, matchLine(e).names, tournament].filter(Boolean).join(' ') : undefined}>
+          accessibilityLabel={tagged ? [when, round, matchLine(e).names, tournament].filter(Boolean).join(' ') : undefined}>
       {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
       {/* The first row's tags are drawn by MiniRows, over the card's edge. */}
-      {!first && when ? <LineTag alt={alt}>{when}</LineTag> : null}
-      {!first && tournament ? <LineTag alt={alt} right>{tournament}</LineTag> : null}
+      {!first ? <LineTags alt={alt} when={when} round={round} tournament={tournament} /> : null}
       <View style={s.miniCard}>
         <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
       </View>
@@ -1156,9 +1188,20 @@ const s = StyleSheet.create({
   miniIconTurned: { transform: [{ rotate: '-90deg' }] },
   miniBarText: { fontFamily: 'Archivo_700Bold', fontSize: 12, lineHeight: leading(16), letterSpacing: 0.25, color: CHIP.text, width: 40, textAlign: 'center', transform: [{ rotate: '-90deg' }] },
   // 16 tall, centred on the 2px line above: 8 above it, 8 below.
-  miniTag: { position: 'absolute', top: -9, height: 16, paddingHorizontal: 4, justifyContent: 'center', zIndex: 1, maxWidth: '55%' },
-  miniTagLeft: { left: 10 },
-  miniTagRight: { right: 28 },
+  /* THE STRIP THE THREE TAGS SHARE. Its ends are where the single left and
+     right tags used to be anchored (10 and 28), so nothing moved; the round
+     centres in what they leave. */
+  miniTagRow: {
+    position: 'absolute', top: -9, left: 10, right: 28,
+    flexDirection: 'row', alignItems: 'center', zIndex: 1,
+  },
+  miniTagMid: { flex: 1, alignItems: 'center' },
+  // Shrinks rather than pushing its neighbours: a long tournament name gives
+  // way before it can crowd the round out of the middle.
+  miniTag: { height: 16, paddingHorizontal: 4, justifyContent: 'center', flexShrink: 1, maxWidth: '55%' },
+  // The round is the same size as the clock and a step quieter — it labels
+  // the match rather than telling the reader when to be there.
+  miniTagRound: { fontFamily: 'Archivo_700Bold', color: C.faint },
   miniTagHalf: { position: 'absolute', left: 0, right: 0, height: 8 },
   // A clear rule between matches (owner, 2026-09-17): two lines of box score
   // per match need a firmer division than the list's hairline.
