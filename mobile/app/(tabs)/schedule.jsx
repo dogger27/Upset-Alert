@@ -1324,7 +1324,7 @@ const s = StyleSheet.create({
      above it was not enough to read as a new section. Only where a name is
      actually drawn — a second court of the same event carries no title, so
      its group stays tight against the first. */
-  tournHead: { marginTop: S.md, marginBottom: -(S.sm - 2) },
+  tournHead: { marginTop: S.sm, marginBottom: -(S.sm - 2) },
   /* THE NAME SITS DOWN ON ITS SECOND LINE (owner, 2026-09-20) — the round on
      a past day, the court on today's, whichever follows it. That line is the
      name's second line, not a label of its own, and 4.5pt of box gap reads
@@ -1332,11 +1332,16 @@ const s = StyleSheet.create({
      its glyphs (feedback_ios_lineheight_sinks_caps), so the small eyebrow's
      6pt of leading all landed between the two.
 
-     Ten points come OUT of the gap below and go INTO the space above, so the
-     name moves down and the cards under it do not move at all. Measured on
-     one heading before and after: 13pt of white between the two lines' ink
-     became 3pt, which is the leading of a single block rather than a gap
-     between two.
+     Ten points come out of the gap below: measured on one heading, 13pt of
+     white between the two lines' ink became 3pt, which is the leading of a
+     single block rather than a gap between two.
+
+     The margin ABOVE is the section break, and it is deliberately modest
+     (owner, 2026-09-20: reduce it, first name included). 8pt here plus the
+     group's own 8 and the column's 12 comes to 30.5 between one tournament
+     and the next — half again the 20 that separates two groups of the SAME
+     event, which is what makes a new name read as a new section without
+     leaving a hole.
 
      The fixed points are safe under Dynamic Type: both line boxes grow with
      the text while these do not, so the gap can only open up from here,
@@ -1346,7 +1351,7 @@ const s = StyleSheet.create({
      Only where a round follows: the court view's heading is already tight
      against the court name, and pulling this one further would run the two
      together. */
-  tournHeadTight: { marginTop: S.md + 10, marginBottom: -(S.sm - 2) - 10 },
+  tournHeadTight: { marginTop: S.sm, marginBottom: -(S.sm - 2) - 10 },
   // The name and the event's stamp share the line, the stamp hard right.
   tournHeadRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   // As the cards' titleSlot (u.fitSlot): the flex is what makes onLayout
