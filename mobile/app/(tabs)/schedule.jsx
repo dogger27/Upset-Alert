@@ -29,7 +29,7 @@ import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } fro
 import { showToast } from '../../toast'
 import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
-import { byTimeOfDay, footTime, isLive, isSuspended, hasStarted, matchFromEntry, rowClock, rowWhen, sideFlags, startedFirst, whenLabel } from '../../schedule'
+import { PHASES, byTimeOfDay, effectivePhase, matchPhase, phaseCounts, footTime, isLive, isSuspended, hasStarted, matchFromEntry, rowClock, rowWhen, sideFlags, startedFirst, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
 import { FitText, FlagSlot, TourBadge } from '../../cards'
 import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
@@ -106,7 +106,12 @@ export default function ScheduleScreen() {
      on and off under the reader (owner, 2026-09-13). A filter the reader did
      not set should not appear, and one they did set should not be undone by
      turning a page. */
-  const [showDone, setShowDone] = useState(true)
+  /* WHICH OF THE DAY'S THREE the reader is looking at — null until they pick
+     one, and then it follows them (owner, 2026-09-20). This replaces a
+     Completed toggle that answered a narrower question: the day has finished
+     matches, matches on court and matches to come, and one switch across the
+     page says which of the three rather than hiding one of them. */
+  const [phase, setPhase] = useState(null)
   const [showDoubles, setShowDoubles] = useState(false)
   const [tourSel, setTourSel] = useState(null)
   /* Venue clock or the reader's own — an ACCOUNT preference (users.schedule_tz)
@@ -120,7 +125,7 @@ export default function ScheduleScreen() {
   const [h2h, setH2H] = useState(null)
   const [hist, setHist] = useState(null)
   const [predictors, setPredictors] = useState(null)
-  const [view, setView] = useState('time')
+  const [viewChoice, setViewChoice] = useState('time')
   // The compact list: one match, one row (owner, 2026-09-17). Session-only, like the switches above.
   const [density, setDensity] = useState('cards')   // 'cards' | 'mid' | 'list' — the button cycles
   const compact = density === 'list'
@@ -226,10 +231,14 @@ export default function ScheduleScreen() {
   const date = (pinned && available.includes(pinned))
     ? pinned
     : landingDay(available, dates.data?.open_counts || {}, asked)
-  /* A DAY BEFORE TODAY is a record: every match on it is over, so Completed
-     is always on and its switch is not offered (owner, 2026-09-17). */
+  /* A DAY BEFORE TODAY IS A RECORD, and a record has one shape. Every match
+     on it is over, so there is nothing to filter by phase — and the court view
+     is not offered either (owner, 2026-09-20): a finished day is read as a
+     chronology of what happened, not as a map of which court it happened on.
+     So the Time/Court switch is gone on a past day and the view is Time,
+     whatever the reader last chose on a live one. */
   const past = date < today()
-  const doneOn = past || showDone
+  const view = past ? 'time' : viewChoice
   /* SWIPE ANYWHERE TO CHANGE THE DAY. A sideways drag on the page — the
      cards, the empty space, the header — steps one day: left for the next,
      right for the one before, and the strip slides its chip to the centre
@@ -296,11 +305,13 @@ export default function ScheduleScreen() {
       if (!e.tour) continue
       if (!rowInTournaments(e, eventFilter)) continue
       if (e.discipline !== 'singles' && !showDoubles) continue
-      if (!doneOn && (e.status === 'completed' || e.status === 'postponed')) continue
+      // The PHASE switch is deliberately not consulted: looking at the live
+      // matches must not make a tour's chip vanish, or switching back leaves
+      // the reader with a selection and no chip to undo it.
       seen.add(e.tour)
     }
     return [...seen].sort()
-  }, [all, eventFilter, showDoubles, doneOn])
+  }, [all, eventFilter, showDoubles])
   /* ONE TOUR NEEDS NO CHIPS, and where there are none the filter must not
      apply either: a selection made on a two-tour day would otherwise empty a
      one-tour day with no chip on screen to undo it. */
@@ -318,12 +329,12 @@ export default function ScheduleScreen() {
      reads as broken.
 
      `showDoubles` is deliberately NOT part of this — a switch cannot be the
-     test of whether to show itself. */
+     test of whether to show itself — and nor is the PHASE, for the same
+     reason the tour chips ignore it: a day whose doubles are all finished
+     still has doubles, and the switch has to be there to say so. */
   const hasDoubles = useMemo(() => all.some(e =>
-    e.discipline !== 'singles'
-    && rowInTournaments(e, eventFilter)
-    && (doneOn || (e.status !== 'completed' && e.status !== 'postponed'))
-  ), [all, eventFilter, doneOn])
+    e.discipline !== 'singles' && rowInTournaments(e, eventFilter)
+  ), [all, eventFilter])
   /* SEEDED ONCE PER DAY, NOT PER FETCH. This ran on `day.data`, whose identity
      changes on every poll — and the live subscription refetches this screen
      about every ten seconds — so switching WTA on held for one cycle and then
@@ -357,13 +368,13 @@ export default function ScheduleScreen() {
      alone, so the time view — the default — ignored every chip. Kept apart
      from the grouping so the empty state can tell "nothing published" from
      "the switches hid everything". */
-  const visible = useMemo(() => {
+  /* EVERY RULE BUT THE PHASE. The phase switch counts its segments over this,
+     so the numbers in its brackets stay put as the reader moves between them —
+     counted over the filtered set they would each shrink to what that segment
+     already shows. */
+  const beforePhase = useMemo(() => {
     return all.filter(e => {
       if (view === 'time' && e.discipline !== 'singles' && !showDoubles) return false
-      // "Completed" off means no longer upcoming on this day — the site's
-      // rule: a match postponed off today's sheet leaves with the finished ones,
-      // so what remains is on court now or still waiting to get there.
-      if (!doneOn && (e.status === 'completed' || e.status === 'postponed')) return false
       if (view === 'time' && tourChips && tourSel && e.tour && !tourSel.has(e.tour)) return false
       // THE TOURNAMENTS THE TAB ASKED ABOUT. Applied in BOTH views, unlike
       // the tour chips: those are a control on this screen and the court view
@@ -372,7 +383,24 @@ export default function ScheduleScreen() {
       if (!rowInTournaments(e, eventFilter)) return false
       return true
     })
-  }, [all, view, showDoubles, tourSel, eventFilter, tourChips, doneOn])
+  }, [all, view, showDoubles, tourSel, eventFilter, tourChips])
+
+  /* THE DAY'S THREE, AND WHICH ONE IS SHOWING. Offered only on a day that is
+     still happening, and only in the time view — the court view reproduces the
+     whole sheet by design, and a past day is all one phase. A segment with no
+     matches is not offered at all, so a quiet morning shows two and a finished
+     day shows none. */
+  const counts = useMemo(() => phaseCounts(beforePhase), [beforePhase])
+  const phaseTabs = useMemo(
+    () => (past || view !== 'time' ? [] : PHASES.filter(x => counts[x.key] > 0)),
+    [past, view, counts],
+  )
+  const shownPhase = phaseTabs.length ? effectivePhase(counts, phase) : null
+
+  const visible = useMemo(
+    () => (shownPhase ? beforePhase.filter(e => matchPhase(e) === shownPhase) : beforePhase),
+    [beforePhase, shownPhase],
+  )
 
   // More than one tournament on the page: the mid view names each match's (time view, today).
   const manyTournaments = useMemo(() => new Set(visible.map(e => e.tournament_id)).size > 1, [visible])
@@ -485,9 +513,13 @@ export default function ScheduleScreen() {
             for 13pt text, and on iOS the extra leading lands ABOVE the
             glyphs, so it both padded the strip and pushed the caps off its
             centre. The row centres the text instead. */}
+        {/* NOT ON A PAST DAY (owner, 2026-09-20): a finished day is read as a
+            chronology, and a switch whose other half nobody wants is a control
+            over nothing. */}
+        {!past && (
         <View style={s.tabs}>
           {['time', 'court'].map(v => (
-            <Pressable key={v} onPress={() => setView(v)}
+            <Pressable key={v} onPress={() => setViewChoice(v)}
                        style={[s.tab, view === v && s.tabOn]}
                        accessibilityRole="button" accessibilityState={{ selected: view === v }}>
               <Text style={[s.tabText, view === v && s.tabTextOn]}>
@@ -496,6 +528,7 @@ export default function ScheduleScreen() {
             </Pressable>
           ))}
         </View>
+        )}
 
         {/* THE TOURNAMENTS, ON THE PAGE. They were reachable only by pressing
             the Schedule tab a second time, which is a thing you have to be
@@ -554,12 +587,6 @@ export default function ScheduleScreen() {
               <Text style={[s.chipText, showDoubles && { color: '#fff' }]}>Doubles</Text>
             </Pressable>
           )}
-          {!past && (
-          <Pressable onPress={() => setShowDone(v => !v)} style={[s.chip, showDone && s.chipOn]}
-                     accessibilityRole="button" accessibilityState={{ selected: showDone }}>
-            <Text style={[s.chipText, showDone && { color: '#fff' }]}>Completed</Text>
-          </Pressable>
-          )}
           {/* THE LIST: one match, one row — time, round, the surnames with
               "vs" or "def.", the score. Far right, an icon, so it reads as a
               view switch rather than another filter. */}
@@ -573,6 +600,35 @@ export default function ScheduleScreen() {
             <Ionicons name={density === 'list' ? 'list' : density === 'mid' ? 'reorder-three' : 'reorder-four'} size={19} color={dense ? '#fff' : C.muted} />
           </Pressable>
         </View>
+
+        {/* ── WHAT IS DONE, WHAT IS ON, WHAT IS COMING ────────────────────
+            Directly above the list and all the way across it (owner,
+            2026-09-20), because it says what the list IS rather than trimming
+            it — which is the difference between this and the chips above.
+
+            Only segments with matches appear, each with its count, so a
+            morning before play shows "Upcoming (28)" alone and needs no
+            explaining. One segment left is no choice at all and draws
+            nothing. */}
+        {phaseTabs.length > 1 && (
+          <View style={s.phases}>
+            {phaseTabs.map(x => {
+              const on = x.key === shownPhase
+              return (
+                <Pressable key={x.key} onPress={() => setPhase(x.key)}
+                           style={[s.phase, on && s.phaseOn]}
+                           accessibilityRole="button"
+                           accessibilityState={{ selected: on }}
+                           accessibilityLabel={`${x.label}, ${counts[x.key]} ${counts[x.key] === 1 ? 'match' : 'matches'}`}>
+                  <Text style={[s.phaseText, on && s.phaseTextOn]} numberOfLines={1}
+                        adjustsFontSizeToFit minimumFontScale={0.75}>
+                    {x.label} <Text style={[s.phaseN, on && s.phaseNOn]}>({counts[x.key]})</Text>
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        )}
 
         {day.loading && !day.data ? <Loading /> : null}
         <ErrorNote error={day.error} onRetry={refetch} />
@@ -1176,6 +1232,27 @@ const s = StyleSheet.create({
     flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken,
     borderRadius: R.md, padding: 2,
   },
+  /* THE DAY'S THREE, across the whole list. The Time/Court control's anatomy
+     exactly — a sunken strip, every segment bordered so nothing moves as the
+     selection does, the chosen one lit on deep green — because it is the same
+     kind of control and a second visual language for it would only ask the
+     reader to learn one. It sits tighter to the list beneath it than the strip
+     above does: it belongs to the rows, not to the filters. */
+  phases: {
+    flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken,
+    borderRadius: R.md, padding: 2, marginTop: S.xs,
+  },
+  phase: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 5,
+    borderRadius: R.sm, borderWidth: 1, borderColor: 'transparent',
+  },
+  phaseOn: { backgroundColor: C.greenDeep, borderColor: C.greenLit },
+  phaseText: { fontFamily: 'Archivo_500Medium', fontSize: 13, color: C.muted },
+  phaseTextOn: { fontFamily: 'Archivo_700Bold', color: C.ink },
+  /* The count is the quieter half of the label: it qualifies the word rather
+     than competing with it. */
+  phaseN: { fontFamily: 'Archivo_400Regular', color: C.faint },
+  phaseNOn: { color: C.greenLit },
   /* Every half carries a border so the box does not change size when it
      moves; only the chosen one's shows. */
   tab: {

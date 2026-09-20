@@ -88,6 +88,51 @@ export function winnerSide(e) {
   return null
 }
 
+/* WHICH OF THE THREE A ROW IS IN (owner, 2026-09-20): the day's filter switch
+   offers Completed, Live and Upcoming, so every row has to land in exactly one
+   of them and none may fall through.
+
+   A POSTPONED match leaves with the finished ones — it is off this day's sheet
+   and nothing more will happen on it today, which is the same answer a reader
+   wants from "Completed" as a finished match. So does a carried one
+   ('to_be_completed'): its play on THIS day is over, and it reappears as a
+   fresh row on the day it resumes. The old Completed toggle hid postponed rows
+   with the finished ones for the same reason.
+
+   Suspended rows stay LIVE, because the server still calls them live and play
+   is expected to resume within the day (see isSuspended below). */
+export function matchPhase(e) {
+  const st = e?.status
+  if (st === 'live') return 'live'
+  if (st === 'completed' || st === 'postponed' || st === 'to_be_completed') return 'completed'
+  return 'upcoming'
+}
+
+/* The three in the order the switch shows them, which is the order the day
+   happens in: what is done, what is on now, what is still to come. */
+export const PHASES = [
+  { key: 'completed', label: 'Completed' },
+  { key: 'live', label: 'Live' },
+  { key: 'upcoming', label: 'Upcoming' },
+]
+
+/* {completed, live, upcoming} over whatever the other controls have left. */
+export function phaseCounts(entries) {
+  const out = { completed: 0, live: 0, upcoming: 0 }
+  for (const e of entries || []) out[matchPhase(e)] += 1
+  return out
+}
+
+/* WHICH SEGMENT IS SELECTED. The reader's own choice while it still has
+   matches in it, else what is happening: on court now, then what is coming,
+   then the record. A selected-but-empty segment would leave the reader looking
+   at an empty list holding a filter they cannot see the effect of — which is
+   what happens on its own as the last live match of the day finishes. */
+export function effectivePhase(counts, chosen) {
+  if (chosen && counts?.[chosen] > 0) return chosen
+  return ['live', 'upcoming', 'completed'].find(k => counts?.[k] > 0) || null
+}
+
 /* Live is the SERVER's word. A suspended match is still status 'live' (play
    stopped, score stands), so nothing is lost by trusting it — and a match
    postponed off the day, or carried to a later one, keeps a frozen point with

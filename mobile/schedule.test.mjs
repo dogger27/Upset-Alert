@@ -3,7 +3,10 @@
 // hold on any machine: the "device" is Los Angeles, the venue New York.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { byTimeOfDay, footTime, whenLabel, isLive, isSuspended, startedFirst, rowWhen, hasStarted } from './schedule.js'
+import {
+  byTimeOfDay, effectivePhase, footTime, hasStarted, isLive, isSuspended, matchPhase,
+  phaseCounts, rowWhen, startedFirst, whenLabel,
+} from './schedule.js'
 
 const LA = 'America/Los_Angeles', NY = 'America/New_York'
 const fixed = { status: 'scheduled', start_type: 'fixed', start_time_local: '11:00 AM',
@@ -136,4 +139,44 @@ test('hasStarted: live or over; a carried, postponed or waiting match has not', 
   assert.equal(hasStarted({ status: 'completed' }), true)
   for (const status of ['scheduled', 'to_be_completed', 'postponed']) assert.equal(hasStarted({ status }), false)
   assert.equal(hasStarted(null), false)
+})
+
+test('every row lands in exactly one of the three phases', () => {
+  assert.equal(matchPhase({ status: 'live' }), 'live')
+  assert.equal(matchPhase({ status: 'completed' }), 'completed')
+  // Off today's sheet, or carried to another day: nothing more happens on it
+  // today, which is what a reader means by Completed.
+  assert.equal(matchPhase({ status: 'postponed' }), 'completed')
+  assert.equal(matchPhase({ status: 'to_be_completed' }), 'completed')
+  assert.equal(matchPhase({ status: 'scheduled' }), 'upcoming')
+  assert.equal(matchPhase({ status: 'pending' }), 'upcoming')
+  // Nothing falls through — an unknown or absent status is still to come.
+  assert.equal(matchPhase({ status: 'something new' }), 'upcoming')
+  assert.equal(matchPhase({}), 'upcoming')
+  assert.equal(matchPhase(null), 'upcoming')
+})
+
+test('the counts are over what the other controls left', () => {
+  const c = phaseCounts([
+    { status: 'live' }, { status: 'live' },
+    { status: 'completed' }, { status: 'postponed' },
+    { status: 'scheduled' },
+  ])
+  assert.deepEqual(c, { completed: 2, live: 2, upcoming: 1 })
+  assert.deepEqual(phaseCounts([]), { completed: 0, live: 0, upcoming: 0 })
+  assert.deepEqual(phaseCounts(null), { completed: 0, live: 0, upcoming: 0 })
+})
+
+test('the selected segment follows the day when the reader has not chosen', () => {
+  const only = (k, n) => ({ completed: 0, live: 0, upcoming: 0, [k]: n })
+  // What is happening first, then what is coming, then the record.
+  assert.equal(effectivePhase({ completed: 3, live: 1, upcoming: 5 }, null), 'live')
+  assert.equal(effectivePhase({ completed: 3, live: 0, upcoming: 5 }, null), 'upcoming')
+  assert.equal(effectivePhase(only('completed', 9), null), 'completed')
+  assert.equal(effectivePhase({ completed: 0, live: 0, upcoming: 0 }, null), null)
+  // The reader's choice is kept while it holds matches…
+  assert.equal(effectivePhase({ completed: 3, live: 1, upcoming: 5 }, 'completed'), 'completed')
+  // …and abandoned when it empties, which happens by itself as the last live
+  // match of the day finishes.
+  assert.equal(effectivePhase({ completed: 3, live: 0, upcoming: 5 }, 'live'), 'upcoming')
 })
