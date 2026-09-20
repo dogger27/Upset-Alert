@@ -2177,6 +2177,89 @@ async def check_and_log(db, tournament, play_date, *,
     return violations
 
 
+async def relink_resolvable(db, tournament_id: int, play_date) -> list[str]:
+    """Fill the draw entry a row could not be matched to WHEN IT WAS INGESTED.
+
+    A schedule row points at a draw entry so the page can show a seed, an
+    inferred draw rank, a flag and an entry code. The match is made once, by
+    the ingest, against the draw as it stood — and the sheet routinely names
+    people the draw does not hold yet:
+
+      * A QUALIFIER, above all. The order of play prints the winners of
+        qualifying the evening they win; the main draw gains them when it is
+        next scraped. schedule.py says as much where it refuses to erase a
+        proved id: "a qualifier reaches draw_entries days after the sheet
+        first names them."
+      * A SLOT THE BRACKET LATER SETTLES, printed as "A or B" first.
+      * A SPELLING the draw acquires afterwards — Sofascore's second name for
+        a player the sheet prints its own way.
+
+    Nothing recomputed the match after any of those, because it was only ever
+    computed on the ingest path. So a row stayed unlinked unless that day's
+    sheet happened to be re-read later, which is luck: of the four qualifiers
+    into the Korea and Singapore main draws on 2026-09-21, one had her row
+    re-ingested after the draw caught up and wore her rank, and three did not
+    and showed no badge at all (owner, 2026-09-20).
+
+    NOR DID ANYTHING REPORT IT. An unlinked row is an expected state at
+    ingest, so it is not logged as a fault — and the self-heal watcher acts
+    on what the logs say, which means a silence nothing writes down heals
+    nothing. That is the gap this closes: the law now re-runs the resolver
+    over what is still unmatched, and fills what the draw can answer for.
+
+    A TEAM IS NEVER FILLED. Two people are not one entry, and `None` there
+    means "cannot resolve, ever" rather than "not yet".
+
+    Returns the names it linked, for the caller's log.
+    """
+    from app.models.schedule import ScheduleEntryPlayer
+    from app.models.tournament import Draw, DrawEntry
+    from app.services.schedule import (
+        _ascii_fold, _names_a_team, _norm, _resolve_players,
+    )
+
+    rows = (await db.execute(
+        select(ScheduleEntryPlayer)
+        .join(ScheduleEntry, ScheduleEntry.id == ScheduleEntryPlayer.schedule_entry_id)
+        .where(ScheduleEntry.tournament_id == tournament_id,
+               ScheduleEntry.play_date == play_date,
+               # MAIN DRAW ONLY. A qualifying row must not point at a main
+               # draw entry even when the person is in both: the badge it
+               # would then wear is their place in the MAIN field, and the
+               # number the sheet printed beside them in qualifying — their
+               # qualifying seed — is the true one for that match. We hold no
+               # qualifying draw to link to, which is the whole reason those
+               # rows resolve to nothing, and leaving them so is correct.
+               ScheduleEntry.stage == "main",
+               ScheduleEntryPlayer.draw_entry_id.is_(None)))).scalars().all()
+    todo = [r for r in rows if r.raw_name and not _names_a_team(r.raw_name)]
+    if not todo:
+        return []
+
+    # The same roster the ingest resolves against, in the same shape: both
+    # folds of both spellings per entry (see schedule.py, where it is built).
+    draw_rows = (await db.execute(
+        select(Draw).where(Draw.tournament_id == tournament_id))).scalars().all()
+    draws = []
+    for d in draw_rows:
+        ents = (await db.execute(
+            select(DrawEntry.id, DrawEntry.name, DrawEntry.sofa_name)
+            .where(DrawEntry.draw_id == d.id))).all()
+        draws.append({'draw': d, 'entries': [
+            (e[0], set(_norm(nm or '').split()), set(_ascii_fold(nm or '').split()))
+            for e in ents for nm in dict.fromkeys((e[1], e[2])) if nm]})
+    if not any(d['entries'] for d in draws):
+        return []
+
+    ids = await _resolve_players(db, draws, None, [r.raw_name for r in todo])
+    linked = []
+    for row, eid in zip(todo, ids):
+        if eid is not None:
+            row.draw_entry_id = eid
+            linked.append(row.raw_name)
+    return linked
+
+
 async def sweep(db) -> int:
     """The law applied to every tournament-day near now.
 
@@ -2198,6 +2281,22 @@ async def sweep(db) -> int:
         t = await db.get(Tournament, tid)
         if t is None:
             continue
+        # FIRST, FILL WHAT THE DRAW CAN NOW ANSWER FOR. This is a fix, not a
+        # check: the resolver is deterministic and the answer is already in
+        # draw_entries, so routing it through a logged fault and the watcher
+        # would be ceremony. It runs before the checks so they see the healed
+        # state rather than reporting on rows about to be linked.
+        relinked = await relink_resolvable(db, tid, day)
+        if relinked:
+            from app.services.system_log import app_log
+            await db.commit()
+            await app_log(
+                "info", "schedule",
+                f"Linked {len(relinked)} schedule row(s) to draw entries the "
+                f"ingest could not match yet: {', '.join(relinked[:6])}"
+                + (" …" if len(relinked) > 6 else ""),
+                {"tournament_id": tid, "play_date": str(day), "names": relinked},
+            )
         total += len(await check_and_log(db, t, day))
     return total
 
