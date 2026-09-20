@@ -730,7 +730,7 @@ export default function ScheduleScreen() {
         )}
 
         {groups.map(({ key, court, title, sub, list }) => (
-          <View key={key} style={[s.group, court && s.courtGroup]}>
+          <View key={key} style={[s.group, court && !title && s.courtGroup]}>
             {/* Tight on the round beneath it: the heading's own line box plus
                 the group's gap read as a hole, so the gap is taken back. */}
             {title ? (
@@ -1303,6 +1303,12 @@ const s = StyleSheet.create({
      A court with no name above it — the second court of the same event —
      keeps courtHead's own spacing, which is the block it has always had. */
   courtHeadUnderName: { marginTop: 0 },
+  /* A COURT GROUP RIDES CLOSER TO THE ONE ABOVE IT — but only when it opens
+     with a court name. A group that opens with a TOURNAMENT name is the start
+     of a new event and takes the full gap, which is what makes the air above
+     a name identical on both pages: 44.5pt from the card above it, where this
+     pull had left today's at 32.5 (owner, 2026-09-20). The whole difference
+     was this one line: -4 here against the group's own +8. */
   courtGroup: { marginTop: -S.xs },
   /* AIR BEFORE A TOURNAMENT (owner, 2026-09-20): 17pt from the controls
      above it was not enough to read as a new section. Only where a name is
