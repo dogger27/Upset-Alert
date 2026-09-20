@@ -734,7 +734,7 @@ export default function ScheduleScreen() {
             {/* Tight on the round beneath it: the heading's own line box plus
                 the group's gap read as a hole, so the gap is taken back. */}
             {title ? (
-              <View style={[s.tournHeadRow, s.tournHead]}>
+              <View style={[s.tournHeadRow, s.tournHead, sub && s.tournHeadOverSub]}>
                 {/* The flex slot is what lets FitText measure the room there
                     IS rather than the room the name took — as the cards'
                     titleSlot (u.fitSlot). Without it the stamp is pushed off
@@ -1300,6 +1300,17 @@ const s = StyleSheet.create({
      actually drawn — a second court of the same event carries no title, so
      its group stays tight against the first. */
   tournHead: { marginTop: S.md, marginBottom: -(S.sm - 2) },
+  /* A PAST DAY'S NAME SITS DOWN ON ITS ROUND (owner, 2026-09-20). The round
+     is the name's second line, not a label of its own, and 4.5pt of box gap
+     reads as more than that on the phone: iOS puts a line's whole leading
+     ABOVE its glyphs (feedback_ios_lineheight_sinks_caps), so the small
+     eyebrow's 6pt of leading all landed between the two.
+
+     Six points come OUT of the gap below and go INTO the space above, so the
+     name moves down and the cards under it do not move at all. Only where a
+     round follows: the court view's heading is already tight against the
+     court name, and pulling this one further would run the two together. */
+  tournHeadOverSub: { marginTop: S.md + 6, marginBottom: -(S.sm - 2) - 6 },
   // The name and the event's stamp share the line, the stamp hard right.
   tournHeadRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   // As the cards' titleSlot (u.fitSlot): the flex is what makes onLayout
