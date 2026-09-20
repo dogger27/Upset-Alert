@@ -794,33 +794,45 @@ function LineTag({ first, alt, style, textStyle, children }) {
     <View style={[s.miniTag, style]} pointerEvents="none">
       <View style={[s.miniTagHalf, { top: 0, backgroundColor: first ? C.bg : alt ? C.card : C.raised }]} />
       <View style={[s.miniTagHalf, { bottom: 0, backgroundColor: alt ? C.raised : C.card }]} />
-      <Text style={[s.rowWhen, textStyle]} numberOfLines={1}>{children}</Text>
+      <Text style={[s.rowWhen, textStyle]} numberOfLines={1}
+            adjustsFontSizeToFit minimumFontScale={0.8}>{children}</Text>
     </View>
   )
 }
 
-/* THE THREE TAGS ON ONE LINE, and the ROUND CENTRED IN WHATEVER GAP THE OTHER
-   TWO LEAVE (owner, 2026-09-20).
+/* THE THREE TAGS ON ONE LINE, and EVERY ROUND ON ONE VERTICAL (owner,
+   2026-09-20).
 
-   Laid out as a flex row rather than three absolutely-placed tags, which is
-   what makes "centred between them" exact and free: the middle cell takes the
-   space the clock and the tournament do not, and centres in it. Anchoring the
-   round at a fixed offset would have centred it between the tags' ANCHORS, so
-   a long tournament name or a venue clock would slide the real gap out from
-   under it — and could overlap it. Here overlap cannot happen: they are
-   siblings in a row.
-   
-   A missing tag gives its space up, so the round centres to the strip's own
-   edge when there is nothing on that side. */
+   The round sits at the STRIP'S OWN CENTRE, not in the middle of whatever gap
+   its neighbours leave. Centring it in the gap was the first cut and it read
+   badly for the reason the owner pointed out: the gap's middle moves with the
+   tournament name, so Korea Open's R32 and Singapore Open's R32 landed at
+   different x on consecutive cards and the column zig-zagged down the page.
+   A round is a label on a column; it has to hold still.
+
+   The geometry is three cells: the clock's side, the round, the tournament's
+   side, with the two SIDES flexed equally. Two equal siblings around an
+   auto-width middle put that middle on the strip's centre line whatever the
+   sides contain — so every round in the card aligns, with no measuring and
+   nothing to keep in sync.
+
+   It is also why a long tournament name cannot reach the round. The name is
+   confined to its own cell, which ends where the round's begins; it shrinks
+   inside it rather than growing across. Overlap is not something to avoid
+   here, it is unrepresentable. */
 function LineTags({ first, alt, when, round, tournament }) {
   if (!when && !round && !tournament) return null
   return (
     <View style={s.miniTagRow} pointerEvents="none">
-      {when ? <LineTag first={first} alt={alt}>{when}</LineTag> : null}
-      <View style={s.miniTagMid}>
-        {round ? <LineTag first={first} alt={alt} textStyle={s.miniTagRound}>{round}</LineTag> : null}
+      <View style={s.miniTagSide}>
+        {when ? <LineTag first={first} alt={alt}>{when}</LineTag> : null}
       </View>
-      {tournament ? <LineTag first={first} alt={alt}>{tournament}</LineTag> : null}
+      {round ? <LineTag first={first} alt={alt} textStyle={s.miniTagRound}>{round}</LineTag> : null}
+      <View style={[s.miniTagSide, s.miniTagSideRight]}>
+        {tournament ? (
+          <LineTag first={first} alt={alt} textStyle={s.miniTagTourn}>{tournament}</LineTag>
+        ) : null}
+      </View>
     </View>
   )
 }
@@ -1195,13 +1207,18 @@ const s = StyleSheet.create({
     position: 'absolute', top: -9, left: 10, right: 28,
     flexDirection: 'row', alignItems: 'center', zIndex: 1,
   },
-  miniTagMid: { flex: 1, alignItems: 'center' },
-  // Shrinks rather than pushing its neighbours: a long tournament name gives
-  // way before it can crowd the round out of the middle.
-  miniTag: { height: 16, paddingHorizontal: 4, justifyContent: 'center', flexShrink: 1, maxWidth: '55%' },
+  /* The two sides, flexed EQUALLY so the round between them lands on the
+     strip's centre line — that equality is the whole mechanism. minWidth 0 so
+     a long tournament name shrinks inside its cell instead of widening it. */
+  miniTagSide: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
+  miniTagSideRight: { justifyContent: 'flex-end' },
+  miniTag: { height: 16, paddingHorizontal: 4, justifyContent: 'center', flexShrink: 1 },
   // The round is the same size as the clock and a step quieter — it labels
   // the match rather than telling the reader when to be there.
   miniTagRound: { fontFamily: 'Archivo_700Bold', color: C.faint },
+  // Its cell is half the strip less the round, so the longest names — "Dubai
+  // Tennis Championships" — shrink a little rather than cutting off.
+  miniTagTourn: { flexShrink: 1 },
   miniTagHalf: { position: 'absolute', left: 0, right: 0, height: 8 },
   // A clear rule between matches (owner, 2026-09-17): two lines of box score
   // per match need a firmer division than the list's hairline.
