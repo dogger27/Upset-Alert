@@ -31,7 +31,7 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 
 from app.models.tournament import DrawEntry, Match
 from app.services.sofascore import SofascoreBlocked, SofascoreNotFound, _get
@@ -663,10 +663,15 @@ async def capture_final_stats() -> int:
         if catch_up:
             await db.commit()
 
+        # ANY of the three still missing brings a draw back, not all of them.
+        # The guard used to need aces AND minutes to be null, so a draw that
+        # got one and not the other was never looked at again.
         finals = (await db.execute(
             select(Draw, Match)
             .join(Match, Match.draw_id == Draw.id)
-            .where(Draw.final_winner_aces.is_(None), Draw.final_duration_min.is_(None),
+            .where(or_(Draw.final_winner_aces.is_(None),
+                       Draw.final_duration_min.is_(None),
+                       Draw.final_sets.is_(None)),
                    Match.round_number == Draw.num_rounds, Match.match_number == 1,
                    Match.is_bye == False, Match.winner_id.isnot(None))  # noqa: E712
         )).all()
@@ -687,6 +692,16 @@ async def capture_final_stats() -> int:
                 aces, minutes, sets_played = 0, 0, 0
             elif final.sofa_event_id:
                 ev = (await _get(f"/event/{final.sofa_event_id}") or {}).get("event") or {}
+                # THE DURATION FROM THE FULL PAYLOAD, not from the stored one.
+                # sofa_duration_min is written by the sweep out of the events
+                # LIST, whose `time` object can still be mid-match — the 2026
+                # Guadalajara final was stored as 46 minutes, which is its
+                # first set, while the event itself carried both period clocks
+                # for 87 (2026-09-20). Whatever this payload says is the whole
+                # match, so it wins.
+                full = _played_minutes(ev)
+                if full is not None:
+                    minutes = full
                 winner = await db.get(DrawEntry, final.winner_id)
                 home_ids = set(_event_player_ids(ev.get("homeTeam") or {}))
                 side = "home" if (winner and winner.sofa_player_id in home_ids) else "away"
@@ -695,15 +710,47 @@ async def capture_final_stats() -> int:
                 row = next((r for r in rows if r.get("label") == "Aces"), None)
                 if row is not None:
                     aces = int((row.get(side) or [0])[0] or 0)
-            if aces is None or minutes is None:
-                logger.info("final stats for draw %s not available yet (aces=%s, minutes=%s)", draw.id, aces, minutes)
+
+            # ── WRITE WHAT IS KNOWN ──────────────────────────────────────────
+            # This used to discard all three the moment one was missing, and
+            # the one that goes missing is the aces: Sofascore publishes no
+            # statistics at all for some events — the 2026 Guadalajara final
+            # returned zero rows — so a real, finished final recorded nothing,
+            # including the SETS, which need no network and were sitting in the
+            # stored score all along (2026-09-20).
+            #
+            # An actual left null is not a guess of zero: diffs_for returns no
+            # gap on that key, so every bracket is level on it and the tie
+            # falls through to the next. The tiebreak degrades a key at a time
+            # instead of failing whole.
+            fields = {"final_sets": sets_played, "final_winner_aces": aces,
+                      "final_duration_min": minutes}
+            got = {k: v for k, v in fields.items() if v is not None}
+            if not got:
+                logger.info("final stats for draw %s: nothing available yet", draw.id)
                 continue
-            draw.final_winner_aces = int(aces)
-            draw.final_duration_min = int(minutes)
-            if sets_played is not None:
-                draw.final_sets = int(sets_played)
+            missing = [k for k, v in fields.items() if v is None]
+            if missing:
+                logger.info("final stats for draw %s partial: have %s, still missing %s",
+                            draw.id, sorted(got), missing)
+            changed = False
+            for field, value in got.items():
+                if getattr(draw, field) != int(value):
+                    setattr(draw, field, int(value))
+                    changed = True
+            if not changed:
+                continue
             await db.commit()
             written += 1
-            await app_log("info", "scoring", f"{draw.name}: final played — {sets_played} sets, champion hit {aces} aces in {minutes} min; the tiebreak is now decided",
-                          {"draw_id": draw.id, "sets": sets_played, "aces": aces, "minutes": minutes})
+            said = ", ".join(filter(None, [
+                f"{sets_played} sets" if sets_played is not None else None,
+                f"{aces} aces" if aces is not None else None,
+                f"{minutes} min" if minutes is not None else None,
+            ]))
+            await app_log("info", "scoring",
+                          f"{draw.name}: final played — {said}"
+                          + (f"; still no {', '.join(m.split('final_')[-1] for m in missing)}"
+                             if missing else "; the tiebreak is now decided"),
+                          {"draw_id": draw.id, "sets": sets_played, "aces": aces,
+                           "minutes": minutes, "missing": missing})
     return written
