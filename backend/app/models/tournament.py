@@ -1,3 +1,4 @@
+import re as _re
 from datetime import date, datetime, timezone
 from typing import Optional
 
@@ -70,6 +71,35 @@ class DrawCategoryVariant(Base):
     category: Mapped["DrawCategory"] = relationship("DrawCategory", back_populates="variants")
 
 
+_OPEN_RE = _re.compile(r"\bopens?\b", _re.I)
+# A name whose first word is a connector once "Open" comes off it: "Open de
+# Rouen" -> "de Rouen" -> "Rouen". Only ever at the FRONT, so "Sud de France"
+# and "Los Cabos" keep theirs.
+_LEADING_JOINER_RE = _re.compile(r"^(?:de|du|des|da|di|of|the|la|le|les|el)\b\s*", _re.I)
+_EDGE = " -–—·,"
+
+
+def default_short_name(name: str) -> str:
+    """The short name an event gets before anybody sets one: its name with
+    "Open" taken out (owner, 2026-09-20).
+
+    Sixty-nine of the seventy-one events in the database whose name contains
+    the word come out clean — Korea Open -> Korea, Winston-Salem Open ->
+    Winston-Salem, Open Occitanie -> Occitanie. The two that do not are
+    "US Open" -> "US" and "SP Open" -> "SP", which are the forms a chip would
+    use anyway, so they stand.
+
+    A name that is nothing but the word, or that comes out a single
+    character, keeps its full name instead: a short name has to still be a
+    name. And an admin who dislikes the result types a better one — that is
+    what the box is for, and their value always wins over this.
+    """
+    full = (name or "").strip()
+    out = _re.sub(r"\s+", " ", _OPEN_RE.sub(" ", full)).strip(_EDGE)
+    out = _LEADING_JOINER_RE.sub("", out).strip(_EDGE)
+    return out if len(out) >= 2 else full
+
+
 class Tournament(Base):
     """
     A real-world tennis event edition, e.g. 'Eastbourne International 2026'.
@@ -127,15 +157,14 @@ class Tournament(Base):
 
     @property
     def short_shown_name(self) -> str:
-        """The short name, falling back to the full one.
+        """The short name: the admin's, or the default taken from the name.
 
-        NEVER an abbreviation this code invented: a name nobody has shortened
-        is shown whole rather than clipped, which is the same rule the name
-        ladder follows elsewhere (feedback_name_shortening_ladder — never
-        "…"). A caller with no room asks for this and gets the best name
-        that exists.
+        Always a real name — never an abbreviation clipped mid-word, which is
+        the rule the name ladder follows everywhere else
+        (feedback_name_shortening_ladder, never "…"). A caller with no room
+        asks for this and gets the best name that exists.
         """
-        return (self.short_name or "").strip() or self.shown_name
+        return (self.short_name or "").strip() or default_short_name(self.shown_name)
 
     draws: Mapped[list["Draw"]] = relationship("Draw", back_populates="tournament")
 

@@ -28,7 +28,7 @@ from app.services.schedule import (carry_surname, settle_from_result_rows,
 from app.services.doubles_rank import doubles_pair_ranks
 from app.services.oop_parser import served_nation
 from app.services.rankings import _norm
-from app.models.tournament import Draw, DrawEntry, Match, Tournament
+from app.models.tournament import Draw, DrawEntry, Match, Tournament, default_short_name
 from app.models.prediction import UserPrediction
 from app.services.system_log import app_log
 from app.services.sofascore_live import live_point_for
@@ -681,7 +681,16 @@ async def schedule_day(
         select(Tournament.id, Tournament.name, Tournament.display_name,
                Tournament.short_name).where(Tournament.id.in_(t_ids)))).all()
     t_names = {r[0]: ((r[2] or "").strip() or r[1]) for r in t_rows}
-    t_short = {r[0]: (r[3] or "").strip() or None for r in t_rows}
+    # TWO SHORT NAMES, because a reader and an editor want different things.
+    # `t_short` is the one to USE — the admin's, or the default taken off the
+    # name — and is never empty, so a caller with no room never has to invent
+    # an abbreviation. `t_short_set` is the admin's own value, null when they
+    # have not set one, which is what lets the sheet prefill an empty box and
+    # show the default as its placeholder.
+    t_short = {r[0]: ((r[3] or "").strip()
+                      or default_short_name((r[2] or "").strip() or r[1]))
+               for r in t_rows}
+    t_short_set = {r[0]: (r[3] or "").strip() or None for r in t_rows}
     t_scraped = {r[0]: r[1] for r in t_rows}
     # THE COURTS' DISPLAY NAMES, set by an admin (CourtAlias): looked up once
     # for the day's tournaments and applied to every outgoing `court`, so the
@@ -1277,6 +1286,7 @@ async def schedule_day(
                       # the editor can show what it is overriding — as the
                       # court's sheet shows `court_key`.
                       "short_name": t_short.get(i),
+                      "short_name_custom": t_short_set.get(i),
                       "scraped_name": t_scraped.get(i)}
                      for i in sorted(t_ids)],
     )
@@ -1503,7 +1513,9 @@ async def set_tournament_name(
         )
     return {"tournament_id": t.id, "scraped_name": t.name,
             "name": t.shown_name, "display_name": t.display_name,
-            "short_name": t.short_name}
+            # As the day payload: the one to use, and the admin's own.
+            "short_name": t.short_shown_name,
+            "short_name_custom": t.short_name}
 
 
 @router.get("/dates")

@@ -81,9 +81,14 @@ export function CourtRenameSheet({ court, onClose }) {
  *
  *   The name        what a reader is shown wherever the event is named.
  *   Short name      the same event where there is no room for its name — a
- *                   chip, a row's tag, a strip across a phone. Left empty,
- *                   callers fall back to the full name rather than clipping
- *                   it themselves.
+ *                   chip, a row's tag, a strip across a phone. LEFT EMPTY IT
+ *                   IS NOT MISSING: the server's default is the name with
+ *                   "Open" taken out (owner, 2026-09-20), which is right for
+ *                   sixty-nine of the seventy-one events that have the word.
+ *                   So the box starts empty with that default as its
+ *                   placeholder, and typing anything overrides it — the same
+ *                   shape as the name field above, where empty means "use
+ *                   the scraped name".
  *
  * The SCRAPED name is shown beneath the fields and is never edited: it is
  * what the scrapers write and what the feed matchers compare against, so an
@@ -98,7 +103,10 @@ export function TournamentRenameSheet({ event, onClose }) {
   const [error, setError] = useState(null)
   useEffect(() => {
     setName(event?.current || '')
-    setShort(event?.short || '')
+    // The admin's own short name, not the effective one: prefilling the
+    // default would turn it into an override the moment they hit Save, and
+    // it would then stop following the name.
+    setShort(event?.shortCustom || '')
     setError(null)
   }, [event])
   if (!event) return null
@@ -131,7 +139,8 @@ export function TournamentRenameSheet({ event, onClose }) {
         />
         <TextInput
           style={s.input} value={short} onChangeText={setShort}
-          placeholder="Short name (where there is no room)" placeholderTextColor={C.muted}
+          placeholder={event.short ? `Short name — ${event.short}` : 'Short name'}
+          placeholderTextColor={C.muted}
           autoCapitalize="words" autoCorrect={false} returnKeyType="done"
           onSubmitEditing={() => save(name, short)} editable={!busy}
           accessibilityLabel="Short tournament name"
