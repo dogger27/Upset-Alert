@@ -672,9 +672,17 @@ async def schedule_day(
         return ScheduleDayOut(play_date=day, entries=[], courts=[], tournaments=[])
 
     t_ids = {e.tournament_id for e in entries}
+    # THE ADMIN'S OWN NAMES FOR THE EVENT, if they set any (owner,
+    # 2026-09-20). `name` here is the one a reader is shown — the override or
+    # the scraped name — exactly as `court` carries the alias rather than the
+    # sheet's spelling. The raw scraped name is never what this endpoint
+    # answers with; it is for the matchers, not for a heading.
     t_rows = (await db.execute(
-        select(Tournament.id, Tournament.name).where(Tournament.id.in_(t_ids)))).all()
-    t_names = {r[0]: r[1] for r in t_rows}
+        select(Tournament.id, Tournament.name, Tournament.display_name,
+               Tournament.short_name).where(Tournament.id.in_(t_ids)))).all()
+    t_names = {r[0]: ((r[2] or "").strip() or r[1]) for r in t_rows}
+    t_short = {r[0]: (r[3] or "").strip() or None for r in t_rows}
+    t_scraped = {r[0]: r[1] for r in t_rows}
     # THE COURTS' DISPLAY NAMES, set by an admin (CourtAlias): looked up once
     # for the day's tournaments and applied to every outgoing `court`, so the
     # site, the app and anything else that reads this answer show the same
@@ -1263,7 +1271,13 @@ async def schedule_day(
         tournaments=[{"id": i, "name": t_names.get(i), "oop_url": pdfs.get(i),
                       "oop_revision": revs.get(i),
                       "venue_timezone": tzs.get(i),
-                      "stamps": stamps.get(i, [])}
+                      "stamps": stamps.get(i, []),
+                      # For the rename sheet: the short name as it stands
+                      # (null if nobody has set one) and the scraped name, so
+                      # the editor can show what it is overriding — as the
+                      # court's sheet shows `court_key`.
+                      "short_name": t_short.get(i),
+                      "scraped_name": t_scraped.get(i)}
                      for i in sorted(t_ids)],
     )
 
@@ -1438,6 +1452,58 @@ async def set_court_alias(
                   {"tournament_id": body.tournament_id, "court": court, "display_name": name,
                    "by": getattr(current_user, "id", None)})
     return {"tournament_id": body.tournament_id, "court": court, "display_name": name}
+
+
+class TournamentNameIn(BaseModel):
+    tournament_id: int
+    display_name: str = ""       # empty = back to the scraped name
+    short_name: str = ""         # empty = no short name; callers fall back
+
+
+@router.put("/tournament-name")
+async def set_tournament_name(
+    body: TournamentNameIn,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Name an event in the admin's own words — admin only.
+
+    Two names, one row: `display_name` is what a reader is shown wherever the
+    event is named, `short_name` the same event where there is no room for
+    it. Either one empty clears that override and the layer beneath shows
+    through — the scraped name for the first, the display name for the
+    second. Neither touches `Tournament.name`, which the scrapers own and
+    several matchers compare against.
+
+    Logged, as the court's rename is: a name the site shows is a fact about
+    the site, and the next reader of the logs should be able to find when it
+    changed and who changed it.
+    """
+    if not getattr(current_user, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin only")
+    t = (await db.execute(select(Tournament).where(
+        Tournament.id == body.tournament_id))).scalars().first()
+    if not t:
+        raise HTTPException(status_code=404, detail="No such tournament")
+    shown = " ".join(body.display_name.split())
+    short = " ".join(body.short_name.split())
+    was = (t.display_name, t.short_name)
+    # An override that just restates the scraped name is not an override.
+    t.display_name = None if not shown or shown == t.name else shown
+    t.short_name = short or None
+    await db.commit()
+    if was != (t.display_name, t.short_name):
+        await app_log(
+            "info", "schedule",
+            f"Tournament renamed: {t.name!r} -> {t.display_name!r} "
+            f"(short {t.short_name!r}), tournament {t.id}",
+            {"tournament_id": t.id, "scraped_name": t.name,
+             "display_name": t.display_name, "short_name": t.short_name,
+             "by": getattr(current_user, "id", None)},
+        )
+    return {"tournament_id": t.id, "scraped_name": t.name,
+            "name": t.shown_name, "display_name": t.display_name,
+            "short_name": t.short_name}
 
 
 @router.get("/dates")

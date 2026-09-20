@@ -159,6 +159,10 @@ async def _migrate(conn):
         "ALTER TABLE tournaments ADD COLUMN draw_released_qualifiers_at DATE",
         "ALTER TABLE tournaments ADD COLUMN city VARCHAR",
         "ALTER TABLE tournaments ADD COLUMN country VARCHAR",
+        # An admin's own names for an event, beside the scraped one — see
+        # Tournament.display_name.
+        "ALTER TABLE tournaments ADD COLUMN display_name VARCHAR",
+        "ALTER TABLE tournaments ADD COLUMN short_name VARCHAR",
         "ALTER TABLE users ADD COLUMN username VARCHAR",
         "ALTER TABLE users ADD COLUMN full_name VARCHAR",
         "ALTER TABLE leagues ADD COLUMN show_real_name BOOLEAN DEFAULT 0",

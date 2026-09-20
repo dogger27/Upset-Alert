@@ -80,6 +80,22 @@ class Tournament(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
+    # THE NAME AS SCRAPED, ABOVE, AND THE NAMES AN ADMIN SETS, HERE (owner,
+    # 2026-09-20). Two separate columns rather than an edit to `name`, because
+    # `name` is what the scrapers write and what several matchers compare
+    # against — a Wikipedia sync would undo an edit to it, and an edit would
+    # quietly change which event a feed row resolves to
+    # (feedback_event_identity_not_names). Nothing writes these but the admin
+    # endpoint, so an edit survives every sync.
+    #
+    #   display_name — what a reader is shown wherever the event is named.
+    #   short_name   — the same event where there is no room for its name:
+    #                  a chip, a row's tag, a strip across a phone.
+    #
+    # Both nullable, and null means "no override": `shown_name` and
+    # `short_shown_name` below are the only correct way to read them.
+    display_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    short_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     city: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     country: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -103,6 +119,23 @@ class Tournament(Base):
     # events with no WTA counterpart; at a shared-venue combined event the WTA
     # file already covers both draws.
     atp_tournament_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    @property
+    def shown_name(self) -> str:
+        """The name to show a reader: the admin's, or the scraped one."""
+        return (self.display_name or "").strip() or self.name
+
+    @property
+    def short_shown_name(self) -> str:
+        """The short name, falling back to the full one.
+
+        NEVER an abbreviation this code invented: a name nobody has shortened
+        is shown whole rather than clipped, which is the same rule the name
+        ladder follows elsewhere (feedback_name_shortening_ladder — never
+        "…"). A caller with no room asks for this and gets the best name
+        that exists.
+        """
+        return (self.short_name or "").strip() or self.shown_name
 
     draws: Mapped[list["Draw"]] = relationship("Draw", back_populates="tournament")
 

@@ -122,6 +122,13 @@ export const getOffer = (matchId) =>
 export const setCourtAlias = (tournament_id, court, display_name) =>
   request('/schedule/court-alias', { method: 'PUT', body: { tournament_id, court, display_name } })
 
+/* An admin's own names for an event: what a reader is shown, and the short
+   form for where there is no room. Either empty clears that override — the
+   scraped name shows through the first, the display name through the second.
+   Never touches the scraped name, which the matchers compare against. */
+export const setTournamentName = (tournament_id, display_name, short_name) =>
+  request('/schedule/tournament-name', { method: 'PUT', body: { tournament_id, display_name, short_name } })
+
 export const getScheduleDay = (playDate) =>
   request(`/schedule/day${playDate ? `?play_date=${playDate}` : ''}`)
 

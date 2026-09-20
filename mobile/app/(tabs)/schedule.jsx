@@ -47,7 +47,7 @@ import { bestLeftColumn } from '../../nameColumns'
 import { groupPastDay } from '../../pastGroups'
 import { stampsFor } from '../../logos'
 import { longRound } from '../../rounds'
-import { CourtRenameSheet } from '../../courtRename'
+import { CourtRenameSheet, TournamentRenameSheet } from '../../rename'
 import { ScoreHistorySheet } from '../../scoreHistory'
 import { C, R, S, T } from '../../theme'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title, eyebrowType } from '../../ui'
@@ -134,6 +134,7 @@ export default function ScheduleScreen() {
   const dense = density !== 'cards'
   // The court being renamed by an admin: { tournament_id, court_key, current }, or null.
   const [renaming, setRenaming] = useState(null)
+  const [renamingEvent, setRenamingEvent] = useState(null)
 
   /* WHICH TOURNAMENTS THE TAB CHOSE (scheduleFilter). A schedule row always
      carries a tournament_id — unlike draw_id, which is null for qualifying and
@@ -362,6 +363,14 @@ export default function ScheduleScreen() {
      where the OOP link and the venue zone already come from. */
   const stampsOf = rows => stampsFor(
     (day.data?.tournaments || []).find(t => t.id === rows?.[0]?.tournament_id)?.stamps)
+  /* What the rename sheet needs about an event: its id, the name as it
+     stands (which is already the admin's, if they set one), the short name,
+     and the scraped name the override sits on top of. */
+  const eventNaming = (rows, shown) => {
+    const id = rows?.[0]?.tournament_id
+    const t = (day.data?.tournaments || []).find(x => x.id === id)
+    return { tournament_id: id, current: shown, short: t?.short_name || '', scraped: t?.scraped_name || shown }
+  }
   // Grey the Draw link when its draw has nothing to show — a Slam's qualifying
   // sheet is live days before the bracket, and a live link to an empty draw
   // reads as a broken page. Same released rule the dashboard cards use.
@@ -688,7 +697,21 @@ export default function ScheduleScreen() {
                     titleSlot (u.fitSlot). Without it the stamp is pushed off
                     the right edge by a long name instead of squeezing it. */}
                 <View style={s.tournHeadSlot}>
-                  <FitText style={(dense ? TOURN_SMALL : TOURN).style} track={(dense ? TOURN_SMALL : TOURN).track} min={9}>{title.toUpperCase()}</FitText>
+                  {/* ADMINS RENAME THE EVENT FROM HERE (owner, 2026-09-20),
+                      the way they rename a court: the pencil rides on the
+                      name, and the sheet takes both the name and the SHORT
+                      name for the places a name does not fit. */}
+                  <FitText style={(dense ? TOURN_SMALL : TOURN).style} track={(dense ? TOURN_SMALL : TOURN).track} min={9}
+                           after={isAdmin ? (
+                             <Pressable
+                               onPress={() => setRenamingEvent(eventNaming(list, title))}
+                               hitSlop={8} style={s.courtEdit} accessibilityRole="button"
+                               accessibilityLabel={`Rename ${title}`}>
+                               <Ionicons name="pencil" size={14} color={C.clayLight} />
+                             </Pressable>
+                           ) : null}>
+                    {title.toUpperCase()}
+                  </FitText>
                 </View>
                 <TournStamps stamps={stampsOf(list)} name={title} small={dense} />
               </View>
@@ -745,6 +768,7 @@ export default function ScheduleScreen() {
       </Screen>
       {champion && <ChampionFanfare key={champion} width={screenW} />}
       <CourtRenameSheet court={renaming} onClose={() => setRenaming(null)} />
+      <TournamentRenameSheet event={renamingEvent} onClose={() => setRenamingEvent(null)} />
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
           and women's draws on one day, so there is no single draw to pass. */}
