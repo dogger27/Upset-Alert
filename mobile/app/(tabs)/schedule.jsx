@@ -1306,11 +1306,21 @@ const s = StyleSheet.create({
      ABOVE its glyphs (feedback_ios_lineheight_sinks_caps), so the small
      eyebrow's 6pt of leading all landed between the two.
 
-     Six points come OUT of the gap below and go INTO the space above, so the
-     name moves down and the cards under it do not move at all. Only where a
-     round follows: the court view's heading is already tight against the
-     court name, and pulling this one further would run the two together. */
-  tournHeadOverSub: { marginTop: S.md + 6, marginBottom: -(S.sm - 2) - 6 },
+     Ten points come OUT of the gap below and go INTO the space above, so the
+     name moves down and the cards under it do not move at all. Measured on
+     one heading before and after: 13pt of white between the two lines' ink
+     became 3pt, which is the leading of a single block rather than a gap
+     between two.
+
+     The fixed points are safe under Dynamic Type: both line boxes grow with
+     the text while these do not, so the gap can only open up from here,
+     never close. And the upper line is uppercase — no descenders to meet the
+     lower line's caps.
+
+     Only where a round follows: the court view's heading is already tight
+     against the court name, and pulling this one further would run the two
+     together. */
+  tournHeadOverSub: { marginTop: S.md + 10, marginBottom: -(S.sm - 2) - 10 },
   // The name and the event's stamp share the line, the stamp hard right.
   tournHeadRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   // As the cards' titleSlot (u.fitSlot): the flex is what makes onLayout
