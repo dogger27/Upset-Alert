@@ -483,24 +483,43 @@ const NAV_SLOP = { top: 9, bottom: 9, left: 2, right: 2 }
    pencil had ended up, against the screen edge (owner, 2026-09-20). Its
    width comes off what the text may use, the same allowance and the same
    constant as PlayerName's trailing mark. */
-export function FitText({ children, style, min = 8, track = 0, wrapAtFloor = false, align = 'left', after = null }) {
+export function FitText({ children, style, min = 8, track = 0, wrapAtFloor = false, align = 'left', after = null, alt = null }) {
   const [avail, setAvail] = useState(null)
   const flat = StyleSheet.flatten(style) || {}
   const family = flat.fontFamily || 'Archivo_500Medium'
   const size = flat.fontSize || 13
-  const text = String(children ?? '')
+  /* `alt`: a SHORTER NAME for the same thing, used only when the real one
+     cannot fit above the floor — the tournament's short name, set by an
+     admin. It is the name ladder's rule in one more place: shrink first, and
+     shorten rather than clip, because below `min` the backstop starts
+     truncating and this project does not print "…"
+     (feedback_name_shortening_ladder). A caller with no short name passes
+     nothing and gets the old behaviour. */
+  let text = String(children ?? '')
   let fontSize = size
   let floored = false
-  if (avail != null) {
-    const need = textWidth(text, family, size) + text.length * track
+  const fit = (str) => {
+    const need = textWidth(str, family, size) + str.length * track
     // A point of slack: kerning is not in the tables, and a string right on
     // the line should shrink rather than gamble.
     const room = avail - 1 - (after ? AFTER_PX : 0)
-    if (need > room) {
-      const want = (size * room) / need
-      fontSize = Math.max(min, want)
-      floored = want < min
+    if (need <= room) return { size, floored: false }
+    const want = (size * room) / need
+    return { size: Math.max(min, want), floored: want < min }
+  }
+  if (avail != null) {
+    let got = fit(text)
+    if (got.floored && alt && String(alt) !== text) {
+      const shorter = fit(String(alt))
+      // Only if the short name actually buys something: a short name as long
+      // as the real one is not a shortening, it is a second spelling.
+      if (!shorter.floored || shorter.size > got.size) {
+        text = String(alt)
+        got = shorter
+      }
     }
+    fontSize = got.size
+    floored = got.floored
   }
   const wrap = wrapAtFloor && floored
   return (

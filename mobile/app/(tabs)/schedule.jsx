@@ -366,6 +366,18 @@ export default function ScheduleScreen() {
   /* What the rename sheet needs about an event: its id, the name as it
      stands (which is already the admin's, if they set one), the short name,
      and the scraped name the override sits on top of. */
+  /* THE SHORT NAME, WHERE THE FULL ONE WILL NOT GO. The heading is the first
+     place to ask for it (owner, 2026-09-20: "a second box for the short
+     version of a tournament's name which we will use in certain places
+     moving forward") — with the pencil and the tier stamp on the same line,
+     a sponsored name runs past the floor and the backstop starts clipping,
+     and this project does not print "…". Uppercased to match the heading it
+     may replace. */
+  const shortNameOf = rows => {
+    const id = rows?.[0]?.tournament_id
+    const short = (day.data?.tournaments || []).find(x => x.id === id)?.short_name
+    return short ? String(short).toUpperCase() : null
+  }
   const eventNaming = (rows, shown) => {
     const id = rows?.[0]?.tournament_id
     const t = (day.data?.tournaments || []).find(x => x.id === id)
@@ -702,6 +714,7 @@ export default function ScheduleScreen() {
                       name, and the sheet takes both the name and the SHORT
                       name for the places a name does not fit. */}
                   <FitText style={(dense ? TOURN_SMALL : TOURN).style} track={(dense ? TOURN_SMALL : TOURN).track} min={9}
+                           alt={shortNameOf(list)}
                            after={isAdmin ? (
                              <Pressable
                                onPress={() => setRenamingEvent(eventNaming(list, title))}
