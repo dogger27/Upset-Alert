@@ -267,3 +267,203 @@ def test_the_order_of_play_links_a_solid_spelling_either_way_round():
                                          "[1] Maya JOINT AUS")] == [
         "ma-2d7c9", "xu-f5123", "joint-2322"]
     assert _by_name(profiles, "[5] Ye-Xin MA CHN") is not None
+
+
+# ------------------------------------------- THE ORDER OF PLAY'S OWN IDENTITY
+#
+# 2026-09-20 02:04 UTC, Korea Open, GRANDSTAND. The WTA feed stopped printing
+# the Q2 it had carried all Saturday (entry 1318, "[WC] Eunhye LEE KOR" vs
+# "[5] Ye-Xin MA CHN", by then on court with a live Sofascore event on it), so
+# the Sofascore half of the same document supplied the match instead — where
+# she is "Yexin Ma". `_pairing_key` hashes `_norm`, which spaces the hyphen,
+# so the two spellings were two identities: the day stored the match TWICE,
+# and the real row, unstamped by the newest document, was reported as a slot
+# the sheet had pulled (`slot_pulled_not_retired`).
+#
+# `_dedupe_day` is the designed net for a row "stored under a key no future
+# revision will produce" — but its relations read `_name_tokens`, which split
+# the hyphen too, so {ye, xin, ma} and {yexin, ma} were two different people
+# and there was nothing to collapse. The net is what this restores; the key
+# is deliberately left alone, since neither spelling is canonical.
+
+from datetime import datetime, timezone  # noqa: E402
+
+from app.models.schedule import ScheduleEntry, ScheduleEntryPlayer  # noqa: E402
+from app.services.schedule import (_dedupe_day, _name_tokens,  # noqa: E402
+                                   _pairing_key, _same_pairing)
+
+KOREA_DAY = date(2026, 9, 20)
+
+
+def test_a_printed_name_is_filed_under_both_spellings():
+    assert _name_tokens("[5] Ye-Xin MA CHN") == {"ye", "xin", "ma", "yexin"}
+    assert _name_tokens("Yexin Ma") == {"yexin", "ma"}
+    # Nothing else moves: a name without a hyphen has one spelling, and an
+    # initial still carries no name.
+    assert _name_tokens("[WC] Eunhye LEE KOR") == {"eunhye", "lee"}
+    assert _name_tokens("Y. Ma") == {"ma"}
+
+
+class _Slot:
+    """A stored row as the dedupe relations read it."""
+
+    def __init__(self, a, b, is_tbd=False, tbd_side=None):
+        self.is_tbd, self.tbd_side = is_tbd, tbd_side
+        self.players = [
+            type("P", (), {"side": s, "position": i, "raw_name": n})()
+            for s, names in (("a", a), ("b", b))
+            for i, n in enumerate(names, 1)]
+
+
+def test_two_sources_spelling_one_player_differently_are_one_match():
+    wta = _Slot(["[WC] Eunhye LEE KOR"], ["[5] Ye-Xin MA CHN"])
+    sofa = _Slot(["Eunhye Lee"], ["Yexin Ma"])
+    assert _same_pairing(wta, sofa) and _same_pairing(sofa, wta)
+
+
+def test_a_western_double_barrel_still_agrees_with_its_spaced_form():
+    """The joined spelling is ADDED, not substituted: a source that spaces
+    "Auger-Aliassime" must keep meeting the one that hyphenates it."""
+    hyphen = _Slot(["[2] Felix AUGER-ALIASSIME CAN"], ["Jan-Lennard STRUFF GER"])
+    spaced = _Slot(["Felix Auger Aliassime"], ["Jan Lennard Struff"])
+    assert _same_pairing(hyphen, spaced)
+
+
+def test_different_matches_are_still_different():
+    assert not _same_pairing(_Slot(["Eunhye Lee"], ["Yexin Ma"]),
+                             _Slot(["Eunhye Lee"], ["Xinxin Yao"]))
+    assert not _same_pairing(_Slot(["Miho Kuramochi"], ["Xinxin Yao"]),
+                             _Slot(["Eunhye Lee"], ["Yexin Ma"]))
+
+
+def _slot_row(db, *, key, court_order, doc, a, b, live=False):
+    e = ScheduleEntry(
+        tournament_id=1, play_date=KOREA_DAY, tour="WTA", stage="qualifying",
+        discipline="singles", round_label="Q2", court="GRANDSTAND",
+        court_order=court_order, pairing_key=key, is_tbd=False,
+        last_document_id=doc,
+        first_seen_at=datetime(2026, 9, 19, 9, 44, tzinfo=timezone.utc),
+        last_seen_at=datetime(2026, 9, 20, 2, tzinfo=timezone.utc))
+    if live:
+        e.sofa_event_id = 17136067
+        e.live_scores_json = [["1"], ["0"], 2, [None]]
+        e.started_at = datetime(2026, 9, 20, 2, 10, tzinfo=timezone.utc)
+    db.add(e)
+    for side, names in (("a", a), ("b", b)):
+        for i, n in enumerate(names, 1):
+            db.add(ScheduleEntryPlayer(entry=e, side=side, position=i, raw_name=n))
+    return e
+
+
+def test_the_day_stops_carrying_the_same_match_twice():
+    """The incident, end to end: the two rows Korea's Sunday held at 02:04,
+    and the pass that has to collapse them. The live row survives — and would
+    have inherited the Sofascore event had the phantom been the one holding
+    it, which is what `_absorb` is for."""
+    sheet = ["[WC] Eunhye LEE KOR"], ["[5] Ye-Xin MA CHN"]
+    feed = ["Eunhye Lee"], ["Yexin Ma"]
+    # The two identities really are different — the dedupe pass, not the key,
+    # is what closes this.
+    assert (_pairing_key(1, KOREA_DAY, "singles", *sheet, [None, None])
+            != _pairing_key(1, KOREA_DAY, "singles", *feed, [None, None]))
+
+    async def go():
+        engine, Session = await _db()
+        async with Session() as db:
+            live = _slot_row(db, key="sheet", court_order=1, doc=363,
+                             a=sheet[0], b=sheet[1], live=True)
+            _slot_row(db, key="feed", court_order=3, doc=362,
+                      a=feed[0], b=feed[1])
+            await db.commit()
+            dropped = await _dedupe_day(db, 1, KOREA_DAY)
+            await db.commit()
+            rows = (await db.execute(ScheduleEntry.__table__.select())).fetchall()
+            left = (await db.execute(
+                ScheduleEntryPlayer.__table__.select())).fetchall()
+        await engine.dispose()
+        return dropped, rows, left, live.id
+
+    dropped, rows, left, live_id = asyncio.run(go())
+    assert dropped == 1
+    assert [r.id for r in rows] == [live_id]
+    assert rows[0].sofa_event_id == 17136067 and rows[0].started_at is not None
+    # The phantom's players go with it — a row deleted by the relationship
+    # cascade, not orphaned behind the page.
+    assert {p.schedule_entry_id for p in left} == {live_id}
+
+
+# ------------------------------------------------------------- AND THE LAW
+#
+# THE RATCHET (schedule_invariants' header): the check for the class goes in
+# with the fix. `pairing_duplicated` is the law that should have named Korea's
+# duplicate and did not — it compared raw printed STRINGS lowercased, so it
+# could only see a slot both sources spelled identically, and the duplicate
+# that matters is the one they spelled differently. What reached the owner was
+# the downstream symptom (`slot_pulled_not_retired`, the live row left
+# unstamped by the newest document) rather than the fault.
+
+from app.models.tournament import Tournament as _T  # noqa: E402
+from app.services.schedule_invariants import (_person_words,  # noqa: E402
+                                              _sides_agree, check_day)
+
+
+def test_the_law_reads_a_name_as_a_person():
+    assert _person_words("[5] Ye-Xin MA CHN") == {"ye", "xin", "ma", "yexin"}
+    assert _person_words("Yexin Ma") == {"yexin", "ma"}
+    # The furniture comes off; an initial is not a name; a team names two.
+    assert _person_words("[WC] Eunhye LEE KOR") == {"eunhye", "lee"}
+    assert _person_words("O. Luz") == {"luz"}
+    assert _person_words("S. Aoyama / E. Liang") == {"aoyama", "liang"}
+
+
+def test_sides_agree_on_equality_and_containment_only():
+    assert _sides_agree({"lee"}, {"lee"})
+    assert _sides_agree({"cabral"}, {"cabral", "tracy"})
+    assert not _sides_agree({"lee"}, {"yao"})
+    assert not _sides_agree(set(), set())
+
+
+async def _korea_sunday(db, *, doubles=False):
+    db.add(_T(id=1, name="Korea Open", year=2026))
+    await db.flush()
+    _slot_row(db, key="sheet", court_order=1, doc=363,
+              a=["[WC] Eunhye LEE KOR"], b=["[5] Ye-Xin MA CHN"], live=True)
+    second = _slot_row(db, key="feed", court_order=3, doc=362,
+                       a=["Eunhye Lee"], b=["Yexin Ma"])
+    if doubles:
+        second.discipline = "doubles"
+        second.round_label = "R16"
+        for p in second.players:
+            p.raw_name = {"Eunhye Lee": "Eunhye Lee / Sohyun Park",
+                          "Yexin Ma": "Yexin Ma / Xinxin Yao"}[p.raw_name]
+    await db.commit()
+
+
+def _codes(violations, code):
+    return [v for v in violations if v["code"] == code]
+
+
+def test_the_law_names_the_duplicate_the_two_spellings_made():
+    async def go():
+        engine, Session = await _db()
+        async with Session() as db:
+            await _korea_sunday(db)
+            out = await check_day(db, 1, KOREA_DAY)
+        await engine.dispose()
+        return out
+    dupes = _codes(asyncio.run(go()), "pairing_duplicated")
+    assert len(dupes) == 1 and "same players as entry" in dupes[0]["detail"]
+
+
+def test_a_doubles_slot_is_not_its_players_singles_slot():
+    """The guard that keeps the containment test honest: a player in the
+    singles and in the doubles on one day puts her singles side inside her
+    doubles side, and those are two matches."""
+    async def go():
+        engine, Session = await _db()
+        async with Session() as db:
+            await _korea_sunday(db, doubles=True)
+            out = await check_day(db, 1, KOREA_DAY)
+        await engine.dispose()
+        return out
+    assert _codes(asyncio.run(go()), "pairing_duplicated") == []

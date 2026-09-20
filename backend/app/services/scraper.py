@@ -1114,6 +1114,42 @@ async def fetch_event_dates(
     return _parse_infobox_date(wikitext, year, gender)
 
 
+async def confirm_start_date(
+    wiki_page_title: str, year: int, gender: str = "",
+    stored_start: Optional[date] = None,
+) -> Optional[date]:
+    """
+    The start date a health check may JUDGE on, for a draw with no page yet.
+
+    While wiki_page_id is None nothing has ever read the singles infobox, so
+    start_date is still exactly what discovery seeded: the Monday of the
+    tournament's week. For an extended-format event that Monday is days early
+    — 2026 Chengdu and Hangzhou were both seeded 21 September and both really
+    start the 23rd. Anything deriving a deadline from it (release_deadline)
+    therefore judges a draw overdue days before it is, and the population that
+    does so is not incidental: "the singles page has never resolved" IS the
+    trigger condition of the check that complains, so the date it accuses on is
+    the one date it can be sure nobody has confirmed.
+
+    _refresh_dates_from_event_page fixes the stored value, but it hangs off a
+    separate job on a separate interval — 30 min against the health check's 60,
+    both added at startup, so their ticks coincide every hour for the life of
+    the process. On 2026-09-20 the health check read 21 September at 00:12:36
+    and the correction wrote 23 September at 00:12:42, six seconds too late,
+    and two draws that were three days out were reported as overdue. Waiting on
+    a sibling job's ordering is not a fix; asking the page is.
+
+    Same source, same cache, no write: this is a read the accuser does before
+    accusing. Falls back to the stored date when the event page cannot be read
+    or parsed — an unreachable event page is corroboration that the title is
+    wrong, not a reason to go quiet.
+    """
+    if not wiki_page_title:
+        return stored_start   # nothing to ask; _general_page_title needs a title
+    start, _ = await fetch_event_dates(wiki_page_title, year, gender)
+    return start or stored_start
+
+
 async def scrape_tournament(
     wiki_page_title: str,
     year: int = 0,

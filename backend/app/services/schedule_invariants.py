@@ -115,6 +115,48 @@ def _names_nobody(raw: str) -> bool:
     return bool(toks) and all(_ROLE_TOKEN_RE.match(t) for t in toks)
 
 
+def _person_words(raw: str) -> set:
+    """The WORDS of a printed name that name a person, under both spellings
+    of a hyphen — the law's own reading of who a slot is about.
+
+    "[5] Ye-Xin MA CHN" and "Yexin Ma" are one player; the seeding, the entry
+    mark and the country are the sheet's furniture around her, and an initial
+    stands in for a name without being one. A HYPHEN IS TWO SPELLINGS
+    (rankings._match_token_set, history.tml.name_keys): the tours hyphenate a
+    romanised Chinese or Korean given name where Sofascore and Tennis Explorer
+    join it, so BOTH are carried and whichever the other row prints will meet
+    one of them.
+
+    Written here rather than borrowed from `schedule._name_tokens`, for the
+    reason `_INITIAL_RE` is: a copy the service owns would go blind with it,
+    and this law exists to catch the day the service's identity fails.
+    """
+    from app.services.rankings import _norm as _name_norm
+    s = _LEADING_SEED_RE.sub("", _TRAILING_SEED_RE.sub("", (raw or "").strip()))
+    m = _TRAILING_CODE_RE.search(s)
+    if m and m.group(1) in COUNTRY_CODES:
+        s = s[:m.start()].strip()
+    out = set()
+    for spelling in {s, s.replace("-", "")}:
+        # A team reaches us as one string ("S. Aoyama / E. Liang"); both of
+        # its people belong to the side that printed it.
+        for t in _name_norm(spelling.replace("/", " ")).split():
+            if _WORDY_RE.match(t):
+                out.add(t)
+    return out
+
+
+def _sides_agree(x: set, y: set) -> bool:
+    """Two printings of one side: equal, or one a subset of the other.
+
+    The subset is `schedule._same_pairing`'s, for its reason — one revision
+    abbreviates what another spells out, and a corrected parser makes a side
+    GAIN a player. The same team cannot meet the same opponents twice in a
+    day, which is what makes equality conclusive and the subset safe.
+    """
+    return bool(x and y) and (x == y or x < y or y < x)
+
+
 _CLOCK_RE = re.compile(r'^(\d{1,2})[:.](\d{2})\s*(am|pm)?$', re.I)
 # A not-before wording as the LAW reads it: spelled out, clipped ("Not Bef."),
 # or abbreviated in front of a clock ("NB 3:30 PM", "N/B 2:30"). Stated apart
@@ -718,7 +760,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         v.append({"code": code, "entry_id": entry.id if entry else None,
                   "court": getattr(entry, "court", None), "detail": detail})
 
-    seen_pairings: dict[frozenset, int] = {}
+    seen_pairings: list = []
     seen_pending: dict[tuple, int] = {}
     court_orders: dict[tuple, int] = {}
 
@@ -1290,13 +1332,38 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         # 2026-08-24, Sonego-Kopriva: a superseded pairing survived a lucky-
         # loser substitution and the day showed 16 matches for a 15-match
         # sheet. Two settled entries naming the same players are one slot.
+        #
+        # THE SAME PLAYERS, NOT THE SAME PRINTED STRING. This compared raw
+        # names lowercased, so it could only see a duplicate both sources
+        # spelled identically — and the duplicate that matters is the one they
+        # spelled differently. Korea Open 2026-09-20: the WTA feed's "[WC]
+        # Eunhye LEE KOR vs [5] Ye-Xin MA CHN" and the Sofascore half of the
+        # same document's "Eunhye Lee vs Yexin Ma" are one Q2, stored twice
+        # because `_pairing_key` hashes `_norm`, which spaces the hyphen. The
+        # day carried the match on GRANDSTAND #1 and a phantom of it at #3,
+        # and what reached the owner was the downstream symptom — the real row
+        # unstamped by the newest document, `slot_pulled_not_retired`. This
+        # law was the one that should have named it, and was blind.
+        #
+        # Disciplines must agree, as they must in `_dedupe_day`: a player in
+        # the singles and in the doubles on one day puts her singles side
+        # inside her doubles side, and those are two matches.
         if not e.is_tbd and players:
-            key = frozenset((p.raw_name or "").strip().lower() for p in players)
-            if key in seen_pairings:
+            sides = {s: set().union(set(), *(_person_words(p.raw_name)
+                                             for p in players if p.side == s))
+                     for s in ("a", "b")}
+            twin = next(
+                (eid for eid, disc, prev in seen_pairings
+                 if disc == e.discipline
+                 and ((_sides_agree(sides["a"], prev["a"])
+                       and _sides_agree(sides["b"], prev["b"]))
+                      or (_sides_agree(sides["a"], prev["b"])
+                          and _sides_agree(sides["b"], prev["a"])))), None)
+            if twin is not None:
                 flag("pairing_duplicated", e,
-                     f"same players as entry {seen_pairings[key]}")
+                     f"same players as entry {twin}")
             else:
-                seen_pairings[key] = e.id
+                seen_pairings.append((e.id, e.discipline, sides))
 
         # 2026-08-26, Winston-Salem: document 77 reprinted three slots
         # unresolved exactly as document 61 had — "DAMM vs KECMANOVIC or
