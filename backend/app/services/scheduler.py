@@ -23,7 +23,7 @@ from app.services.espn_monitor import ESPNMonitor
 from app.services.eventstream import EventStreamListener
 from app.services.http_errors import describe_exception, is_transient_http_error
 from app.services.push_content import tour_label
-from app.services.scraper import WikiPageNotFound
+from app.services.scraper import WikiPageNotFound, confirm_start_date
 
 logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
@@ -1536,13 +1536,50 @@ async def _check_draw_health() -> None:
         deadline = release_deadline(t.start_date, t.draw_release_direct)
         release_overdue = deadline is not None and today >= deadline
         if t.wiki_page_id is None and release_overdue:
+            # ASK THE PAGE BEFORE ACCUSING IT. The deadline above is derived
+            # from start_date, and `wiki_page_id is None` — this check's own
+            # trigger — is precisely the state in which start_date has never
+            # been read off any page: it is still discovery's placeholder, the
+            # Monday of the tournament's week, which for an extended-format
+            # event is days early. _refresh_dates_from_event_page corrects it,
+            # but from a different job on a different interval (30 min against
+            # this one's 60, both added at startup, so their ticks coincide
+            # every hour), and on 2026-09-20 it corrected 2026 Chengdu and
+            # Hangzhou from 21 to 23 September six seconds AFTER this check had
+            # already called them overdue. Reading the event page here makes
+            # the judgement independent of which job ran first, and also covers
+            # the case that offsetting the jobs never would: a placeholder that
+            # the correction pass has not reached, or could not write.
+            confirmed_start = await confirm_start_date(
+                t.wiki_page_title, t.year, t.gender, t.start_date)
+            deadline = release_deadline(confirmed_start, t.draw_release_direct)
+            still_overdue = deadline is not None and today >= deadline
+            if not still_overdue:
+                # Not overdue at all — the stored date was the placeholder.
+                # Info, not silence: this is the check standing down, and
+                # the reason it stood down is the interesting part.
+                await app_log(
+                    "info", "scheduler",
+                    f"No wiki page yet for {t.year} {t.name} ({tour_label(t.gender)}), "
+                    f"and that is on schedule: the event page starts it "
+                    f"{confirmed_start}, not the stored {t.start_date}, so the draw "
+                    f"is not due until {deadline}",
+                    {"tournament_id": t.id, "tournament_name": t.name, "gender": t.gender,
+                     "wiki_page_title": t.wiki_page_title,
+                     "stored_start_date": str(t.start_date),
+                     "event_page_start_date": str(confirmed_start),
+                     "deadline": str(deadline)},
+                    dedup_key=f"wiki_not_due_yet_{t.id}", dedup_hours=DRAW_HEALTH_REALERT_HOURS,
+                )
+                continue
             await app_log(
                 "error", "scheduler",
                 f"Wiki page never resolved for {t.year} {t.name} ({t.gender}) — "
                 f"likely a wrong/dead wiki_page_title: {t.wiki_page_title!r}",
                 {"tournament_id": t.id, "tournament_name": t.name, "gender": t.gender,
                  "wiki_page_title": t.wiki_page_title, "draw_release_direct": str(t.draw_release_direct),
-                 "start_date": str(t.start_date)},
+                 "start_date": str(t.start_date),
+                 "confirmed_start_date": str(confirmed_start), "deadline": str(deadline)},
                 dedup_key=f"wiki_never_resolved_{t.id}", dedup_hours=DRAW_HEALTH_REALERT_HOURS,
             )
 

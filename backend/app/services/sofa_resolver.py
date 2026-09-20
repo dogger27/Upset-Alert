@@ -38,6 +38,7 @@ from app.database import AsyncSessionLocal
 from app.models.schedule import ScheduleEntry
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.draw_dates import release_deadline
+from app.services.scraper import confirm_start_date
 from app.services.sofascore import (DARK_RETRY_HOURS, RESOLVE_RETRY_HOURS,
                                     SofascoreBlocked, resolve_pending_draws)
 from app.services.system_log import app_log
@@ -272,6 +273,17 @@ async def _coverage_check(db, verdicts: dict | None = None) -> None:
             # in advance on purpose: they need an id to exist, which means the
             # bracket IS published, so a problem then is real.
             deadline = release_deadline(d.start_date, d.draw_release_direct)
+            if deadline is not None and today >= deadline and d.wiki_page_id is None:
+                # AND THE DATE THAT DEADLINE RESTS ON HAS NEVER BEEN READ OFF A
+                # PAGE. With no wiki_page_id nothing has ever parsed the
+                # infobox, so start_date is still discovery's week-Monday
+                # placeholder, which for an extended-format event is days
+                # early — the same reading that had the draw-health check call
+                # 2026 Chengdu and Hangzhou overdue three days out. Ask the
+                # event page before warning, same as _check_draw_health.
+                deadline = release_deadline(
+                    await confirm_start_date(d.wiki_page_title, d.year, d.gender, d.start_date),
+                    d.draw_release_direct)
             if deadline is None or today >= deadline:
                 problem = ("no Sofascore tournament id, so nothing can score it — "
                            "usually a bracket Sofascore has not published yet")
