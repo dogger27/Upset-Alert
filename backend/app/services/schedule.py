@@ -1599,8 +1599,34 @@ def _name_tokens(raw: str) -> set:
     A team string keeps its tokens here, unlike in `_match_tokens` — the
     relations in `_dedupe_day` compare printed side against printed side, where
     "S. Aoyama / E. Liang" is exactly the text that has to agree.
+
+    A HYPHEN IS TWO SPELLINGS (rankings._match_token_set, history.tml.name_keys,
+    routers/schedule._spellings), and this was the copy of it that identity
+    itself depends on. `_norm` spaces the hyphen, so the WTA's "[5] Ye-Xin MA
+    CHN" reduced to {ye, xin, ma} and Sofascore's "Yexin Ma" to {yexin, ma} —
+    two sets with no subset between them, so `_same_pairing` said two
+    DIFFERENT matches and `_dedupe_day` had nothing to collapse. Korea Open,
+    2026-09-20: the WTA feed dropped the Q2 it had been printing (entry 1318,
+    Lee vs Ma, on court with a live event on it), the Sofascore half of the
+    same document supplied it, its `_pairing_key` hashed the other spelling,
+    and the day carried the match TWICE — one row live on GRANDSTAND #1, one
+    phantom chaining the estimates behind it, and the real row unstamped by
+    the newest document, which is `slot_pulled_not_retired`.
+
+    The joined spelling is ADDED to the split one rather than replacing it,
+    because neither is the canonical form: the tours hyphenate a romanised
+    Chinese or Korean given name where Sofascore and Tennis Explorer join it
+    ("Ye-Xin"/"Yexin"), and split a western double-barrel where another source
+    may not ("Auger-Aliassime"/"Auger Aliassime"). Carrying both leaves every
+    relation here on the subset test it already uses, from whichever side the
+    hyphen is printed. An extra token can only make a side a SUPERSET, which
+    is the safe direction: `_same_pairing.agree` already accepts a subset
+    either way, `_side_resolves` and `_superseded` only get stricter about the
+    side that carries it.
     """
-    return {t for t in _norm(_clean_name(raw or '')).split() if not _is_initial(t)}
+    cleaned = _clean_name(raw or '')
+    spellings = [cleaned] + ([cleaned.replace('-', '')] if '-' in cleaned else [])
+    return {t for s in spellings for t in _norm(s).split() if not _is_initial(t)}
 
 
 def _side_tokens(entry, side: str) -> list:
