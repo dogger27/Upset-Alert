@@ -25,7 +25,7 @@ reads the originals, never its own output, so running it twice is a no-op.
 """
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageChops, ImageStat
 
 ROOT = Path(__file__).resolve().parent.parent
 MOBILE = ROOT / 'mobile' / 'assets' / 'logos'
@@ -81,17 +81,47 @@ def fit_box(art, box=BOX):
     return art.resize((max(1, round(w * k)), max(1, round(h * k))), Image.LANCZOS)
 
 
+def _seen(art, bg):
+    """What the eye gets: the art composited onto an opaque background.
+
+    COMPARING RGBA DIRECTLY IS THE TRAP, and the first version of this tool
+    fell in it. Where alpha is 0 the RGB is arbitrary — a quantizer writes
+    black, the source had white — so a straight difference reported channels
+    off by the full 255 in regions that cannot be seen at all, and the bound
+    below was being set against noise. Composite first, then compare.
+    """
+    return Image.alpha_composite(Image.new('RGBA', art.size, bg), art).convert('RGB')
+
+
+# The two grounds this art is ever drawn on: the app's card and the website's
+# light theme. The worse of the two is the one that counts.
+GROUNDS = ((13, 20, 17, 255), (255, 255, 255, 255))
+
+
 def _error(a, b):
-    """(rmse, worst) between two RGBA images, in 0-255 channel units."""
-    import math
-    pa, pb = a.tobytes(), b.convert('RGBA').tobytes()
-    total = worst = 0
-    for x, y in zip(pa, pb):                # every channel of every pixel
-        d = x - y if x > y else y - x
-        total += d * d
-        if d > worst:
-            worst = d
-    return math.sqrt(total / max(1, len(pa))), worst
+    """(rmse, worst channel) between two encodings AS DRAWN, in 0-255 units.
+
+    AT THE SIZE A VIEWER SEES, not at 1:1. The art ships at 4x the box it is
+    drawn in (see BOX), and no device made draws it larger than 3x, so the
+    last step before the eye is a downscale to three quarters — which is part
+    of what is being judged: it averages away the single-pixel disagreements
+    a palette makes on an antialiased edge.
+
+    Measured at 1:1 instead, every candidate here lands at rmse 2.9-3.5 and
+    every one of them at 1.7-2.3 as drawn. The gap is the point: at 1:1 a
+    bound has to be drawn through the middle of a cluster that all looks
+    identical on a phone, and where it falls decides whether Roland Garros
+    ships at 8.7 KB or 55.1 KB for the same picture.
+    """
+    b = b.convert('RGBA')
+    size = (max(1, round(a.size[0] * 0.75)), max(1, round(a.size[1] * 0.75)))
+    a, b = a.resize(size, Image.LANCZOS), b.resize(size, Image.LANCZOS)
+    rmse = worst = 0
+    for bg in GROUNDS:
+        diff = ImageChops.difference(_seen(a, bg), _seen(b, bg))
+        rmse = max(rmse, max(ImageStat.Stat(diff).rms))
+        worst = max(worst, max(hi for _, hi in diff.getextrema()))
+    return rmse, worst
 
 
 def save_small(art, path, label=''):
@@ -104,23 +134,26 @@ def save_small(art, path, label=''):
     seventeen colours, a crest a few hundred. A palette with alpha holds that
     exactly, in a quarter of the bytes.
 
-    So: try truecolour and a 256, 128 and 64-colour palette, keep the
+    So: try truecolour and a 256 and 64-colour palette, and keep the
     smallest candidate whose error against the truecolour resize is under the
-    bound below. Nothing is accepted on faith — the numbers come from the six
-    detailed files, measured:
+    bound. Nothing is accepted on faith, and the bound is not a round number
+    someone liked — it sits in a gap that was measured. Squeezing the gold
+    1000 stamp, the one real gradient here, until it visibly bands:
 
-        Roland Garros  55.1 KB rgba -> 9.5 KB p256, rmse 2.2, worst 30
-        Wimbledon      50.6 KB      -> 9.5 KB      , rmse 2.1, worst 30
-        ATP 1000       38.6 KB      -> 9.4 KB      , rmse 2.2, worst 30
+        p256   9.4 KB   rmse  2.32   worst  19     |  the whole nineteen-file
+        p64    8.2 KB   rmse  3.12   worst  46     |  population lives here
+        ----------------------------------------------- the bound, 3.0 / 64
+        p16    6.5 KB   rmse  7.49   worst 200     |  banded
+        p8     5.3 KB   rmse 14.97   worst 200     |
+        p4     2.2 KB   rmse 30.17   worst 200     |
 
-    rmse ~2 is 0.9% of the channel range, and the worst cases are single
-    pixels on an antialiased edge — on art drawn at a quarter of this size.
-    The bound is set just above that and no further: a palette that BANDS the
-    gold 1000's gradient is not the same picture, and 3.0 is tight enough to
-    catch it. The rendering was compared before and after on both clients.
-
-    p128 saves another half-kilobyte over p256 and is not taken for it: at
-    equal bytes, more colours.
+    Every acceptable candidate across all nineteen files falls in 1.7-3.1
+    rmse and 15-46 worst; the first banded one is 7.5 and 200. The gap
+    between 46 and 200 is where the worst-channel bound goes, and it is the
+    band detector: banding is a hard edge where a smooth ramp was, so it
+    shows up there an order of magnitude before rmse notices. rmse 3.0 then
+    does the fine grading — it is what keeps the gold stamp on p256 rather
+    than taking p64 and its extra kilobyte of saving.
     """
     best, best_size, best_note = art, None, 'rgba'
     from io import BytesIO
@@ -129,7 +162,7 @@ def save_small(art, path, label=''):
             for n in (256, 64)]:
         if note != 'rgba':
             rmse, worst = _error(art, cand)
-            if rmse > 3.0 or worst > 48:
+            if rmse > 3.0 or worst > 64:
                 continue
         buf = BytesIO()
         cand.save(buf, format='PNG', optimize=True)
