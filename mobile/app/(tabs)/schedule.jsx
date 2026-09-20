@@ -442,6 +442,15 @@ export default function ScheduleScreen() {
   )
   const shownPhase = phaseTabs.length ? effectivePhase(counts, phase) : null
 
+  /* A COMPLETED SET OF MATCHES IS A RECORD, whatever day it is on (owner,
+     2026-09-20). That is the same argument that made a past day one — a
+     reader of results wants the bracket's order, by tournament and round,
+     not the order the courts happened to free up — and today's Completed
+     segment is exactly a set of results. So `past` stops meaning two things
+     at once: the DAY is past, and the LIST is read as a record. Everything
+     below that was about the second one asks this instead. */
+  const asRecord = past || shownPhase === 'completed'
+
   const visible = useMemo(
     () => (shownPhase ? beforePhase.filter(e => matchPhase(e) === shownPhase) : beforePhase),
     [beforePhase, shownPhase],
@@ -471,7 +480,7 @@ export default function ScheduleScreen() {
        than one is showing, singles before doubles, then by round — the
        chronology kept inside each group. Today and the days ahead stay a
        running order. pastGroups.js, on its own suite. */
-    if (past) {
+    if (asRecord) {
       /* ALWAYS NAMED, even on a day only one tournament played (owner,
          2026-09-20, for the court view's headings — the same rule, and this
          is the same kind of heading). A heading names its section once; it is
@@ -499,7 +508,7 @@ export default function ScheduleScreen() {
        ones that have not (owner, 2026-09-17); the cards keep the running
        order, where the clock is what each card leads with. */
     return [{ key: 'all', list: dense ? startedFirst(chrono) : chrono }]
-  }, [visible, view, past, dense])
+  }, [visible, view, asRecord, dense])
 
   const refetch = () => { day.refetch(); dates.refetch() }
   /* ON COURT HERE, not on court anywhere. It counted the whole day's rows, so
@@ -798,10 +807,15 @@ export default function ScheduleScreen() {
                 </HeadTap>
               </View>
             ) : null}
+            {/* A ROW NAMES ITS TOURNAMENT ONLY WHERE NO HEADING DOES: grouped
+                as a record, the heading says it once for the whole group, and
+                repeating it on every row was the duplication that made
+                today's Completed list read as a flat stream (owner,
+                2026-09-20). */}
             {density === 'mid'
               ? (
-                <MiniRows list={list} tagsOf={e => miniTags(e, { past, tournament: !past && view !== 'court' && manyTournaments ? e.tournament_name : null, venueMode, venueTz: venueTzOf(e) })}>
-                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={past} tournament={!past && view !== 'court' && manyTournaments ? e.tournament_name : null} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} onH2H={openH2H} onPredictors={openPredictors} onMenu={openMenu} />)}
+                <MiniRows list={list} tagsOf={e => miniTags(e, { past: asRecord, tournament: !asRecord && view !== 'court' && manyTournaments ? e.tournament_name : null, venueMode, venueTz: venueTzOf(e) })}>
+                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={asRecord} tournament={!asRecord && view !== 'court' && manyTournaments ? e.tournament_name : null} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} onH2H={openH2H} onPredictors={openPredictors} onMenu={openMenu} />)}
                 </MiniRows>
               )
               : compact
