@@ -390,3 +390,80 @@ def test_the_day_stops_carrying_the_same_match_twice():
     # The phantom's players go with it — a row deleted by the relationship
     # cascade, not orphaned behind the page.
     assert {p.schedule_entry_id for p in left} == {live_id}
+
+
+# ------------------------------------------------------------- AND THE LAW
+#
+# THE RATCHET (schedule_invariants' header): the check for the class goes in
+# with the fix. `pairing_duplicated` is the law that should have named Korea's
+# duplicate and did not — it compared raw printed STRINGS lowercased, so it
+# could only see a slot both sources spelled identically, and the duplicate
+# that matters is the one they spelled differently. What reached the owner was
+# the downstream symptom (`slot_pulled_not_retired`, the live row left
+# unstamped by the newest document) rather than the fault.
+
+from app.models.tournament import Tournament as _T  # noqa: E402
+from app.services.schedule_invariants import (_person_words,  # noqa: E402
+                                              _sides_agree, check_day)
+
+
+def test_the_law_reads_a_name_as_a_person():
+    assert _person_words("[5] Ye-Xin MA CHN") == {"ye", "xin", "ma", "yexin"}
+    assert _person_words("Yexin Ma") == {"yexin", "ma"}
+    # The furniture comes off; an initial is not a name; a team names two.
+    assert _person_words("[WC] Eunhye LEE KOR") == {"eunhye", "lee"}
+    assert _person_words("O. Luz") == {"luz"}
+    assert _person_words("S. Aoyama / E. Liang") == {"aoyama", "liang"}
+
+
+def test_sides_agree_on_equality_and_containment_only():
+    assert _sides_agree({"lee"}, {"lee"})
+    assert _sides_agree({"cabral"}, {"cabral", "tracy"})
+    assert not _sides_agree({"lee"}, {"yao"})
+    assert not _sides_agree(set(), set())
+
+
+async def _korea_sunday(db, *, doubles=False):
+    db.add(_T(id=1, name="Korea Open", year=2026))
+    await db.flush()
+    _slot_row(db, key="sheet", court_order=1, doc=363,
+              a=["[WC] Eunhye LEE KOR"], b=["[5] Ye-Xin MA CHN"], live=True)
+    second = _slot_row(db, key="feed", court_order=3, doc=362,
+                       a=["Eunhye Lee"], b=["Yexin Ma"])
+    if doubles:
+        second.discipline = "doubles"
+        second.round_label = "R16"
+        for p in second.players:
+            p.raw_name = {"Eunhye Lee": "Eunhye Lee / Sohyun Park",
+                          "Yexin Ma": "Yexin Ma / Xinxin Yao"}[p.raw_name]
+    await db.commit()
+
+
+def _codes(violations, code):
+    return [v for v in violations if v["code"] == code]
+
+
+def test_the_law_names_the_duplicate_the_two_spellings_made():
+    async def go():
+        engine, Session = await _db()
+        async with Session() as db:
+            await _korea_sunday(db)
+            out = await check_day(db, 1, KOREA_DAY)
+        await engine.dispose()
+        return out
+    dupes = _codes(asyncio.run(go()), "pairing_duplicated")
+    assert len(dupes) == 1 and "same players as entry" in dupes[0]["detail"]
+
+
+def test_a_doubles_slot_is_not_its_players_singles_slot():
+    """The guard that keeps the containment test honest: a player in the
+    singles and in the doubles on one day puts her singles side inside her
+    doubles side, and those are two matches."""
+    async def go():
+        engine, Session = await _db()
+        async with Session() as db:
+            await _korea_sunday(db, doubles=True)
+            out = await check_day(db, 1, KOREA_DAY)
+        await engine.dispose()
+        return out
+    assert _codes(asyncio.run(go()), "pairing_duplicated") == []
