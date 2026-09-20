@@ -279,6 +279,12 @@ export default function ScheduleScreen() {
   /* Every tap the page hands its rows, guarded — the history, the H2H, the
      predictors — so no swipe ever opens anything. */
   const openHist = useMemo(() => unlessSwiping(setHist), [])
+  /* The headings' rename sheets go through the same guard as the rest: the
+     release at the end of a day swipe lands on whatever is under the finger,
+     and a tournament name is 361pt wide (owner, 2026-09-20 — the day changed
+     AND the rename sheet opened). */
+  const openRenameCourt = useMemo(() => unlessSwiping(setRenaming), [])
+  const openRenameEvent = useMemo(() => unlessSwiping(setRenamingEvent), [])
   const openH2H = useMemo(() => unlessSwiping(setH2H), [])
   const openPredictors = useMemo(() => unlessSwiping(setPredictors), [])
   const day = useApi(`schedule:${date}`, () => getScheduleDay(date))
@@ -746,7 +752,7 @@ export default function ScheduleScreen() {
                     use it is furniture for everybody else. A reader who is
                     not an admin gets a plain View, so there is nothing to
                     press and nothing announced. */}
-                <HeadTap style={s.tournHeadSlot} onPress={isAdmin ? () => setRenamingEvent(eventNaming(list, title)) : undefined}
+                <HeadTap style={s.tournHeadSlot} onPress={isAdmin ? () => openRenameEvent(eventNaming(list, title)) : undefined}
                          label={isAdmin ? `Rename ${title}` : undefined}>
                   <FitText style={(dense ? TOURN_SMALL : TOURN).style} track={(dense ? TOURN_SMALL : TOURN).track} min={9}
                            alt={shortNameOf(list)}>
@@ -772,7 +778,7 @@ export default function ScheduleScreen() {
                     the court's everywhere the schedule is served, and the
                     sheet's own name stays the key — carried on every row as
                     court_key. */}
-                <HeadTap style={s.courtHeadSlot} onPress={isAdmin ? () => setRenaming({ tournament_id: list[0].tournament_id, court_key: list[0].court_key || court, current: court }) : undefined}
+                <HeadTap style={s.courtHeadSlot} onPress={isAdmin ? () => openRenameCourt({ tournament_id: list[0].tournament_id, court_key: list[0].court_key || court, current: court }) : undefined}
                          label={isAdmin ? `Rename ${court}` : undefined}>
                   <FitText style={(dense ? COURT_SMALL : COURT).style} track={(dense ? COURT_SMALL : COURT).track} min={9}>
                     {court.toUpperCase()}
@@ -1292,7 +1298,11 @@ const s = StyleSheet.create({
      card is 12pt clear of it — measured, not eyeballed: 4/4 became 0/12. */
   courtHead: {
     flexDirection: 'row', alignItems: 'center', gap: S.sm,
-    marginTop: -S.xs, marginBottom: S.xs,
+    /* FLUSH TO THE CARD BENEATH IT, the same -S.sm a past day's round line
+       carries (subHead): the court is the heading's last line and the matches
+       start immediately under it. It sat +S.xs, which put 12pt of hole there
+       against the round's 0 (owner, 2026-09-20). */
+    marginTop: -S.xs, marginBottom: -S.sm,
   },
   /* UNDER A TOURNAMENT'S NAME the court is that name's second line, and the
      row above has already pulled 10pt up for it (tournHeadTight) — so this
