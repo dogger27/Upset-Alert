@@ -20,7 +20,7 @@ from datetime import timedelta as _timedelta, timezone as _tz
 from sqlalchemy import select
 
 from app.models.schedule import ScheduleDocument, ScheduleEntry
-from app.services.oop_parser import COUNTRY_CODES
+from app.services.oop_parser import COUNTRY_CODES, served_nation
 
 
 # How many of the DAY'S OWN revisions have come and gone without restating a
@@ -1064,14 +1064,26 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         # wrote the code onto her row, and `_sync_players` let no later None
         # erase it. The web and the app each make a flag from EITHER the
         # served nationality or a name's trailing code, so both are judged —
-        # the served one as the serve path computes it, draw entry first.
+        # the served one THROUGH `served_nation`, which is the serve path's
+        # own computation and not a copy of it.
+        #
+        # 2026-09-21, Korea Open "Alina KORNEEVA": that fix closed every
+        # source that writes schedule_entry_players.nationality and left the
+        # one the serve path prefers — the DRAW ENTRY, where assign_rankings
+        # deliberately backfills RUS/BLR from Tennis Explorer so the BRACKET
+        # can fly those flags (2026-07-11). Judging the raw column instead
+        # would now call all 192 of those rows a fault, and they are not one:
+        # the draw page is ours to render. Judging what is SERVED asks the
+        # only question this law ever meant — does the sheet's row fly a flag
+        # the sheet withheld.
+        #
         # "Arantxa RUS" is a surname: a trailing code counts only after a
         # capitalised surname, as in name_trailing_noncountry above. Its own
         # copy of the codes, not oop_parser's: the law must not go blind when
-        # the thing it checks is edited. Over every stored row: the five the
-        # feed wrote that morning, nothing else.
+        # the thing it checks is edited — drop RUS from NEUTRAL_NATIONS and
+        # `served_nation` starts serving it, and this fires.
         for p in players:
-            served = de_nat.get(p.draw_entry_id) or p.nationality
+            served = served_nation(de_nat.get(p.draw_entry_id), p.nationality)
             if (served or "").upper() in _WITHHELD_NATIONS:
                 flag("withheld_nation_served", e,
                      f"side {p.side}: {p.raw_name!r} is served nationality "

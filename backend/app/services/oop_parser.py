@@ -177,6 +177,30 @@ USA UZB VAN VEN VIE VIN YEM ZAM ZIM
 NEUTRAL_NATIONS = frozenset({"RUS", "BLR"})
 
 
+def served_nation(*stated) -> Optional[str]:
+    """The country an ORDER-OF-PLAY row shows, from its sources in order.
+
+    The row renders the tour's sheet, and the sheet prints no country for a
+    neutral athlete — so neither does the row, whichever source holds one. A
+    withheld code is the END of the question, not a reason to fall through to
+    the next source and fly a different flag.
+
+    Korea Open 2026-09-21: the sheet printed "Alina KORNEEVA" with no country
+    and `_sync_players` stored none, as 486183f5 made it — and the page flew a
+    Russian flag anyway, read off her DRAW ENTRY, the one source that fix
+    never covered. `assign_rankings` fills a blank draw-entry nationality from
+    Tennis Explorer for exactly the players Wikipedia leaves blank (2026-07-11,
+    "Show RU/BY flags"). That is the BRACKET's rule and it stays: the draw page
+    is ours to render and the owner asked for those flags on it. This is the
+    SHEET's rule, and on a sheet's row it wins — so the two live together, one
+    function apart.
+    """
+    for nat in stated:
+        if nat:
+            return None if nat.strip().upper() in NEUTRAL_NATIONS else nat
+    return None
+
+
 def _is_continuation(text):
     """Is this line the wrapped tail of the name above — or the sheet's own furniture?
 
