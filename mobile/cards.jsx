@@ -9,10 +9,10 @@
  */
 
 import { createContext, useContext, useMemo, useState } from 'react'
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { leading } from './fontScale.js'
 import { stampsFor, tierStamp } from './logos'
-import { CAP as CAP_RATIO } from './fontMetrics.js'
+import { VERT } from './fontMetrics.js'
 import { flagEmoji } from './flags'
 import { CardLink } from './ui'
 import { textWidth } from './measure.js'
@@ -183,11 +183,24 @@ const CREST_SMALL = {
   height: (26 * SMALL) / CREST_SHRINK,
 }
 
-/* Kanit's cap height over its em, from the font's own metric — every weight
-   of the family shares it (fontMetrics.js CAP, generated). The badge is
-   specified in CAP HEIGHT, as the artwork was: `cap` tall, whatever the face.
-   So the font size is the cap the badge wants divided by this. */
-const KANIT_CAP = CAP_RATIO.Kanit_900Black_Italic
+/* KANIT'S OWN VERTICAL METRICS, read off the TTF (fontMetrics.js VERT,
+   generated). All three numbers are needed, and this is why:
+
+   `cap` sizes the type. The badge is specified in CAP HEIGHT, as the artwork
+   was — `cap` tall whatever the face — so the font size is the cap the badge
+   wants divided by this.
+
+   `asc` and `desc` PLACE it. A platform puts the baseline inside a line box,
+   and iOS and react-native-web only agree when the line height is the font's
+   own asc + desc: then the half-leading is zero and both put the baseline at
+   `asc` below the box's top. Kanit is a Thai face carrying room for marks
+   above and below — a 1.495 em box against Archivo's 1.088 — so its caps
+   start 0.456 em down from the top of that box, which at this size is 10.6pt.
+   Left to the platforms, one centred the box and the other aligned it to the
+   top: the same badge read centred in the harness and 2.7pt low on the phone
+   (owner, 2026-09-20, twice). Stating the line height and the offset takes
+   the choice away from both. */
+const K = VERT.Kanit_900Black_Italic
 
 export function TierBadge({ tour, tier, name, small }) {
   const { crest, mark, num } = tierStamp({ tour, tier, name })
@@ -199,7 +212,12 @@ export function TierBadge({ tour, tier, name, small }) {
   if (!mark) return null
   const key = String(tour || 'ATP').toUpperCase() === 'ATP' ? 'M' : 'F'
   const cap = small ? CAP_SMALL : CAP
-  const size = Math.round((cap / KANIT_CAP) * 10) / 10
+  const size = Math.round((cap / K.cap) * 10) / 10
+  const plate = cap + 16                    // what the artwork's badge measured
+  /* Where the caps want to be, and where the line box would put them: the
+     difference is the lift. Negative, always, for a face whose ascent is
+     taller than its caps by more than the badge's own padding. */
+  const lift = Math.round(((plate - cap) / 2 - (K.asc - K.cap) * size) * 10) / 10
   /* THE NUMBER IS LIGHT AND THE WORDMARK IS BLACK (owner, 2026-09-20: "the
      ATP / WTA part needs to be a lot more bold than the number part", then
      "let's go 900 / 300"), which is the contrast the artwork had.
@@ -219,11 +237,38 @@ export function TierBadge({ tour, tier, name, small }) {
      the descender's depth above its bottom, and in Kanit those are 0.35em
      and 0.31em — within half a point of each other at this size. Centre the
      box and the ink is centred. */
+  /* TWO PLATFORMS, TWO MEASURED NUMBERS — because this cannot be modelled.
+     Three attempts tried: an explicit short line height (centred on the web,
+     high on the phone), the face's natural box with flex centring (centred on
+     the web, 2.67pt low on the phone), and an explicit natural-sized line
+     height with a computed lift, which matched NEITHER — the web put the ink
+     14.5pt down where the arithmetic said 8.0.
+
+     So the line box is the face's own again, and the only platform-specific
+     thing is a lift, measured on each:
+
+       native  the box is taller than the plate, so flex aligns it to the TOP
+               rather than centring it, and the caps land (asc - cap) x size
+               below that top: 10.6pt measured off the owner's screenshot
+               against the 8.0 that centres them. `lift` is that difference,
+               and it scales with the badge because it is made of metrics.
+       web     react-native-web's natural box is shorter and does get centred,
+               which measured 7.5 above the ink against 8.0 below — already
+               centred, so it gets nothing.
+
+     Android is untested and takes the native branch, which is the better
+     guess: its text layout follows the font's metrics as iOS does, where
+     react-native-web follows the browser's. */
+  const set = {
+    fontSize: size,
+    marginTop: Platform.OS === 'web' ? 0 : lift,
+    color: TOUR[key].text,
+  }
   return (
     <View style={[u.stamp, u.stampSet, small && u.stampSmall,
-                  { height: cap + 16, backgroundColor: TOUR[key].plate }]}>
-      <Text style={[u.stampMark, { fontSize: size, color: TOUR[key].text }]} allowFontScaling={false}>{mark}</Text>
-      <Text style={[u.stampNum, { fontSize: size, color: TOUR[key].text, marginLeft: size * 0.06 }]} allowFontScaling={false}>{num}</Text>
+                  { height: plate, backgroundColor: TOUR[key].plate }]}>
+      <Text style={[u.stampMark, set]} allowFontScaling={false}>{mark}</Text>
+      <Text style={[u.stampNum, set, { marginLeft: size * 0.06 }]} allowFontScaling={false}>{num}</Text>
     </View>
   )
 }
@@ -688,16 +733,17 @@ const u = StyleSheet.create({
      two move it to 10.25 either side. That pair is font metrics and travels. */
   stampSet: {
     flexDirection: 'row',
+    /* The line box is taller than the plate — Kanit's ascent and descent
+       carry room for Thai marks — so the cross-axis rule is what decides
+       where the ink lands, and TierBadge's `lift` is measured against THIS
+       being the rule. Do not change it to 'center' without re-measuring on
+       a phone: on native, flex aligns overflowing content to the start
+       whatever this says, and on the web it does not. */
     alignItems: 'center',
-    justifyContent: 'center',
-    /* A POINT AND A HALF OFF THE BOTTOM, which lifts the centred content by
-       half of it. Inside a fixed height, padding moves the content without
-       changing the plate. It pays for the one asymmetry the font itself has:
-       above the caps sits (ascender - cap height), below the baseline sits
-       the descender, and in Kanit that is 0.35em against 0.31em — 0.75pt
-       apart at this size, measured as 8.5 above the ink against 7.0 below.
-       Font metrics, so it travels; the line-box behaviour that did not is
-       gone from this component entirely. */
+    /* paddingTop EXPLICITLY ZERO: `stamp` above sets padding 8 on all four
+       sides for the crest box, and a style that lists only paddingBottom
+       inherits that 8 at the top — which put the ink 11.5pt down before this
+       line existed. */
     paddingTop: 0,
     paddingBottom: 1.5,
     paddingLeft: 8.25,
