@@ -591,6 +591,22 @@ export default function ScheduleScreen() {
             auto` on the button keeps it at the same right edge with nothing
             to its left. */}
         <View style={s.viewRow}>
+          {/* DOUBLES SITS WITH THE VIEW CONTROLS (owner, 2026-09-20), on the
+              left of the switch: it decides WHAT the list holds, which is the
+              same kind of question as how it is arranged, and it was the last
+              thing left in a filters row of its own.
+
+              "DBLS" rather than "Doubles" — beside a segmented control the
+              word was wider than either of the switch's halves, and the
+              scoreboard's own shorthand is what the rest of this screen
+              already speaks. The spoken label stays the word. */}
+          {view === 'time' && hasDoubles && (
+            <Pressable onPress={() => setShowDoubles(v => !v)} style={[s.chip, showDoubles && s.chipOn]}
+                       accessibilityRole="button" accessibilityLabel="Doubles"
+                       accessibilityState={{ selected: showDoubles }}>
+              <Text style={[s.chipText, showDoubles && { color: '#fff' }]}>DBLS</Text>
+            </Pressable>
+          )}
           {!past && (
           <View style={[s.tabs, s.tabsGrow]}>
             {['time', 'court'].map(v => (
@@ -662,7 +678,7 @@ export default function ScheduleScreen() {
             density button, so it was always worth drawing; with that gone a
             day with one tour and no doubles would leave the column's gap
             around an empty row. */}
-        {view === 'time' && (tourChips || hasDoubles) && (
+        {view === 'time' && tourChips && (
         <View style={s.filters}>
           {/* The tour chips filter the time view only, so the court view does
               not offer them — the site's rule; a chip that toggles nothing
@@ -677,14 +693,6 @@ export default function ScheduleScreen() {
               </Pressable>
             )
           })}
-          {/* Only a day that HAS doubles offers the switch — the site's rule.
-              A chip that toggles nothing reads as broken. */}
-          {view === 'time' && hasDoubles && (
-            <Pressable onPress={() => setShowDoubles(v => !v)} style={[s.chip, showDoubles && s.chipOn]}
-                       accessibilityRole="button" accessibilityState={{ selected: showDoubles }}>
-              <Text style={[s.chipText, showDoubles && { color: '#fff' }]}>Doubles</Text>
-            </Pressable>
-          )}
         </View>
         )}
 
