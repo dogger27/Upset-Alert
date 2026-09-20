@@ -45,6 +45,7 @@ import { courtGroups } from '../../courtGroups'
 import { textWidth } from '../../measure'
 import { bestLeftColumn } from '../../nameColumns'
 import { groupPastDay } from '../../pastGroups'
+import { longRound } from '../../rounds'
 import { CourtRenameSheet } from '../../courtRename'
 import { ScoreHistorySheet } from '../../scoreHistory'
 import { C, R, S, T } from '../../theme'
@@ -428,7 +429,10 @@ export default function ScheduleScreen() {
       return groupPastDay(chrono, { byTournament, byTour }).map(g => ({
         key: g.key,
         title: g.first ? g.tournament : null,
-        sub: [byTour ? g.tour : null, mixed ? g.discipline : null, g.round || null].filter(Boolean).join(' · '),
+        // The round has a line to itself here, so it is spelled out —
+        // "Final", not "F" (owner, 2026-09-20). rounds.js::longRound.
+        sub: [byTour ? g.tour : null, mixed ? g.discipline : null,
+          g.round ? longRound(g.round) : null].filter(Boolean).join(' · '),
         list: g.list,
       }))
     }

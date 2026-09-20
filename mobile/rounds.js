@@ -28,6 +28,33 @@ export function shortRound(name, roundNumber) {
   return name.length > 6 ? name.slice(0, 6) : name
 }
 
+/* THE SPELLED-OUT FORM, for a heading with a LINE TO ITSELF.
+ *
+ * Compact is the rule wherever a round is a chip or a pill, and it stays the
+ * rule. A past day's group heading is the exception that rule always had: it
+ * sits on its own line under the tournament's name with the width to itself,
+ * and there "F" alone reads as an initial rather than as the final (owner,
+ * 2026-09-20).
+ *
+ * ONLY the three that are cryptic alone. "R32" is read at a glance and "Round
+ * of 32" is four times as wide, so the numbered rounds — and the qualifying
+ * ones — keep the compact form even here.
+ *
+ * Singular and hyphenated, the owner's own wording. The email's
+ * `_email_round_label` says "Quarter-Finals" for the same round because a
+ * subject line is about the round as a whole; a heading is over the matches
+ * under it.
+ *
+ * Takes either wording — the server's "Quarterfinals" or an already-compacted
+ * "QF" — because the caller holding a round has one or the other.
+ */
+const LONG = { QF: 'Quarter-Final', SF: 'Semi-Final', F: 'Final' }
+
+export function longRound(name, roundNumber) {
+  const short = shortRound(name, roundNumber)
+  return LONG[short] || short
+}
+
 /* The reader's own calendar day, which is the day the schedule screen prints
    its clocks in (the device's zone, not the venue's and not the account's).
    A match is "today" if the reader would see it on today's page. */
