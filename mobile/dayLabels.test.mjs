@@ -44,12 +44,12 @@ assert.deepEqual(dayLabels(['2026-09-12'], '2026-09-13'), [{ date: '2026-09-12',
 // for any other day. Across a month end and a year end, since it is day
 // arithmetic rather than string maths.
 assert.equal(relativeDayWord('2026-09-17', '2026-09-17'), 'Today')
-assert.equal(relativeDayWord('2026-09-16', '2026-09-17'), 'Yester.')
+assert.equal(relativeDayWord('2026-09-16', '2026-09-17'), 'Yday')
 assert.equal(relativeDayWord('2026-09-18', '2026-09-17'), 'Tmrw')
 assert.equal(relativeDayWord('2026-09-15', '2026-09-17'), null)
 assert.equal(relativeDayWord('2026-09-19', '2026-09-17'), null)     // two days out is a date
-assert.equal(relativeDayWord('2026-08-31', '2026-09-01'), 'Yester.')
-assert.equal(relativeDayWord('2025-12-31', '2026-01-01'), 'Yester.')
+assert.equal(relativeDayWord('2026-08-31', '2026-09-01'), 'Yday')
+assert.equal(relativeDayWord('2025-12-31', '2026-01-01'), 'Yday')
 assert.equal(relativeDayWord(undefined, '2026-09-17'), null)
 
 console.log('ok — dayLabels')

@@ -465,7 +465,7 @@ export default function ScheduleScreen() {
             date pinned at the far right with the court count under it. The
             arrows went with it — the chips and the swipe are the stepper
             now (owner, 2026-09-17). Rendered even with no days, so a day
-            with no sheet still says which day it is. "Today" and "Yester."
+            with no sheet still says which day it is. "Yday", "Today" and "Tmrw"
             when the day has a word, else month and day (owner): "Sep 15". */}
         <DayStrip
           days={days} active={date} onPick={setPinned}

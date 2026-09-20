@@ -18,10 +18,10 @@ export function dayLabels(dates, mainStart) {
   return out
 }
 
-/* The chosen day's name in the strip's right slot: a word for the three days
- * a reader has one for — "Yester.", "Today", "Tmrw" — and the date for every
- * other. The owner's wording, and short enough for the slot (2026-09-17,
- * tomorrow added 2026-09-20).
+/* The chosen day's name in the strip's right slot: a word for the three days a
+ * reader has one for — "Yday", "Today", "Tmrw" — and the date for every other.
+ * The owner's wording, and short enough for the slot (2026-09-17; tomorrow
+ * added and yesterday shortened to match it, 2026-09-20).
  *
  * Both dates are plain YYYY-MM-DD in the DEVICE's calendar (the schedule's
  * rule: the zone is the device), so this is arithmetic on days with no zones
@@ -35,7 +35,7 @@ export function relativeDayWord(iso, todayIso) {
     t.setUTCDate(t.getUTCDate() + days)
     return t.toISOString().slice(0, 10)
   }
-  if (iso === shifted(-1)) return 'Yester.'
+  if (iso === shifted(-1)) return 'Yday'
   if (iso === shifted(1)) return 'Tmrw'
   return null
 }
