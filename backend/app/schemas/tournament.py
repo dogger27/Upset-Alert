@@ -69,6 +69,13 @@ class TournamentOut(BaseModel):
     # only record qualifying has — it is not in `matches`. Per EVENT, so both
     # halves of a combined tournament report the same answer.
     qualifying_started_at: Optional[datetime] = None
+    # THE EVENT'S SHORT NAME — the admin's, or the default taken off the name
+    # (Tournament.short_name / default_short_name). Served per draw because
+    # this list IS draws, and every control that has to name an event in a
+    # chip reads it from here: the schedule's tournament filter is the first
+    # (owner, 2026-09-20). Never empty — a caller with no room must never
+    # have to invent an abbreviation.
+    tournament_short_name: Optional[str] = None
     is_locked: bool
 
     @property

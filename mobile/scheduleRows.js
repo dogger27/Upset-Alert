@@ -83,7 +83,15 @@ export function tournamentsOf(draws) {
     if (cur) {
       if (!cur.genders.includes(d.gender)) cur.genders.push(d.gender)
     } else {
-      by.set(d.tournament_id, { id: d.tournament_id, name: d.name, genders: [d.gender] })
+      by.set(d.tournament_id, {
+        id: d.tournament_id,
+        name: d.name,
+        // The EVENT's short name, for a control that has to name it in a
+        // pill — the server always sends one (TournamentOut). `name` is
+        // still here for the places with room, and for a spoken label.
+        short: d.tournament_short_name || d.name,
+        genders: [d.gender],
+      })
     }
   }
   for (const t of by.values()) t.genders.sort((a, b) => (a === 'M' ? 0 : 1) - (b === 'M' ? 0 : 1))

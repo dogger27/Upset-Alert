@@ -11,7 +11,7 @@ from app.core.auth import get_current_user, get_optional_user
 from app.database import get_db
 from app.models.prediction import UserPrediction
 from app.models.rankings import TePlayer, TeRankingsSnapshot
-from app.models.tournament import DrawEntry, Match, Draw
+from app.models.tournament import DrawEntry, Match, Draw, Tournament, default_short_name
 from app.models.user import User
 from app.schemas.league import LeaderboardEntry, LeagueTournamentOut
 from app.schemas.tournament import DrawEntryOut, DrawOut, MatchOut, TournamentCreate, TournamentOut
@@ -159,10 +159,16 @@ async def list_tournaments(db: AsyncSession = Depends(get_db)):
         .group_by(ScheduleEntry.tournament_id)
         .subquery()
     )
+    # The EVENT's names ride along: a draw carries the scraped name, and an
+    # admin's display and short names live on the tournament. Outer-joined
+    # because Draw.tournament_id is nullable, and a draw with no event row
+    # still gets a short name — off its own name.
     result = await db.execute(
-        select(Draw, lat_subq.c.lat, qual_subq.c.qual)
+        select(Draw, lat_subq.c.lat, qual_subq.c.qual,
+               Tournament.display_name, Tournament.short_name)
         .outerjoin(lat_subq, Draw.id == lat_subq.c.draw_id)
         .outerjoin(qual_subq, Draw.tournament_id == qual_subq.c.tid)
+        .outerjoin(Tournament, Tournament.id == Draw.tournament_id)
         .order_by(Draw.year.desc(), Draw.name)
     )
     rows = result.all()
@@ -173,8 +179,11 @@ async def list_tournaments(db: AsyncSession = Depends(get_db)):
     return [
         TournamentOut.model_validate(t).model_copy(
             update={"status": t.computed_status, "latest_result_at": lat,
-                    "qualifying_started_at": qual})
-        for t, lat, qual in rows
+                    "qualifying_started_at": qual,
+                    "tournament_short_name": (
+                        (t_short or "").strip()
+                        or default_short_name((t_display or "").strip() or t.name))})
+        for t, lat, qual, t_display, t_short in rows
     ]
 
 

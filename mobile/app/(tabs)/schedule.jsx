@@ -605,14 +605,18 @@ export default function ScheduleScreen() {
               const playing = all.some(e => e.tournament_id === t.id)
               return (
                 <Pressable key={t.id} onPress={() => toggleEvent(t.id)}
-                           style={[s.eventBox, !playing && s.eventIdle]} accessibilityRole="button"
+                           style={[s.eventBox, on && s.eventBoxOn, !playing && s.eventIdle]}
+                           accessibilityRole="button"
                            accessibilityState={{ selected: on }}
                            accessibilityLabel={playing ? t.name : `${t.name}, no matches this day`}>
-                  <View style={[s.check, on && s.checkOn]}>
-                    {on ? <Ionicons name="checkmark" size={12} color={C.bg} /> : null}
-                  </View>
-                  <Text style={[s.eventName, !on && { color: C.muted }]} numberOfLines={1}>
-                    {t.name}
+                  {/* THE PILL IS THE STATE (owner, 2026-09-20): lit when the
+                      event is showing, quiet when it is not. A tick inside a
+                      box said the same thing twice and cost 22pt of the row
+                      that the names needed — which is also why these say the
+                      SHORT name. The full name stays the spoken label, so
+                      nothing is lost to a screen reader. */}
+                  <Text style={[s.eventName, on ? s.eventNameOn : { color: C.muted }]} numberOfLines={1}>
+                    {t.short || t.name}
                   </Text>
                 </Pressable>
               )
@@ -1464,14 +1468,12 @@ const s = StyleSheet.create({
   // Greyed when the tournament has nothing on the day. This line once sat
   // INSIDE eventBox - a nested key no style reads - so nothing greyed.
   eventIdle: { opacity: 0.4 },
+  // Lit, the same green the Doubles chip lights with — these are siblings in
+  // the same stack of controls and a second green would read as a second
+  // meaning.
+  eventBoxOn: { backgroundColor: C.green, borderColor: C.green },
+  eventNameOn: { color: '#fff' },
   eventName: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', flexShrink: 1 },
-  // Sized in points, not from the type scale: a control, and a row of them
-  // has to line up.
-  check: {
-    width: 16, height: 16, borderRadius: 3, borderWidth: 1.5,
-    borderColor: C.border, alignItems: 'center', justifyContent: 'center',
-  },
-  checkOn: { backgroundColor: C.greenBright, borderColor: C.greenBright },
 
   // Rows breathe: the gap is what separates one match from the next, and at
   // S.xs the cards read as a single ruled block rather than a stack of cards.
