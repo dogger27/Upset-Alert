@@ -26,6 +26,7 @@ from app.models.rankings import TePlayer, TeRankingsSnapshot
 from app.services.schedule import (carry_surname, settle_from_result_rows,
                                    settled_sides_index)
 from app.services.doubles_rank import doubles_pair_ranks
+from app.services.oop_parser import served_nation
 from app.services.rankings import _norm
 from app.models.tournament import Draw, DrawEntry, Match, Tournament
 from app.models.prediction import UserPrediction
@@ -43,8 +44,9 @@ class SchedulePlayerOut(BaseModel):
     # From our own draw_entries, not from the printed name. The sheet drops the
     # country whenever space is tight — abbreviated "OR" slots especially — and
     # a resolved slot carries the bracket's name, which never had one inline.
-    # Stays null for players we genuinely hold no country for, which is how
-    # neutral athletes keep no flag.
+    # Stays null for players we genuinely hold no country for, AND for the
+    # ones the tours withhold — a neutral athlete keeps no flag on a sheet's
+    # row even where our own bracket holds their country. See `served_nation`.
     nationality: Optional[str] = None
     # Seeding and entry status as data rather than as "[17] " on the front of
     # the name. The bracket is preferred where the player resolved; the sheet
@@ -397,7 +399,15 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_brack
         side=p.side, position=p.position,
         name=p.raw_name,
         draw_entry_id=p.draw_entry_id,
-        nationality=nats.get(p.draw_entry_id) or p.nationality,
+        # The draw entry first — it is the resolved identity, and the sheet
+        # drops the country whenever space is tight. Through
+        # `served_nation`, which withholds what the sheet withholds:
+        # a neutral athlete's draw entry carries RUS for the BRACKET's
+        # sake (assign_rankings backfills it from Tennis Explorer) and
+        # the sheet's row must not borrow it. Korea Open 2026-09-21,
+        # "Alina KORNEEVA": no country printed, none stored, a Russian
+        # flag served anyway.
+        nationality=served_nation(nats.get(p.draw_entry_id), p.nationality),
         seed=seed,
         draw_rank=draw_rank,
         entry_type=etype,
