@@ -213,6 +213,69 @@ function UsersPanel({ user }) {
   )
 }
 
+/* THE EVENT'S SHORT NAME, edited in place (owner, 2026-09-20: "so I can go
+   through them all and add a short name").
+
+   EMPTY IS NOT MISSING. Every event has a short name already — the default is
+   its name with "Open" taken out — so the box shows that default as its
+   PLACEHOLDER and holds only what an admin has actually chosen. Typing
+   overrides it; clearing goes back to the default. Prefilling the default
+   instead would save it as an override on the first blur, and it would then
+   stop following the name.
+
+   ONE NAME PER EVENT, and this table is one row per DRAW: a combined week's
+   two rows share it, which is why the save invalidates the list rather than
+   patching the row it was typed in.
+
+   Saved on blur, and on Enter by blurring — a table of sixty rows is a
+   tabbing job, and a Save button per row would double the column's width. */
+function ShortNameCell({ t, onSaved }) {
+  const stored = t.tournament_short_name_custom || ''
+  const [value, setValue] = useState(stored)
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+  // Follow the server when the list refetches — including the sibling row of
+  // a combined event, which changes under this input without it being touched.
+  useEffect(() => { setValue(stored) }, [stored])
+
+  const save = async () => {
+    const next = value.trim()
+    if (next === stored) return
+    setBusy(true)
+    setFailed(false)
+    try {
+      const { default: client } = await import('../api/client')
+      // short_name ALONE: the body omits display_name, which the server reads
+      // as "leave it alone" rather than as "clear it".
+      await client.put('/schedule/tournament-name', { tournament_id: t.tournament_id, short_name: next })
+      onSaved()
+    } catch {
+      setFailed(true)
+      setValue(stored)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!t.tournament_id) return <span className="muted">—</span>
+  return (
+    <input
+      className="admin-short-input"
+      value={value}
+      placeholder={t.tournament_short_name || ''}
+      disabled={busy}
+      style={failed ? { borderColor: 'var(--danger)' } : undefined}
+      title={failed ? 'Could not save — try again' : `Short name for ${t.name}`}
+      onChange={e => setValue(e.target.value)}
+      onBlur={save}
+      onKeyDown={e => {
+        if (e.key === 'Enter') e.target.blur()
+        if (e.key === 'Escape') { setValue(stored); e.target.blur() }
+      }}
+    />
+  )
+}
+
 function TournamentsPanel({ user }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
@@ -347,6 +410,7 @@ function TournamentsPanel({ user }) {
                   <th rowSpan={2}>Category</th>
                   <th colSpan={2} style={{ borderBottom: '1px solid var(--border)' }}>Expected Draw Dates</th>
                   <th rowSpan={2}>Name</th>
+                  <th rowSpan={2} title="The event's name where there is no room for it — a chip, a row's tag. Empty means the default is used: the name with &quot;Open&quot; taken out.">Short</th>
                   <th rowSpan={2}>City</th>
                   <th rowSpan={2}>Closes{localTzAbbr ? ` (${localTzAbbr})` : ''}</th>
                   <th rowSpan={2}>Draw</th>
@@ -366,13 +430,13 @@ function TournamentsPanel({ user }) {
                     const inGroup = filtered.filter(t => displayStatus(t) === status)
                     rows.push(
                       <tr key={`group-${status}`} className="status-group-header">
-                        <td colSpan={13}>{DISPLAY_STATUS_LABELS[status]}</td>
+                        <td colSpan={14}>{DISPLAY_STATUS_LABELS[status]}</td>
                       </tr>
                     )
                     if (inGroup.length === 0) {
                       rows.push(
                         <tr key={`empty-${status}`} className="status-group-empty-row">
-                          <td colSpan={13}>No {DISPLAY_STATUS_LABELS[status].toLowerCase()} tournaments at this time</td>
+                          <td colSpan={14}>No {DISPLAY_STATUS_LABELS[status].toLowerCase()} tournaments at this time</td>
                         </tr>
                       )
                     } else {
@@ -423,6 +487,12 @@ function TournamentsPanel({ user }) {
                                 : isCompleted ? <span style={{ color: 'var(--success)' }}>✓</span> : '—'}
                             </td>
                             <td className="td-left td-name" style={{ fontWeight: 700 }}>{t.name}</td>
+                            {/* The row navigates on click, so the cell swallows
+                                its own events — otherwise typing a name would
+                                also open the draw. */}
+                            <td onClick={e => e.stopPropagation()} style={{ padding: '0 0.35rem' }}>
+                              <ShortNameCell t={t} onSaved={() => qc.invalidateQueries({ queryKey: ['tournaments'] })} />
+                            </td>
                             <td className="muted">{t.city && t.country ? `${t.city}, ${t.country}` : t.city || t.country || '—'}</td>
                             <td className="muted" title={fmtVenueTime(t.closing_time, t.venue_timezone) ?? undefined}>
                               {t.closing_time
@@ -477,7 +547,7 @@ function TournamentsPanel({ user }) {
                         const next = inGroup[i + 1]
                         if (next && (next.week ?? next.start_date ?? '') !== (t.week ?? t.start_date ?? '')) {
                           rows.push(
-                            <tr key={`sep-${t.id}`}><td colSpan={13} style={{ padding: 0, border: 'none' }}><div style={{ height: '2px', background: 'var(--border-strong)' }} /></td></tr>
+                            <tr key={`sep-${t.id}`}><td colSpan={14} style={{ padding: 0, border: 'none' }}><div style={{ height: '2px', background: 'var(--border-strong)' }} /></td></tr>
                           )
                         }
                       })

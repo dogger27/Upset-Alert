@@ -560,6 +560,29 @@
 .admin-radio em { font-size: 0.78rem; color: var(--n-700); font-style: normal; line-height: 1.45; }
 .admin-settings-counts { margin: 0; padding-left: 1.1rem; font-size: 0.82rem; color: var(--n-700); }
 
+/* The event's short name, typed straight into the tournaments table. Sized
+   to what a short name IS — a word or two — so the column cannot widen an
+   already dense row, and quiet until it has focus: sixty of these down a
+   page should read as a column of names, not a column of boxes. */
+.admin-short-input {
+  font-size: 0.68rem;
+  padding: 0.15rem 0.3rem;
+  width: 6.5rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--n-800);
+  font-weight: 600;
+}
+.admin-short-input::placeholder { color: var(--n-500); font-weight: 400; font-style: italic; }
+.admin-short-input:hover { border-color: var(--border, var(--n-200)); }
+.admin-short-input:focus {
+  outline: none;
+  border-color: var(--primary, var(--n-400));
+  background: var(--surface-card);
+}
+.admin-short-input:disabled { opacity: 0.5; }
+
 /* Per-draw locking rule in the tournaments table. Sized to the column rather
    than the text so a long option can't widen an already dense row. */
 .admin-lock-select {

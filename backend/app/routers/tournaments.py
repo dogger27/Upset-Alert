@@ -182,7 +182,8 @@ async def list_tournaments(db: AsyncSession = Depends(get_db)):
                     "qualifying_started_at": qual,
                     "tournament_short_name": (
                         (t_short or "").strip()
-                        or default_short_name((t_display or "").strip() or t.name))})
+                        or default_short_name((t_display or "").strip() or t.name)),
+                    "tournament_short_name_custom": (t_short or "").strip() or None})
         for t, lat, qual, t_display, t_short in rows
     ]
 

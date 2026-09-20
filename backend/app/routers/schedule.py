@@ -1465,9 +1465,16 @@ async def set_court_alias(
 
 
 class TournamentNameIn(BaseModel):
+    """Either name may be left out, and that is not the same as clearing it.
+
+    OMITTED (null) means LEAVE THIS ALONE; an empty string means clear the
+    override. The admin list edits one field of one row at a time — it has no
+    business knowing the other name, and a body that carried both would wipe
+    a display name every time somebody typed a short one (owner, 2026-09-20).
+    """
     tournament_id: int
-    display_name: str = ""       # empty = back to the scraped name
-    short_name: str = ""         # empty = no short name; callers fall back
+    display_name: Optional[str] = None   # "" = back to the scraped name
+    short_name: Optional[str] = None     # "" = back to the default off the name
 
 
 @router.put("/tournament-name")
@@ -1495,12 +1502,16 @@ async def set_tournament_name(
         Tournament.id == body.tournament_id))).scalars().first()
     if not t:
         raise HTTPException(status_code=404, detail="No such tournament")
-    shown = " ".join(body.display_name.split())
-    short = " ".join(body.short_name.split())
     was = (t.display_name, t.short_name)
-    # An override that just restates the scraped name is not an override.
-    t.display_name = None if not shown or shown == t.name else shown
-    t.short_name = short or None
+    if body.display_name is not None:
+        shown = " ".join(body.display_name.split())
+        # An override that just restates the scraped name is not an override.
+        t.display_name = None if not shown or shown == t.name else shown
+    if body.short_name is not None:
+        short = " ".join(body.short_name.split())
+        # Nor is a short name that restates what the default already gives.
+        t.short_name = (
+            None if not short or short == default_short_name(t.shown_name) else short)
     await db.commit()
     if was != (t.display_name, t.short_name):
         await app_log(

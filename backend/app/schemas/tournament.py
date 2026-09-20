@@ -76,6 +76,10 @@ class TournamentOut(BaseModel):
     # (owner, 2026-09-20). Never empty — a caller with no room must never
     # have to invent an abbreviation.
     tournament_short_name: Optional[str] = None
+    # The admin's OWN short name, null until they set one — so an editor can
+    # tell "they chose this" from "this is the default", and show the default
+    # as a placeholder rather than as a value it would then save back.
+    tournament_short_name_custom: Optional[str] = None
     is_locked: bool
 
     @property
