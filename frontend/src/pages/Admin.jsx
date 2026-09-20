@@ -216,12 +216,16 @@ function UsersPanel({ user }) {
 /* THE EVENT'S SHORT NAME, edited in place (owner, 2026-09-20: "so I can go
    through them all and add a short name").
 
-   EMPTY IS NOT MISSING. Every event has a short name already — the default is
-   its name with "Open" taken out — so the box shows that default as its
-   PLACEHOLDER and holds only what an admin has actually chosen. Typing
-   overrides it; clearing goes back to the default. Prefilling the default
-   instead would save it as an override on the first blur, and it would then
-   stop following the name.
+   THE BOX HOLDS THE REAL TEXT, default and all (owner, 2026-09-20: a
+   placeholder was the wrong call). Going down a column of sixty, the job is
+   to correct a word — "Adelaide International" wants to be "Adelaide" — and
+   that means reading and editing what is there, not typing it out against an
+   empty field.
+
+   Prefilling is safe because the server does not store a short name that
+   merely restates the default: blur "Korea" on Korea Open and nothing is
+   written, so it keeps following the name. Clearing the box says the same
+   thing explicitly.
 
    ONE NAME PER EVENT, and this table is one row per DRAW: a combined week's
    two rows share it, which is why the save invalidates the list rather than
@@ -230,7 +234,8 @@ function UsersPanel({ user }) {
    Saved on blur, and on Enter by blurring — a table of sixty rows is a
    tabbing job, and a Save button per row would double the column's width. */
 function ShortNameCell({ t, onSaved }) {
-  const stored = t.tournament_short_name_custom || ''
+  // The one in use, which is the admin's own or the default off the name.
+  const stored = t.tournament_short_name || ''
   const [value, setValue] = useState(stored)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -262,7 +267,7 @@ function ShortNameCell({ t, onSaved }) {
     <input
       className="admin-short-input"
       value={value}
-      placeholder={t.tournament_short_name || ''}
+      placeholder="Short name"
       disabled={busy}
       style={failed ? { borderColor: 'var(--danger)' } : undefined}
       title={failed ? 'Could not save — try again' : `Short name for ${t.name}`}

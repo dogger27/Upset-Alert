@@ -81,14 +81,17 @@ export function CourtRenameSheet({ court, onClose }) {
  *
  *   The name        what a reader is shown wherever the event is named.
  *   Short name      the same event where there is no room for its name — a
- *                   chip, a row's tag, a strip across a phone. LEFT EMPTY IT
- *                   IS NOT MISSING: the server's default is the name with
- *                   "Open" taken out (owner, 2026-09-20), which is right for
- *                   sixty-nine of the seventy-one events that have the word.
- *                   So the box starts empty with that default as its
- *                   placeholder, and typing anything overrides it — the same
- *                   shape as the name field above, where empty means "use
- *                   the scraped name".
+ *                   chip, a row's tag, a strip across a phone. THE BOX HOLDS
+ *                   THE REAL TEXT, default and all (owner, 2026-09-20): a
+ *                   placeholder here was the wrong call — an empty field
+ *                   reads as nothing set, and an editor wants to correct a
+ *                   word, not retype it from scratch.
+ *
+ *                   Prefilling is safe because the server does not store a
+ *                   short name that merely restates the default: save
+ *                   "Korea" for Korea Open and nothing is written, so it
+ *                   keeps following the name. Clearing the box does the same
+ *                   thing explicitly.
  *
  * The SCRAPED name is shown beneath the fields and is never edited: it is
  * what the scrapers write and what the feed matchers compare against, so an
@@ -103,10 +106,9 @@ export function TournamentRenameSheet({ event, onClose }) {
   const [error, setError] = useState(null)
   useEffect(() => {
     setName(event?.current || '')
-    // The admin's own short name, not the effective one: prefilling the
-    // default would turn it into an override the moment they hit Save, and
-    // it would then stop following the name.
-    setShort(event?.shortCustom || '')
+    // The one in use — the admin's, or the default off the name — because a
+    // box you can read and edit beats a box you have to guess at.
+    setShort(event?.short || '')
     setError(null)
   }, [event])
   if (!event) return null
@@ -139,8 +141,7 @@ export function TournamentRenameSheet({ event, onClose }) {
         />
         <TextInput
           style={s.input} value={short} onChangeText={setShort}
-          placeholder={event.short ? `Short name — ${event.short}` : 'Short name'}
-          placeholderTextColor={C.muted}
+          placeholder="Short name" placeholderTextColor={C.muted}
           autoCapitalize="words" autoCorrect={false} returnKeyType="done"
           onSubmitEditing={() => save(name, short)} editable={!busy}
           accessibilityLabel="Short tournament name"

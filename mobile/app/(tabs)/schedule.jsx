@@ -384,11 +384,9 @@ export default function ScheduleScreen() {
     return {
       tournament_id: id,
       current: shown,
-      // `short` is the one in use (the admin's, or the server's default off
-      // the name); `shortCustom` is theirs alone, so an empty box reads as
-      // "use the default" rather than as "there isn't one".
+      // The one in use: the admin's, or the server's default off the name.
+      // The sheet shows it as real text — see rename.jsx.
       short: t?.short_name || '',
-      shortCustom: t?.short_name_custom || '',
       scraped: t?.scraped_name || shown,
     }
   }

@@ -563,7 +563,9 @@
 /* The event's short name, typed straight into the tournaments table. Sized
    to what a short name IS — a word or two — so the column cannot widen an
    already dense row, and quiet until it has focus: sixty of these down a
-   page should read as a column of names, not a column of boxes. */
+   page should read as a column of names, not a column of boxes. Every box
+   carries real text (its default, where nobody has set one), so the column
+   is readable as a list on its own. */
 .admin-short-input {
   font-size: 0.68rem;
   padding: 0.15rem 0.3rem;
@@ -574,7 +576,7 @@
   color: var(--n-800);
   font-weight: 600;
 }
-.admin-short-input::placeholder { color: var(--n-500); font-weight: 400; font-style: italic; }
+.admin-short-input::placeholder { color: var(--n-500); font-weight: 400; }
 .admin-short-input:hover { border-color: var(--border, var(--n-200)); }
 .admin-short-input:focus {
   outline: none;
