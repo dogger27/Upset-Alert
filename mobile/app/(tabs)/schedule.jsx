@@ -569,19 +569,45 @@ export default function ScheduleScreen() {
         {/* NOT ON A PAST DAY (owner, 2026-09-20): a finished day is read as a
             chronology, and a switch whose other half nobody wants is a control
             over nothing. */}
-        {!past && (
-        <View style={s.tabs}>
-          {['time', 'court'].map(v => (
-            <Pressable key={v} onPress={() => setViewChoice(v)}
-                       style={[s.tab, view === v && s.tabOn]}
-                       accessibilityRole="button" accessibilityState={{ selected: view === v }}>
-              <Text style={[s.tabText, view === v && s.tabTextOn]}>
-                {v === 'time' ? 'Time' : 'Court'}
-              </Text>
-            </Pressable>
-          ))}
+        {/* THE DENSITY BUTTON SITS BESIDE THE SWITCH (owner, 2026-09-20) —
+            and stays a SEPARATE button: its own pill, its own gap, no shared
+            frame. Both answer "how am I looking at this day?", which is why
+            they belong on one line, but the switch chooses an arrangement
+            and this chooses how much of each match to draw. It was at the
+            far end of the filters row below, among controls that thin the
+            rows rather than redraw them.
+
+            The row survives a past day, where the switch does not: `marginLeft:
+            auto` on the button keeps it at the same right edge with nothing
+            to its left. */}
+        <View style={s.viewRow}>
+          {!past && (
+          <View style={[s.tabs, s.tabsGrow]}>
+            {['time', 'court'].map(v => (
+              <Pressable key={v} onPress={() => setViewChoice(v)}
+                         style={[s.tab, view === v && s.tabOn]}
+                         accessibilityRole="button" accessibilityState={{ selected: view === v }}>
+                <Text style={[s.tabText, view === v && s.tabTextOn]}>
+                  {v === 'time' ? 'Time' : 'Court'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          )}
+          {/* THE LIST: one match, one row — time, round, the surnames with
+              "vs" or "def.", the score. An icon rather than a word, so it
+              reads as a view control rather than a filter.
+
+              Three densities, one button (owner, 2026-09-17): cards, the
+              card's two lines with hairlines between matches, one-line rows.
+              The glyph says where you are. */}
+          <Pressable onPress={() => setDensity(d => (d === 'cards' ? 'mid' : d === 'mid' ? 'list' : 'cards'))}
+                     style={[s.chip, s.chipIcon, dense && s.chipOn]}
+                     hitSlop={6} accessibilityRole="button" accessibilityLabel="Compact list"
+                     accessibilityState={{ selected: dense }} accessibilityValue={{ text: density }}>
+            <Ionicons name={density === 'list' ? 'list' : density === 'mid' ? 'reorder-three' : 'reorder-four'} size={19} color={dense ? '#fff' : C.muted} />
+          </Pressable>
         </View>
-        )}
 
         {/* THE TOURNAMENTS, ON THE PAGE. They were reachable only by pressing
             the Schedule tab a second time, which is a thing you have to be
@@ -622,6 +648,11 @@ export default function ScheduleScreen() {
           </View>
         )}
 
+        {/* ONLY WHEN THERE IS SOMETHING IN IT. The row used to always hold the
+            density button, so it was always worth drawing; with that gone a
+            day with one tour and no doubles would leave the column's gap
+            around an empty row. */}
+        {view === 'time' && (tourChips || hasDoubles) && (
         <View style={s.filters}>
           {/* The tour chips filter the time view only, so the court view does
               not offer them — the site's rule; a chip that toggles nothing
@@ -644,19 +675,8 @@ export default function ScheduleScreen() {
               <Text style={[s.chipText, showDoubles && { color: '#fff' }]}>Doubles</Text>
             </Pressable>
           )}
-          {/* THE LIST: one match, one row — time, round, the surnames with
-              "vs" or "def.", the score. Far right, an icon, so it reads as a
-              view switch rather than another filter. */}
-          <Pressable onPress={() => setDensity(d => (d === 'cards' ? 'mid' : d === 'mid' ? 'list' : 'cards'))}
-                     style={[s.chip, s.chipIcon, dense && s.chipOn]}
-                     hitSlop={6} accessibilityRole="button" accessibilityLabel="Compact list"
-                     accessibilityState={{ selected: dense }} accessibilityValue={{ text: density }}>
-            {/* Three densities, one button (owner, 2026-09-17): cards, the
-                card's two lines with hairlines between matches, one-line
-                rows. The glyph says where you are. */}
-            <Ionicons name={density === 'list' ? 'list' : density === 'mid' ? 'reorder-three' : 'reorder-four'} size={19} color={dense ? '#fff' : C.muted} />
-          </Pressable>
         </View>
+        )}
 
         {/* ── WHAT IS DONE, WHAT IS ON, WHAT IS COMING ────────────────────
             Directly above the list and all the way across it (owner,
@@ -1418,6 +1438,11 @@ const s = StyleSheet.create({
     flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken,
     borderRadius: R.md, padding: 2,
   },
+  // The switch and the density button on one line, with a gap between them
+  // wide enough that they read as two controls rather than one.
+  viewRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  // The switch still takes the width the button leaves it.
+  tabsGrow: { flex: 1 },
   /* THE DAY'S THREE, across the whole list. The Time/Court control's anatomy
      exactly — a sunken strip, every segment bordered so nothing moves as the
      selection does, the chosen one lit on deep green — because it is the same
