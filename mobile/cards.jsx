@@ -766,6 +766,8 @@ const u = StyleSheet.create({
      of the box (the draw's pills taught this); the font's own line, centred
      by the box, puts them on its middle. */
   badgeText: { fontFamily: 'Archivo_700Bold', fontSize: 11 },
+  // A three-letter code at the size that keeps its pill as wide as a WC's.
+  badgeTextWide: { fontSize: 9.5 },
 })
 
 
@@ -804,12 +806,25 @@ export function PosBadge({ seed, drawRank }) {
 /* Q for a qualifier, WC for a wildcard, LL for a lucky loser — whatever the
    feed says, rendered only when there is one. Sits AFTER the name, as on the
    site, so it never pushes the names out of alignment. */
+/* THE SHEET'S CODES, AS IT PRINTS THEM — WC, Q, PR, LL, SE — with one
+   exception. "A" is ALTERNATE, and a bare letter reads as an initial rather
+   than as a status (owner, 2026-09-20). Spelled out, and only that one:
+   every other code is two letters and already says itself.
+
+   A three-letter label is set a size down so its pill stays the width of the
+   two-letter ones beside it, which was the owner's condition. Measured
+   rather than eyeballed: "ALT" at 9.5pt is 18.6pt wide against "WC" at 11pt
+   at 18.7pt, so the pair is as near identical as the face allows. */
+const ENTRY_LABEL = { A: 'ALT' }
+
 export function EntryChip({ entryType }) {
   if (!entryType) return null
+  const code = String(entryType).toUpperCase()
+  const label = ENTRY_LABEL[code] || code
   return (
     <View style={[u.entryChip, { backgroundColor: BADGE.qual.bg, borderColor: BADGE.qual.line }]}>
-      <Text style={[u.badgeText, { color: BADGE.qual.fg }]} numberOfLines={1}>
-        {String(entryType).toUpperCase()}
+      <Text style={[u.badgeText, label.length > 2 && u.badgeTextWide, { color: BADGE.qual.fg }]} numberOfLines={1}>
+        {label}
       </Text>
     </View>
   )

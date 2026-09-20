@@ -140,7 +140,7 @@ export function TournamentRenameSheet({ event, onClose }) {
         {error ? <Text style={s.err}>{error}</Text> : null}
         <Pressable style={[s.btn, s.primary, busy && s.dim]} onPress={() => save(name, short)} disabled={busy}
                    accessibilityRole="button">
-          {busy ? <ActivityIndicator color={C.bg} /> : <Text style={s.primaryText}>Save everywhere</Text>}
+          {busy ? <ActivityIndicator color={C.bg} /> : <Text style={s.primaryText}>Save</Text>}
         </Pressable>
         {overridden && (
           <Pressable style={[s.btn, busy && s.dim]} onPress={() => save('', short)} disabled={busy} accessibilityRole="button">
