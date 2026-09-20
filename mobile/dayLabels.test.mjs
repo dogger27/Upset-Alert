@@ -39,14 +39,26 @@ assert.deepEqual(labels(['2026-09-12', '2026-09-13'], undefined), ['1', '2'])
 assert.deepEqual(dayLabels(['2026-09-12'], '2026-09-13'), [{ date: '2026-09-12', label: 'Q1' }])
 
 
-// The slot's word: today, yesterday, and nothing for any other day — across a
-// month end and a year end, since it is day arithmetic, not string maths.
+// The slot's word: yesterday, today and TOMORROW — the three days a reader has
+// a word for (owner, 2026-09-20; tomorrow used to show its date) — and nothing
+// for any other day. Across a month end and a year end, since it is day
+// arithmetic rather than string maths.
 assert.equal(relativeDayWord('2026-09-17', '2026-09-17'), 'Today')
 assert.equal(relativeDayWord('2026-09-16', '2026-09-17'), 'Yester.')
+assert.equal(relativeDayWord('2026-09-18', '2026-09-17'), 'Tmrw')
 assert.equal(relativeDayWord('2026-09-15', '2026-09-17'), null)
-assert.equal(relativeDayWord('2026-09-18', '2026-09-17'), null)     // tomorrow has no word
+assert.equal(relativeDayWord('2026-09-19', '2026-09-17'), null)     // two days out is a date
 assert.equal(relativeDayWord('2026-08-31', '2026-09-01'), 'Yester.')
 assert.equal(relativeDayWord('2025-12-31', '2026-01-01'), 'Yester.')
 assert.equal(relativeDayWord(undefined, '2026-09-17'), null)
 
 console.log('ok — dayLabels')
+
+// The words hold over a month end, a year end and a leap day. The shift is
+// done at NOON UTC so a daylight change cannot push the result across the
+// date line.
+assert.equal(relativeDayWord('2026-10-01', '2026-09-30'), 'Tmrw')
+assert.equal(relativeDayWord('2027-01-01', '2026-12-31'), 'Tmrw')
+assert.equal(relativeDayWord('2028-02-29', '2028-02-28'), 'Tmrw')
+assert.equal(relativeDayWord('2028-03-01', '2028-02-29'), 'Tmrw')
+assert.equal(relativeDayWord('2026-09-21', null), null)
