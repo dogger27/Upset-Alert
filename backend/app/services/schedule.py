@@ -41,7 +41,8 @@ from app.models.schedule import (ScheduleChange, ScheduleDocument,
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.live_state import is_suspended
 from app.services.oop_parser import (COUNTRY_CODES, NEUTRAL_NATIONS,
-                                     is_placeholder, parse_pdf, sheet_is_blank)
+                                     is_placeholder, parse_pdf, served_nation,
+                                     sheet_is_blank)
 from app.services.oop_parser import _CLOCK_BODY as _OOP_CLOCK_BODY
 from app.services.rankings import _norm
 
@@ -711,7 +712,17 @@ def _sheet_form(person, seeded: bool = True) -> Optional[str]:
     marker = None
     if seeded:
         marker = f"[{seed}]" if seed else (f"[{entry_type}]" if entry_type else None)
-    return ' '.join([p for p in (marker, ' '.join(words), nationality) if p])
+    # THROUGH `served_nation`: this renders a SHEET row, and a draw entry
+    # states a neutral athlete's country on purpose — `assign_rankings` fills
+    # it from Tennis Explorer so the bracket can fly the flag (2026-07-11).
+    # Written into a name it is the sheet's rendering of something no sheet
+    # prints: a settled Korea slot would have published "Alina KORNEEVA RUS",
+    # a flag on the page by the one road the serve-path gate cannot see (the
+    # app reads a trailing code as a country) and a `withheld_nation_served`
+    # violation on the name. Found by the OOP verifier, 2026-09-20, beside
+    # the serve-path leak in routers/schedule.py.
+    return ' '.join([p for p in (marker, ' '.join(words),
+                                 served_nation(nationality)) if p])
 
 
 def _printed_name(printed: dict, people: dict, eid, fallback: str) -> str:

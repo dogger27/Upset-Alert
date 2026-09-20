@@ -88,6 +88,19 @@ def test_the_bracket_may_hold_a_country_the_sheets_row_may_not_show():
     assert served_nation(None, None) is None and served_nation("", "") is None
 
 
+def test_a_slot_settled_from_the_bracket_prints_no_withheld_country():
+    # `_sheet_form` renders a draw entry the way a sheet prints a settled row,
+    # and the draw entry states a neutral athlete's country on purpose. Glued
+    # to the name it is a flag on the app (a trailing code IS the country
+    # there) and a violation of the law's second branch.
+    from app.services.schedule import _sheet_form
+    assert _sheet_form(("Alina Korneeva", "RUS", None, None)) == "Alina KORNEEVA"
+    assert _sheet_form(("Aliaksandra Sasnovich", "BLR", 8, None)) == \
+        "[8] Aliaksandra SASNOVICH"
+    # Everyone else keeps the country the sheet would print.
+    assert _sheet_form(("Cristina Bucsa", "ESP", 8, None)) == "[8] Cristina BUCSA ESP"
+
+
 def _p(name, entry_id, nat=None):
     return SimpleNamespace(side="a", position=1, raw_name=name,
                            draw_entry_id=entry_id, nationality=nat)
