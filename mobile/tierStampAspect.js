@@ -3,8 +3,8 @@
  * its lettering: TierBadge draws it CAP tall and aspect x CAP wide. Both
  * tours are built to one line, so the pairs match exactly. */
 export default {
-  atp: { 250: 5.5364, 500: 5.5909, 1000: 6.1091 },
-  wta: { 250: 5.5364, 500: 5.5909, 1000: 6.1091 },
+  atp: { 250: 5.5312, 500: 5.5938, 1000: 6.1094 },
+  wta: { 250: 5.5312, 500: 5.5938, 1000: 6.1094 },
 }
 
 /* The ink each tour's artwork is flattened to: TOUR[*].text in

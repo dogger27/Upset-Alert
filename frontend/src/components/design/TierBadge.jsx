@@ -11,18 +11,18 @@ import { useTheme } from '../../store/theme'
    read and are left alone — a variant they do not need is a second file to
    keep in step. */
 const SLAM_DARK = new Set([
-  '/logos/slams/slam_US.svg.png',
-  '/logos/slams/slam_RolandGarros.svg.png',
-  '/logos/slams/slam_Wimbledon.svg.png',
+  '/logos/badge/slam_US.svg.png',
+  '/logos/badge/slam_RolandGarros.svg.png',
+  '/logos/badge/slam_Wimbledon.svg.png',
 ])
 
 function slamLogo(name, dark) {
   const n = (name || '').toLowerCase()
   let src = null
-  if (n.includes('australian')) src = '/logos/slams/slam_Australian.png'
-  else if (n.includes('roland') || n.includes('french')) src = '/logos/slams/slam_RolandGarros.svg.png'
-  else if (n.includes('wimbledon')) src = '/logos/slams/slam_Wimbledon.svg.png'
-  else if (n.includes('us open')) src = '/logos/slams/slam_US.svg.png'
+  if (n.includes('australian')) src = '/logos/badge/slam_Australian.png'
+  else if (n.includes('roland') || n.includes('french')) src = '/logos/badge/slam_RolandGarros.svg.png'
+  else if (n.includes('wimbledon')) src = '/logos/badge/slam_Wimbledon.svg.png'
+  else if (n.includes('us open')) src = '/logos/badge/slam_US.svg.png'
   if (!src) return null  // will fall back to tour-specific generic
   return dark && SLAM_DARK.has(src) ? src.replace('.png', '-dark.png') : src
 }
@@ -42,7 +42,7 @@ export function TierBadge({ tour = 'ATP', tier = '500', name = '', size = 'md', 
 
   let src
   if (isSlam) {
-    src = slamLogo(name, theme === 'dark') || (isATP ? '/logos/slams/slam_atp.png' : '/logos/slams/slam_wta.svg')
+    src = slamLogo(name, theme === 'dark') || (isATP ? '/logos/badge/slam_atp.png' : '/logos/slams/slam_wta.svg')
   } else {
     const tierNum = String(tier).replace(/\D/g, '') || '250'
     // The 250 stamp is a flat navy (#050053) — 1.1:1 on a dark card, i.e.
@@ -52,7 +52,7 @@ export function TierBadge({ tour = 'ATP', tier = '500', name = '', size = 'md', 
     // are untouched and it lands at 8.2:1.
     const darkStamp = theme === 'dark' && tierNum === '250' ? '-dark' : ''
     src = isATP
-      ? `/logos/categorystamps_${tierNum}${darkStamp}.png`
+      ? `/logos/badge/categorystamps_${tierNum}${darkStamp}.png`
       : `/logos/${tierNum}k-tag.svg`
   }
 

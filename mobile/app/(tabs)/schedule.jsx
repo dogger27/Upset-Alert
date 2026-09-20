@@ -704,18 +704,25 @@ export default function ScheduleScreen() {
                 that is drawn. */}
             {court ? (
               <View style={s.courtHead}>
-                <FitText style={(dense ? COURT_SMALL : COURT).style} track={(dense ? COURT_SMALL : COURT).track} min={9}>{court.toUpperCase()}</FitText>
                 {/* ADMINS RENAME A COURT FROM HERE (owner, 2026-09-17): the
-                    pencil after the name opens the sheet; the name it sets is
-                    the court's everywhere the schedule is served. The sheet's
-                    own name is the key, carried on every row as court_key. */}
-                {isAdmin && (
-                  <Pressable
-                    onPress={() => setRenaming({ tournament_id: list[0].tournament_id, court_key: list[0].court_key || court, current: court })}
-                    hitSlop={8} style={s.courtEdit} accessibilityRole="button" accessibilityLabel={`Rename ${court}`}>
-                    <Ionicons name="pencil" size={14} color={C.muted} />
-                  </Pressable>
-                )}
+                    pencil opens the sheet; the name it sets is the court's
+                    everywhere the schedule is served. The sheet's own name is
+                    the key, carried on every row as court_key.
+
+                    IT RIDES ON THE NAME, not at the end of the row (owner,
+                    2026-09-20) — `after` puts it inside the fitting slot, so
+                    it follows "GRANDSTAND" instead of sitting 200pt away
+                    against the screen's edge. */}
+                <FitText style={(dense ? COURT_SMALL : COURT).style} track={(dense ? COURT_SMALL : COURT).track} min={9}
+                         after={isAdmin ? (
+                           <Pressable
+                             onPress={() => setRenaming({ tournament_id: list[0].tournament_id, court_key: list[0].court_key || court, current: court })}
+                             hitSlop={8} style={s.courtEdit} accessibilityRole="button" accessibilityLabel={`Rename ${court}`}>
+                             <Ionicons name="pencil" size={14} color={C.muted} />
+                           </Pressable>
+                         ) : null}>
+                  {court.toUpperCase()}
+                </FitText>
               </View>
             ) : null}
             {density === 'mid'

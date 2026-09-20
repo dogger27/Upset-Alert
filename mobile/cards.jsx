@@ -477,7 +477,13 @@ const NAV_SLOP = { top: 9, bottom: 9, left: 2, right: 2 }
    a name 20pt on a small phone. Off by default: a title that wraps is a
    different design from one that shrinks, and every other caller chose the
    shrink. */
-export function FitText({ children, style, min = 8, track = 0, wrapAtFloor = false, align = 'left' }) {
+/* `after`: a control that rides immediately right of the text, INSIDE the
+   fitting slot. The slot is flex:1, so anything placed after FitText itself
+   lands at the far end of the row instead — which is where the court's
+   pencil had ended up, against the screen edge (owner, 2026-09-20). Its
+   width comes off what the text may use, the same allowance and the same
+   constant as PlayerName's trailing mark. */
+export function FitText({ children, style, min = 8, track = 0, wrapAtFloor = false, align = 'left', after = null }) {
   const [avail, setAvail] = useState(null)
   const flat = StyleSheet.flatten(style) || {}
   const family = flat.fontFamily || 'Archivo_500Medium'
@@ -489,7 +495,7 @@ export function FitText({ children, style, min = 8, track = 0, wrapAtFloor = fal
     const need = textWidth(text, family, size) + text.length * track
     // A point of slack: kerning is not in the tables, and a string right on
     // the line should shrink rather than gamble.
-    const room = avail - 1
+    const room = avail - 1 - (after ? AFTER_PX : 0)
     if (need > room) {
       const want = (size * room) / need
       fontSize = Math.max(min, want)
@@ -514,6 +520,7 @@ export function FitText({ children, style, min = 8, track = 0, wrapAtFloor = fal
             numberOfLines={wrap ? undefined : 1} adjustsFontSizeToFit={!wrap} minimumFontScale={0.5}>
         {text}
       </Text>
+      {after}
     </View>
   )
 }

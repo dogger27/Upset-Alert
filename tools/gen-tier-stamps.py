@@ -36,6 +36,7 @@ output: they are this script's input.
 
     python3 gen-tier-stamps.py
 """
+import sys
 from collections import Counter
 from pathlib import Path
 
@@ -87,9 +88,28 @@ def flat_colour(name):
 
 # ---------------------------------------------------------------- the canvas
 
-# The cap height every stamp is set at. Close to the WTA tags' own 106-119px so
-# nothing is meaningfully resampled, and ~2x what the badge needs at 3x.
+# The cap height every stamp is BUILT at. Close to the WTA tags' own 106-119px
+# so nothing is meaningfully resampled while the lettering is being taken
+# apart — the gap-finding passes below measure runs of pixels, and they were
+# tuned at this height.
 CAP = 110
+
+# The cap height every stamp is SHIPPED at, which is a different question
+# (owner, 2026-09-20: the badges took too long to load). TierBadge draws a
+# stamp CAP_PT tall, so the artwork is only ever asked for CAP_PT x the
+# device's scale: 15pt at 4x — an Android xxxhdpi, more than any iPhone — is
+# 60px. Shipping 110 meant every card decoded ~3.4x the pixels it could draw,
+# and a dashboard's worth of that is the delay. 64px is 4.3x of 15pt, so the
+# art is still oversampled on every device made.
+#
+# Downsampling is the safe direction (LANCZOS, clean lettering) and it happens
+# LAST, after the two tours have been paired: the pair goes in identical, so
+# it comes out identical, which is what tierStamps.test.mjs checks.
+#
+# IF cards.jsx's CAP EVER GROWS, raise this and re-run — the rule is
+# OUT_CAP >= 4 x CAP_PT.
+CAP_PT = 15
+OUT_CAP = 64
 
 
 def tight(line, cap):
@@ -347,6 +367,13 @@ def parts(name):
 # nothing here touches them.
 CRESTS = {'slam_US-mark.png': 'slams/slam_US.svg-dark.png'}
 
+# The crests' pixel budget and the fitter, from the tool that shrinks the
+# others, so there is one definition of how big a crest ships.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from importlib import import_module           # noqa: E402
+_crests = import_module('gen-badge-crests')
+CREST_BOX, fit_box, save_small = _crests.BOX, _crests.fit_box, _crests.save_small
+
 
 # ------------------------------------------------------------------- do it
 
@@ -390,16 +417,34 @@ for tier in TIERS:
           f'(wordmark fitted to {mark.size[0]}x{mark.size[1]}, '
           f'numerals {num.size[0]}x{num.size[1]}; tag lettering was {ink} on {bg})')
 
+# SHIP SMALL. Built at CAP, saved at OUT_CAP — see the note beside them.
+def to_out_cap(art):
+    if art.size[1] <= OUT_CAP:
+        return art
+    w = max(1, round(art.size[0] * OUT_CAP / art.size[1]))
+    return art.resize((w, OUT_CAP), Image.LANCZOS)
+
+
+lines = {name: to_out_cap(line) for name, line in lines.items()}
+
 for out_name, line in lines.items():
-    line.save(ART / out_name)
+    # Through the same encoder as the crests: these are two flat colours on
+    # transparency, which a palette holds exactly.
+    print(f'  {out_name:28s} {line.size[0]}x{line.size[1]}  '
+          f'{save_small(line, ART / out_name)}')
 
 for out_name, src_name in CRESTS.items():
     mark, name = split_at_gap(Image.open(ART / src_name).convert('RGBA'))
     mark = mark.crop(mark.getbbox())
-    mark.save(ART / 'slams' / out_name)
+    # As the stamps: shipped at the size a badge can draw. A crest goes in
+    # TierBadge's own box rather than at a cap height, so it shares the
+    # crests' budget — gen-badge-crests.py, one number in one place.
+    mark = fit_box(mark, CREST_BOX)
+    (ART / 'badge').mkdir(exist_ok=True)
+    save_small(mark, ART / 'badge' / out_name)
     print(f'{src_name}: mark {mark.size[0]}x{mark.size[1]} '
           f'(aspect {mark.size[0] / mark.size[1]:.2f}), wordmark dropped, '
-          f'wrote slams/{out_name}')
+          f'wrote badge/{out_name}')
 
 # The badge draws each stamp CAP tall and aspect x CAP wide, so it needs the
 # aspect ratios. It cannot ask the runtime for them: Image.resolveAssetSource
