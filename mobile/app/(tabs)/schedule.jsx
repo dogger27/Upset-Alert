@@ -409,8 +409,17 @@ export default function ScheduleScreen() {
     [beforePhase, shownPhase],
   )
 
-  // More than one tournament on the page: the mid view names each match's (time view, today).
-  const manyTournaments = useMemo(() => new Set(visible.map(e => e.tournament_id)).size > 1, [visible])
+  /* More than one tournament on the page: the mid view names each match's
+     (time view, today).
+
+     THE DAY'S ROWS, NOT THE SEGMENT'S (owner, 2026-09-20). Read off `visible`
+     this collapsed whenever the Completed/Live/Upcoming switch left a segment
+     holding one tournament: today's single upcoming match lost the name that
+     the eight completed ones above it carried, on the same day and the same
+     page. Whether the page mixes tournaments is a fact about the DAY, and it
+     must not change as the reader moves between its segments. */
+  const manyTournaments = useMemo(
+    () => new Set(beforePhase.map(e => e.tournament_id)).size > 1, [beforePhase])
 
   const groups = useMemo(() => {
     // Court: one group per court, by tournament when more than one is showing
@@ -425,7 +434,13 @@ export default function ScheduleScreen() {
        chronology kept inside each group. Today and the days ahead stay a
        running order. pastGroups.js, on its own suite. */
     if (past) {
-      const byTournament = new Set(chrono.map(e => e.tournament_id)).size > 1
+      /* ALWAYS NAMED, even on a day only one tournament played (owner,
+         2026-09-20, for the court view's headings — the same rule, and this
+         is the same kind of heading). A heading names its section once; it is
+         a per-ROW repeat that has to earn its place, which is what
+         manyTournaments decides above. It also carries the event's tier
+         stamp, which a day with one tournament should not go without. */
+      const byTournament = true
       // "Singles" is said only when there is doubles on the page to tell it
       // from — Doubles off, or a day with none, is rounds alone (owner).
       const mixed = new Set(chrono.map(e => (e.discipline === 'singles' ? 'singles' : 'other'))).size > 1
