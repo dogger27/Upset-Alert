@@ -329,11 +329,20 @@ export default function ScheduleScreen() {
      apply either: a selection made on a two-tour day would otherwise empty a
      one-tour day with no chip on screen to undo it. */
   const tourChips = toursHere.length > 1
-  /* A GENDER BAR on the dense rows (owner, 2026-09-17): where the day mixes
-     the tours — a Slam, a combined event — each row carries a thin bar at
-     its far left in the tour's colour, pink or blue. One tour on the day
-     needs no bar, and a qualifying row has no tour to show. */
-  const tourBarOf = e => (tourChips && e.tour ? (e.tour === 'WTA' ? TOUR_BAR.WTA : TOUR_BAR.ATP) : null)
+  /* A GENDER BAR on the dense rows (owner, 2026-09-17), on EVERY row (owner,
+     2026-09-20). A thin bar at the row's far left in its tour's colour, pink
+     or blue, whether or not the day mixes the tours.
+
+     It began as a disambiguator, drawn only where a Slam or a combined event
+     put two tours in one list — and that was the narrower rule. The bar says
+     what this match IS, and that does not depend on what else happens to be
+     on the page; a WTA 250 on a WTA-only day is no less a WTA match. It is
+     the same call as the court view's heading, which names its tournament
+     even when only one is showing.
+
+     A row with no tour of its own still gets no bar: there is nothing to
+     say, and a grey stripe would say something false. */
+  const tourBarOf = e => (e.tour ? (e.tour === 'WTA' ? TOUR_BAR.WTA : TOUR_BAR.ATP) : null)
   /* DOUBLES TO FILTER — among the rows the other filters keep, not among every
      row fetched. Filtering to a tournament with no doubles while another event
      on the same day has some left the switch on screen toggling nothing; so
