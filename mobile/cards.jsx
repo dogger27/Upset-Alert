@@ -650,11 +650,30 @@ const u = StyleSheet.create({
      "on both width and height" means once the artwork is cropped to its ink
      and the plate is only as big as what it holds. */
   stamp: { borderRadius: 8, padding: 8 },
-  /* THE SET STAMP is a row of two words. Its vertical padding is smaller than
-     the artwork's 8 because a line box carries its own air: cap + 2 of line
-     height plus 7 either side comes to the 31pt the image badge was, so
-     nothing around it moves. */
-  stampSet: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, paddingHorizontal: 9 },
+  /* THE SET STAMP is a row of two words, and its padding is NOT symmetric.
+     Symmetric padding centres the text's BOX; what a reader sees is its INK,
+     and an italic's ink is not centred in its box — the wordmark's W leans
+     off its left bearing, the number's 0 carries a right one, and the line
+     box places the baseline nearer its top than its bottom.
+
+     Measured on the rendered badge with symmetric padding (7 and 9): ink
+     8.5pt from the top against 7.0 from the bottom, and 11.0 from the left
+     against 9.5 from the right. These four numbers move each pair to its
+     own average — 7.75 and 10.25 — and hold the plate at the 31pt the image
+     badge was, so nothing around it shifts.
+
+     The horizontal pair is font metrics and travels; the vertical pair is
+     baseline placement inside a line box, which iOS and react-native-web do
+     not agree on to the point. If the caps look high or low on a phone, the
+     two numbers to move are here and they still have to sum to 14. */
+  stampSet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 6.25,
+    paddingBottom: 7.75,
+    paddingLeft: 8.25,
+    paddingRight: 9.75,
+  },
   stampMark: { fontFamily: 'Kanit_900Black_Italic' },
   stampNum: { fontFamily: 'Kanit_300Light_Italic' },
   // Padding scales with the lettering, and with it: 6pt of air around 9pt of
