@@ -19,24 +19,25 @@ const { getDefaultConfig } = require('expo/metro-config')
 
 const config = getDefaultConfig(__dirname)
 
-/* 1. EVALUATE A MODULE WHEN IT IS FIRST USED, not at startup.
+/* 1. NO INLINE REQUIRES — TRIED, MEASURED, REVERTED.
  *
- * Metro's default bundle calls every module factory as it loads, so the app
- * pays for every screen, every icon set and every font table before it draws
- * anything. inlineRequires rewrites top-level imports into lazy requires at
- * their use site, which is the single documented lever on React Native
- * startup time — and this app is import-heavy by design: expo-router pulls
- * every route, and @expo/vector-icons pulls its glyph maps.
+ * Deferring every module's evaluation to its first use is the documented
+ * lever on React Native start-up, and this app looked like a good candidate:
+ * expo-router pulls every route, @expo/vector-icons its glyph maps. It also
+ * red-boxed the app on first render:
  *
- * It is safe for import-for-side-effect modules because Metro keeps those
- * eager; the failure mode it does have is a module with a circular import
- * that relied on eager evaluation order, which this app does not have (the
- * one cycle it ever had, theme.js <-> fontScale.js, was broken when the
- * scale moved into its own file).
+ *   [Worklets] createSerializableObject should never be called in JSWorklets
+ *
+ * react-native-worklets has to install its runtime before anything creates a
+ * worklet, and lazy evaluation puts those two in the wrong order. The draw's
+ * swipe, the round scrub and the score animations are all Reanimated, so
+ * this is not a corner of the app that could be worked around.
+ *
+ * Left here as a note rather than deleted, so the next person to reach for
+ * it knows it was tried and what it cost. The two changes below are the ones
+ * that survived, and both are about what Metro CARRIES rather than when it
+ * evaluates.
  */
-config.transformer.getTransformOptions = async () => ({
-  transform: { inlineRequires: true, experimentalImportSupport: false },
-})
 
 /* 2. NINE FONT FILES, NOT FORTY-FIVE.
  *
