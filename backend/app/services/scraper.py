@@ -1196,11 +1196,28 @@ async def scrape_tournament(
     if has_qualifiers_section and any(p.entry_type == "Q" and p.name and p.name.strip() for p in parsed.players):
         parsed.has_qualifiers = True
 
-    # Check if the final match has a winner (tournament is complete)
+    # IS THE TOURNAMENT OVER? A SCORE SAYS SO; A NAME DOES NOT.
+    #
+    # This used to accept a winner_position alone — a name in the champion slot
+    # — and that is a lower bar than the one the match write itself uses, where
+    # a result needs a score and Wikipedia may not decide one at all
+    # (feedback_wikipedia_never_decides_a_result, feedback_blank_slot_is_not_a_bye).
+    #
+    # The mismatch had teeth. Someone filled in the 2026 Guadalajara champion
+    # on Wikipedia minutes after the final ended but before the score; the
+    # scrape refused the result, correctly, and then marked the DRAW complete
+    # on the strength of the same name. A completed draw was dropped from
+    # Sofascore tracking, so the one source permitted to decide the result
+    # never looked again, and the final sat unresolved with its score frozen
+    # mid-second-set (2026-09-20).
+    #
+    # Requiring the score aligns the two bars. A final nobody has scored yet
+    # simply leaves the draw active a little longer, which costs nothing: the
+    # match's own completion still marks the draw complete further down.
     if parsed.matches:
         max_round = max((m.round_number for m in parsed.matches), default=0)
         finals = [m for m in parsed.matches if m.round_number == max_round]
-        if finals and finals[0].winner_position is not None:
+        if finals and finals[0].winner_position is not None and finals[0].scores:
             parsed.has_final_winner = True
 
     return parsed

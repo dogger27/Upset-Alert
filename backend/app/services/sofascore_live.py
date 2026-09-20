@@ -54,7 +54,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.models.tournament import Draw, DrawEntry, Match
 from app.services.sofascore import SofascoreBlocked, _get
@@ -458,12 +458,35 @@ async def _tracked(db) -> tuple[dict, dict]:
     The player map is scoped to draws we actually track, so an id that only
     exists in some other draw cannot resolve.
     """
+    # A COMPLETED DRAW IS STILL TRACKED WHILE A MATCH IN IT HAS NO RESULT.
+    #
+    # `status` is set from the Wikipedia scrape, and a draw can be marked
+    # completed while its final is still on court: the bracket only has to show
+    # a name in the champion slot. Dropping such a draw from tracking switches
+    # off the one source allowed to decide a result, so the match can never be
+    # resolved at all — which is exactly what happened to the 2026 Guadalajara
+    # final, marked complete at 00:36 with the match still pending and no
+    # winner six hours later (2026-09-20).
+    #
+    # The predicate is "no WINNER", not "no Sofascore verdict". Eighty-seven
+    # completed draws lack a verdict on some match whose winner is perfectly
+    # well known — tracking those would be a permanent traffic cost for
+    # nothing. Winnerless is the real fault, it was true of exactly one match
+    # in the database, and it stops being true the moment the result lands.
+    unresolved = (
+        select(Match.draw_id)
+        .where(Match.is_bye == False,                                  # noqa: E712
+               Match.player1_id.isnot(None), Match.player2_id.isnot(None),
+               Match.winner_id.is_(None))
+        .correlate(None)
+        .scalar_subquery()
+    )
     draw_rows = (await db.execute(
         select(Draw.id, Draw.sofa_tournament_id, Draw.sofa_season_id,
                Draw.tournament_id).where(
             Draw.sofa_tournament_id.isnot(None),
             Draw.sofa_season_id.isnot(None),
-            Draw.status != "completed",
+            or_(Draw.status != "completed", Draw.id.in_(unresolved)),
         ))).all()
     by_tournament = {(r[1], r[2]): r[0] for r in draw_rows}
     # The SSE broadcaster is keyed by TOURNAMENT, not draw — same as
