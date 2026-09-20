@@ -204,16 +204,26 @@ export function TierBadge({ tour, tier, name, small }) {
      ATP / WTA part needs to be a lot more bold than the number part", then
      "let's go 900 / 300"), which is the contrast the artwork had.
 
-     ONE LINE HEIGHT FOR BOTH, and it is the cap plus a couple of points
-     rather than the face's natural leading: the plate is built around the
-     lettering's cap height, so a 1.3-em line box would have made the badge a
-     third taller than the artwork's. The two words share a size, so they
-     share a baseline without being asked to. */
-  const line = { fontSize: size, lineHeight: leading(cap + 2), color: TOUR[key].text }
+     NO lineHeight, AND THAT IS THE POINT. The first version set one — the cap
+     plus two points — to keep the plate the height the artwork's had. It
+     centred on the web and sat high on the phone, because the two platforms
+     place a baseline inside a short line box differently: iOS compresses
+     toward the top of the line and leaves the descender's room below the
+     glyphs, react-native-web splits the difference. Compensating with padding
+     only fixed whichever one it was measured on (owner: "still the same").
+
+     So the line box is left at the face's own height and the PLATE is given
+     an explicit height instead, with the text centred in it by flex. What
+     remains is font metrics, which both platforms agree on: for a string of
+     caps and figures the ink sits (ascender - cap) below the box's top and
+     the descender's depth above its bottom, and in Kanit those are 0.35em
+     and 0.31em — within half a point of each other at this size. Centre the
+     box and the ink is centred. */
   return (
-    <View style={[u.stamp, u.stampSet, small && u.stampSmall, { backgroundColor: TOUR[key].plate }]}>
-      <Text style={[u.stampMark, line]} allowFontScaling={false}>{mark}</Text>
-      <Text style={[u.stampNum, line, { marginLeft: size * 0.06 }]} allowFontScaling={false}>{num}</Text>
+    <View style={[u.stamp, u.stampSet, small && u.stampSmall,
+                  { height: cap + 16, backgroundColor: TOUR[key].plate }]}>
+      <Text style={[u.stampMark, { fontSize: size, color: TOUR[key].text }]} allowFontScaling={false}>{mark}</Text>
+      <Text style={[u.stampNum, { fontSize: size, color: TOUR[key].text, marginLeft: size * 0.06 }]} allowFontScaling={false}>{num}</Text>
     </View>
   )
 }
@@ -666,11 +676,30 @@ const u = StyleSheet.create({
      baseline placement inside a line box, which iOS and react-native-web do
      not agree on to the point. If the caps look high or low on a phone, the
      two numbers to move are here and they still have to sum to 14. */
+  /* THE SET STAMP is a row of two words, centred in a plate of a stated
+     height (TierBadge passes it: cap + 16, which is what the artwork's badge
+     measured). No vertical padding — the height and the centring do that job
+     between them, and a padding that also had an opinion would fight them.
+
+     The horizontal padding is not symmetric, because an italic's ink is not
+     centred in its box: the wordmark's W leans off its left bearing and the
+     number's 0 carries a right one. Measured on the rendered badge at 9 and
+     9, the ink sat 11.0pt from the left against 9.5 from the right; these
+     two move it to 10.25 either side. That pair is font metrics and travels. */
   stampSet: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 6.25,
-    paddingBottom: 7.75,
+    justifyContent: 'center',
+    /* A POINT AND A HALF OFF THE BOTTOM, which lifts the centred content by
+       half of it. Inside a fixed height, padding moves the content without
+       changing the plate. It pays for the one asymmetry the font itself has:
+       above the caps sits (ascender - cap height), below the baseline sits
+       the descender, and in Kanit that is 0.35em against 0.31em — 0.75pt
+       apart at this size, measured as 8.5 above the ink against 7.0 below.
+       Font metrics, so it travels; the line-box behaviour that did not is
+       gone from this component entirely. */
+    paddingTop: 0,
+    paddingBottom: 1.5,
     paddingLeft: 8.25,
     paddingRight: 9.75,
   },
