@@ -31,7 +31,7 @@ import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
 import { PHASES, byTimeOfDay, effectivePhase, matchPhase, phaseCounts, footTime, isLive, isSuspended, hasStarted, matchFromEntry, rowClock, rowWhen, sideFlags, startedFirst, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
-import { FitText, FlagSlot, TourBadge } from '../../cards'
+import { FitText, FlagSlot, TierBadge, TourBadge } from '../../cards'
 import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
 import { useChoosableTournaments } from '../../choosableTournaments'
 import { DayStrip } from '../../DayStrip'
@@ -45,6 +45,7 @@ import { courtGroups } from '../../courtGroups'
 import { textWidth } from '../../measure'
 import { bestLeftColumn } from '../../nameColumns'
 import { groupPastDay } from '../../pastGroups'
+import { stampsFor } from '../../logos'
 import { longRound } from '../../rounds'
 import { CourtRenameSheet } from '../../courtRename'
 import { ScoreHistorySheet } from '../../scoreHistory'
@@ -356,6 +357,11 @@ export default function ScheduleScreen() {
   const venueMode = tzMode === 'venue'
   // The venue's zone for a row, from the day's tournament list.
   const venueTzOf = e => (day.data?.tournaments || []).find(t => t.id === e.tournament_id)?.venue_timezone || undefined
+  /* The tier stamp for a group's heading. A row carries only a tournament id,
+     so the artwork's two fields come from the day payload's tournaments —
+     where the OOP link and the venue zone already come from. */
+  const stampsOf = rows => stampsFor(
+    (day.data?.tournaments || []).find(t => t.id === rows?.[0]?.tournament_id)?.stamps)
   // Grey the Draw link when its draw has nothing to show — a Slam's qualifying
   // sheet is live days before the bracket, and a live link to an empty draw
   // reads as a broken page. Same released rule the dashboard cards use.
@@ -660,7 +666,18 @@ export default function ScheduleScreen() {
           <View key={key} style={[s.group, court && s.courtGroup]}>
             {/* Tight on the round beneath it: the heading's own line box plus
                 the group's gap read as a hole, so the gap is taken back. */}
-            {title ? <FitText style={[(dense ? TOURN_SMALL : TOURN).style, s.tournHead]} track={(dense ? TOURN_SMALL : TOURN).track} min={9}>{title.toUpperCase()}</FitText> : null}
+            {title ? (
+              <View style={[s.tournHeadRow, s.tournHead]}>
+                {/* The flex slot is what lets FitText measure the room there
+                    IS rather than the room the name took — as the cards'
+                    titleSlot (u.fitSlot). Without it the stamp is pushed off
+                    the right edge by a long name instead of squeezing it. */}
+                <View style={s.tournHeadSlot}>
+                  <FitText style={(dense ? TOURN_SMALL : TOURN).style} track={(dense ? TOURN_SMALL : TOURN).track} min={9}>{title.toUpperCase()}</FitText>
+                </View>
+                <TournStamps stamps={stampsOf(list)} name={title} small={dense} />
+              </View>
+            ) : null}
             {/* Tight above and below (owner, 2026-09-17): the list's gap and the
                 group's margin stacked to 20pt over the round, and the gap under
                 it read as a hole before the card. */}
@@ -833,6 +850,25 @@ function LineTag({ first, alt, style, textStyle, children }) {
    "Korea Open" and "Singapore Open", and across rows with no clock at all.
    One distinct centre in every case, because nothing on either side can reach
    the middle cell. */
+/* THE EVENT'S TIER STAMP, hard right on the row that names the tournament
+   (owner, 2026-09-20) — the same artwork, plate and sizing the dashboard's
+   cards carry, so the two surfaces name a tournament the same way. `small`
+   follows the heading's own size, exactly as it follows the card's.
+
+   Its own row: the gap between two stamps of a combined week is theirs, not
+   the wider gap between the name and them. */
+function TournStamps({ stamps, name, small }) {
+  if (!stamps?.length) return null
+  return (
+    <View style={s.tournHeadStamps}>
+      {stamps.map(d => (
+        <TierBadge key={d.draw_id} tour={d.gender === 'F' ? 'WTA' : 'ATP'}
+                   tier={d.category} name={name} small={small} />
+      ))}
+    </View>
+  )
+}
+
 function LineTags({ first, alt, when, round, tournament }) {
   if (!when && !round && !tournament) return null
   return (
@@ -1153,6 +1189,13 @@ const s = StyleSheet.create({
   courtHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginBottom: -S.xs },
   courtGroup: { marginTop: -S.xs },
   tournHead: { marginBottom: -(S.sm - 2) },
+  // The name and the event's stamp share the line, the stamp hard right.
+  tournHeadRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  // As the cards' titleSlot (u.fitSlot): the flex is what makes onLayout
+  // report the room the name MAY use, so a long name shrinks to fit beside
+  // the stamp instead of pushing it off the edge.
+  tournHeadSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
+  tournHeadStamps: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   subHead: { marginBottom: -S.sm },                // flush to the card beneath; the line box's own descent is the air (owner, 2026-09-17)
   subHeadFirst: { marginTop: -(S.sm + 2) },        // 10pt from the card above, not 20
   courtEdit: { paddingHorizontal: 4, paddingVertical: 2 },

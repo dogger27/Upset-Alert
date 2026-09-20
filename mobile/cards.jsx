@@ -11,7 +11,7 @@
 import { createContext, useContext, useMemo, useState } from 'react'
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { leading } from './fontScale.js'
-import { isSlamTier, tierStamp } from './logos'
+import { stampsFor, tierStamp } from './logos'
 import { flagEmoji } from './flags'
 import { CardLink } from './ui'
 import { textWidth } from './measure.js'
@@ -270,9 +270,9 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
   const isATP = list[0]?.gender !== 'F'
   /* A Slam's crest is the EVENT's mark, the same artwork for either tour, so
      stacking it twice would print the same picture twice. Every other tier
-     stamp names a tour and both are shown. */
-  const oneTier = combined && isSlamTier(list[0]?.category)
-  const stamps = oneTier ? list.slice(0, 1) : list
+     stamp names a tour and both are shown. logos.js::stampsFor — the
+     schedule's tournament heading asks the same question. */
+  const stamps = stampsFor(list)
   /* ONE DECISION, TWO HALVES. The surface and the ink that has to read on it
      are chosen together and in one place — see CardSkinContext above and the
      ramp's derivation in theme.js. `rule` is the footer's hairline: it lifts

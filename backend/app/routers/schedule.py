@@ -1228,6 +1228,22 @@ async def schedule_day(
             Draw.tournament_id.in_(t_ids), Draw.oop_url.isnot(None)))).all()
     pdfs = {r[0]: r[1] for r in pdf_rows}
 
+    # THE EVENT'S TIER STAMP, for the tournament heading on the schedule
+    # (owner, 2026-09-20). What the client needs is what TierBadge takes — the
+    # tour and the category string ("ATP 250", "Grand Slam") — so this sends
+    # the same two fields the dashboard's cards already draw from, and the
+    # artwork, the plate and the slam rule stay in one place on the client.
+    # A draw IS a gender, so these are one row per gendered draw of the event,
+    # men first: the order the cards stack them in.
+    stamp_rows = (await db.execute(
+        select(Draw.tournament_id, Draw.id, Draw.gender, Draw.category).where(
+            Draw.tournament_id.in_(t_ids)).order_by(
+                Draw.tournament_id, Draw.gender.desc(), Draw.id))).all()
+    stamps: dict[int, list[dict]] = {}
+    for t_id, d_id, gender, category in stamp_rows:
+        stamps.setdefault(t_id, []).append(
+            {"draw_id": d_id, "gender": gender, "category": category})
+
     # Which revision of THIS DAY's sheet the site currently reflects — the
     # same ordinal the status emails carry ("OOP rev.3"), counted the same
     # way: real revisions only, a force-reparse's 'forced-*' leftovers
@@ -1246,7 +1262,8 @@ async def schedule_day(
         play_date=day, entries=out, courts=courts,
         tournaments=[{"id": i, "name": t_names.get(i), "oop_url": pdfs.get(i),
                       "oop_revision": revs.get(i),
-                      "venue_timezone": tzs.get(i)}
+                      "venue_timezone": tzs.get(i),
+                      "stamps": stamps.get(i, [])}
                      for i in sorted(t_ids)],
     )
 

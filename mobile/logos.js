@@ -70,6 +70,23 @@ const WTA = {
    is a second copy to forget. */
 export const isSlamTier = tier => /slam|gs|grand/i.test(String(tier || ''))
 
+/* WHICH OF AN EVENT'S STAMPS ARE DRAWN, in one place.
+ *
+ * A Slam's crest is the EVENT's mark — the same artwork whichever tour — so a
+ * combined Slam draws it once; every other tier stamp names a tour, and a
+ * combined week draws both. TourCard had this inline until the schedule's
+ * tournament heading needed the same answer (owner, 2026-09-20), and two
+ * copies of a rule this quiet is one copy too many.
+ *
+ * Takes the event's draws (a draw IS a gender) and returns the ones to draw,
+ * in the order given.
+ */
+export function stampsFor(draws) {
+  const list = (draws || []).filter(Boolean)
+  if (list.length > 1 && isSlamTier(list[0].category)) return list.slice(0, 1)
+  return list
+}
+
 /* `{ src, aspect }`, not just the source. The tier artwork is cropped to its
    lettering, so the badge sizes it by its own shape (TierBadge) rather than
    fitting it into a box — and the aspect ratios are generated beside the
