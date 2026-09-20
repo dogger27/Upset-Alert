@@ -1,4 +1,11 @@
 /*
+ * THE APP NO LONGER DRAWS THIS ARTWORK (owner, 2026-09-20): a tier stamp is
+ * set in Kanit now, and TierBadge asks logos.js for two words instead of a
+ * PNG. The files, the generator and this suite all stay — restoring the
+ * pictures is one import, and a fallback nobody checks is not a fallback —
+ * so what follows guards the artwork against drifting out of step with its
+ * table while it sits there unused.
+ *
  * The generated aspect ratios must match the artwork they describe.
  *
  * WHY THIS IS WORTH A TEST: TierBadge draws each tier stamp CAP tall and

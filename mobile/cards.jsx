@@ -12,6 +12,7 @@ import { createContext, useContext, useMemo, useState } from 'react'
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { leading } from './fontScale.js'
 import { stampsFor, tierStamp } from './logos'
+import { CAP as CAP_RATIO } from './fontMetrics.js'
 import { flagEmoji } from './flags'
 import { CardLink } from './ui'
 import { textWidth } from './measure.js'
@@ -182,22 +183,37 @@ const CREST_SMALL = {
   height: (26 * SMALL) / CREST_SHRINK,
 }
 
+/* Kanit's cap height over its em, from the font's own metric — every weight
+   of the family shares it (fontMetrics.js CAP, generated). The badge is
+   specified in CAP HEIGHT, as the artwork was: `cap` tall, whatever the face.
+   So the font size is the cap the badge wants divided by this. */
+const KANIT_CAP = CAP_RATIO.Kanit_900Black_Italic
+
 export function TierBadge({ tour, tier, name, small }) {
-  const { src, aspect } = tierStamp({ tour, tier, name })
-  if (!src) return null
+  const { crest, mark, num } = tierStamp({ tour, tier, name })
   // A crest keeps the square-ish box it has always had, and no plate: it is
   // the tournament's own mark, not a tier stamp (see logos.js).
-  if (!aspect) {
-    return <Image source={src} style={small ? CREST_SMALL : CREST} resizeMode="contain" />
+  if (crest) {
+    return <Image source={crest} style={small ? CREST_SMALL : CREST} resizeMode="contain" />
   }
+  if (!mark) return null
   const key = String(tour || 'ATP').toUpperCase() === 'ATP' ? 'M' : 'F'
   const cap = small ? CAP_SMALL : CAP
+  const size = Math.round((cap / KANIT_CAP) * 10) / 10
+  /* THE NUMBER IS LIGHT AND THE WORDMARK IS BLACK (owner, 2026-09-20: "the
+     ATP / WTA part needs to be a lot more bold than the number part", then
+     "let's go 900 / 300"), which is the contrast the artwork had.
+
+     ONE LINE HEIGHT FOR BOTH, and it is the cap plus a couple of points
+     rather than the face's natural leading: the plate is built around the
+     lettering's cap height, so a 1.3-em line box would have made the badge a
+     third taller than the artwork's. The two words share a size, so they
+     share a baseline without being asked to. */
+  const line = { fontSize: size, lineHeight: leading(cap + 2), color: TOUR[key].text }
   return (
-    <View style={[u.stamp, small && u.stampSmall, { backgroundColor: TOUR[key].plate }]}>
-      {/* contain as well as the computed width: the arithmetic is right, and
-          if it ever stops being right the artwork letterboxes inside the plate
-          instead of stretching, which is the failure you can see. */}
-      <Image source={src} style={{ width: aspect * cap, height: cap }} resizeMode="contain" />
+    <View style={[u.stamp, u.stampSet, small && u.stampSmall, { backgroundColor: TOUR[key].plate }]}>
+      <Text style={[u.stampMark, line]} allowFontScaling={false}>{mark}</Text>
+      <Text style={[u.stampNum, line, { marginLeft: size * 0.06 }]} allowFontScaling={false}>{num}</Text>
     </View>
   )
 }
@@ -634,6 +650,13 @@ const u = StyleSheet.create({
      "on both width and height" means once the artwork is cropped to its ink
      and the plate is only as big as what it holds. */
   stamp: { borderRadius: 8, padding: 8 },
+  /* THE SET STAMP is a row of two words. Its vertical padding is smaller than
+     the artwork's 8 because a line box carries its own air: cap + 2 of line
+     height plus 7 either side comes to the 31pt the image badge was, so
+     nothing around it moves. */
+  stampSet: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, paddingHorizontal: 9 },
+  stampMark: { fontFamily: 'Kanit_900Black_Italic' },
+  stampNum: { fontFamily: 'Kanit_300Light_Italic' },
   // Padding scales with the lettering, and with it: 6pt of air around 9pt of
   // caps is a border, not a margin, and 3 around 13.5 is the same mistake
   // inverted. So the base number moves with the full-size one — 3 -> 4, times

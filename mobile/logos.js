@@ -10,7 +10,6 @@
  * a retina phone.
  */
 
-import ASPECT from './tierStampAspect.js'
 
 /* EVERY PATH BELOW IS `badge/`, WHICH IS THE DISPLAY COPY (owner,
  * 2026-09-20: the badges took too long to load). The tournaments' own
@@ -35,42 +34,12 @@ const SLAM = {
   wta: require('./assets/logos/badge/slam_wta.png'),
 }
 
-/* NUMBER INLINE, not stacked under the wordmark. The ATP ships these with the
-   tier number on a second line below "ATP"; the WTA tag beside it on the same
-   dashboard sets the two side by side at one height, and two stamps built to
-   different rules read as a mistake rather than as two brands (owner,
-   2026-09-15). tools/gen-tier-stamps.py takes each apart at the blank band
-   between the rows and re-sets the number to the right of the wordmark, at its
-   cap height and on its baseline.
-
-   "MASTERS" comes off the 1000 in the process. Inline it runs 7:1, which
-   `contain` would then shrink until its wordmark was half the size of the
-   250's beside it — and "WTA 1000" does not spell out its tier either.
-
-   The 250 is built from the -dark variant: the shipped 250 is flat navy
-   (#050053), 1.1:1 on a dark card, i.e. invisible. It is the only one needing
-   one; 500 is silver and 1000 gold, both of which read either way. Same
-   reasoning, same artwork, as the web. Originals stay put as the generator's
-   input. */
-const ATP = {
-  250: require('./assets/logos/atp-250-inline.png'),
-  500: require('./assets/logos/atp-500-inline.png'),
-  1000: require('./assets/logos/atp-1000-inline.png'),
-}
-
-/* LETTERING ONLY. The tags as shipped are opaque rounded rectangles in the
-   WTA's own tier colours — purple, teal, gold — and the dashboard now paints
-   the tour's colour behind every stamp, so a baked-in tier colour was the one
-   thing on the card arguing with it. tools/gen-tour-tag-plates.py strips each
-   tag to its wordmark and number (alpha = how much of the pixel the letters
-   covered) on the same canvas, so the plate colour comes from theme.js and the
-   tag keeps the margin that holds it to the ATP stamps' size. Originals kept
-   beside them: they are the generator's input. */
-const WTA = {
-  250: require('./assets/logos/250k-tag-plate.png'),
-  500: require('./assets/logos/500k-tag-plate.png'),
-  1000: require('./assets/logos/1000k-tag-plate.png'),
-}
+/* THE TIER STAMPS' ARTWORK IS GONE FROM HERE (owner, 2026-09-20). Six PNGs —
+   the ATP's wordmark with its number re-set inline, the WTA's tags stripped to
+   their lettering — are now two words in Kanit; tierStamp below returns the
+   words. tools/gen-tier-stamps.py still builds the files and the US crest, so
+   a revert is one import away, and the tours' original downloads stay where
+   they were as its input. */
 
 /* THE SLAM TEST, EXPORTED. TierBadge needs the same answer — the slam crests
    are left exactly as the tournaments draw them, so they take no tour-coloured
@@ -95,15 +64,20 @@ export function stampsFor(draws) {
   return list
 }
 
-/* `{ src, aspect }`, not just the source. The tier artwork is cropped to its
-   lettering, so the badge sizes it by its own shape (TierBadge) rather than
-   fitting it into a box — and the aspect ratios are generated beside the
-   artwork, because Image.resolveAssetSource can answer this on iOS but does
-   not exist in react-native-web, where asking red-boxed the visual harness.
-
-   A crest has no aspect: it is left as its tournament draws it and keeps the
-   fixed box it always had. One branch decides which of the two a stamp is, so
-   the source and the way it is measured can never disagree. */
+/* A STAMP IS EITHER A CREST OR A PIECE OF LETTERING.
+ *
+ * `{ crest }` — a Slam's mark, left exactly as its tournament draws it, in the
+ * fixed box it has always had. It is a picture and stays one.
+ *
+ * `{ mark, num }` — a tier stamp, which is two words: the tour's wordmark and
+ * the tier's number. It used to be one PNG per tour per tier, six files built
+ * by tools/gen-tier-stamps.py out of the tours' own artwork. It is SET now, in
+ * Kanit 900 italic and 300 italic (owner, 2026-09-20) — which takes the last
+ * image a card has to fetch and decode before it can paint, and the generated
+ * aspect table with it, because text sizes itself.
+ *
+ * One branch decides which kind a stamp is, so no caller can draw a crest as
+ * words or words in a crest's box. */
 export function tierStamp({ tour, tier, name }) {
   const isATP = String(tour || 'ATP').toUpperCase() === 'ATP'
 
@@ -114,15 +88,9 @@ export function tierStamp({ tour, tier, name }) {
       : n.includes('wimbledon') ? SLAM.wimbledon
       : n.includes('us open') ? SLAM.us
       : isATP ? SLAM.atp : SLAM.wta
-    return { src: crest, aspect: null }
+    return { crest }
   }
 
   // "ATP 500" -> 500. Anything unrecognised is a 250, matching the web.
-  const num = String(tier || '').replace(/\D/g, '') || '250'
-  const table = isATP ? ATP : WTA
-  const tour_ = isATP ? 'atp' : 'wta'
-  return {
-    src: table[num] || table['250'],
-    aspect: ASPECT[tour_][num] ?? ASPECT[tour_]['250'],
-  }
+  return { mark: isATP ? 'ATP' : 'WTA', num: String(tier || '').replace(/\D/g, '') || '250' }
 }

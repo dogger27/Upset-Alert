@@ -17,6 +17,10 @@ import {
   SairaCondensed_900Black,
 } from '@expo-google-fonts/saira-condensed'
 import {
+  Kanit_300Light_Italic,
+  Kanit_900Black_Italic,
+} from '@expo-google-fonts/kanit'
+import {
   Archivo_400Regular,
   Archivo_400Regular_Italic,
   Archivo_500Medium,
@@ -24,6 +28,13 @@ import {
 } from '@expo-google-fonts/archivo'
 
 export const FONTS = {
+  /* THE TIER BADGE, which used to be six PNGs (owner, 2026-09-20). A heavy
+     italic for the tour's wordmark and a light one for the number — the
+     contrast the artwork had and a single weight cannot give. Two files
+     against the 22 KB of artwork they replace, and nothing to fetch or
+     decode while a card is drawing. */
+  Kanit_900Black_Italic,
+  Kanit_300Light_Italic,
   SairaCondensed_600SemiBold,
   SairaCondensed_700Bold,
   SairaCondensed_900Black,     // the wordmark only — the site sets it at 900
