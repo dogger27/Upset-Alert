@@ -28,9 +28,12 @@ import { readFileSync } from 'node:fs'
 import ASPECT, { INK } from './tierStampAspect.js'
 import { TOUR } from './theme.js'
 
+/* The artwork sits in art/ now, outside the app — it is the generator's
+   input and the archive, not something Metro should crawl (owner,
+   2026-09-20). */
 const FILES = {
-  atp: t => `assets/logos/atp-${t}-inline.png`,
-  wta: t => `assets/logos/${t}k-tag-plate.png`,
+  atp: t => `../art/logos/atp-${t}-inline.png`,
+  wta: t => `../art/logos/${t}k-tag-plate.png`,
 }
 const TIERS = ['250', '500', '1000']
 

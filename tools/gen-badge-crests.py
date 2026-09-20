@@ -21,15 +21,30 @@ both clients. Nothing here is authored: it is a downsample and a re-save.
     python3 tools/gen-badge-crests.py
 
 Re-run it when a crest is added or replaced, or when BOX changes. It always
-reads the originals, never its own output, so running it twice is a no-op.
+reads the originals in art/, never its own output, so running it twice is a
+no-op.
 """
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageStat
 
 ROOT = Path(__file__).resolve().parent.parent
+# THE ORIGINALS LIVE OUTSIDE THE APP (owner, 2026-09-20: keep Metro light).
+# `art/` is the archive and this tool's input: 1.3 MB of print-resolution
+# downloads that the app never loads, and that Metro therefore has no reason
+# to crawl, hash or watch. What the clients get are the display copies below.
+ART = ROOT / 'art' / 'logos'
 MOBILE = ROOT / 'mobile' / 'assets' / 'logos'
 SITE = ROOT / 'frontend' / 'public' / 'logos'
+
+# Which display copies each client actually draws. The app draws crests only —
+# its tier stamps are set in Kanit (logos.js) — and the website draws both,
+# plus the light-theme variants it switches to. An asset a client cannot
+# reach is one Metro or Pages ships for nothing, so each gets its own list.
+APP_FILES = {
+    'slam_Australian.png', 'slam_RolandGarros.svg-dark.png',
+    'slam_Wimbledon.svg-dark.png', 'slam_atp.png', 'slam_wta.png',
+}
 
 # THE PIXEL BUDGET, derived rather than picked. A crest is drawn `contain` in
 # a fixed box: TierBadge's CREST is 77x51pt in the app, and the website asks
@@ -178,7 +193,7 @@ def main():
 
     total_before = total_after = 0
     for rel in SOURCES:
-        src = MOBILE / rel
+        src = ART / rel
         if not src.exists():
             raise SystemExit(f'missing source: {src}')
         art = fit_box(Image.open(src).convert('RGBA'))
@@ -186,6 +201,8 @@ def main():
         before = src.stat().st_size
         after = note = None
         for dest in (MOBILE / 'badge', SITE / 'badge'):
+            if dest.parent == MOBILE and name not in APP_FILES:
+                continue
             out = dest / name
             note = save_small(art, out, name)
             after = out.stat().st_size
