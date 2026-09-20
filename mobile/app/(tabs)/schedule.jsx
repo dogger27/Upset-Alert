@@ -1276,9 +1276,21 @@ const s = StyleSheet.create({
   /* FAR LESS AIR AROUND A COURT NAME (owner, 2026-09-17): the group's
      margin above it is given back and then some, and the gap beneath it is
      taken back to half — the name sits on its card, not between two holes. */
-  courtHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginBottom: -S.xs },
+  /* THE COURT NAME BELONGS TO THE HEADING, NOT TO THE CARD (owner,
+     2026-09-20). It sat 4pt under the tournament name and 4pt above the
+     first match, which put it exactly between the two and left it reading as
+     the card's label. Now it is tight under the name it qualifies and the
+     card is 12pt clear of it — measured, not eyeballed: 4/4 became 0/12. */
+  courtHead: {
+    flexDirection: 'row', alignItems: 'center', gap: S.sm,
+    marginTop: -S.xs, marginBottom: S.xs,
+  },
   courtGroup: { marginTop: -S.xs },
-  tournHead: { marginBottom: -(S.sm - 2) },
+  /* AIR BEFORE A TOURNAMENT (owner, 2026-09-20): 17pt from the controls
+     above it was not enough to read as a new section. Only where a name is
+     actually drawn — a second court of the same event carries no title, so
+     its group stays tight against the first. */
+  tournHead: { marginTop: S.md, marginBottom: -(S.sm - 2) },
   // The name and the event's stamp share the line, the stamp hard right.
   tournHeadRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   // As the cards' titleSlot (u.fitSlot): the flex is what makes onLayout
