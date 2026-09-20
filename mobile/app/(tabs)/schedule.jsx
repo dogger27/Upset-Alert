@@ -734,7 +734,7 @@ export default function ScheduleScreen() {
             {/* Tight on the round beneath it: the heading's own line box plus
                 the group's gap read as a hole, so the gap is taken back. */}
             {title ? (
-              <View style={[s.tournHeadRow, s.tournHead, sub && s.tournHeadOverSub]}>
+              <View style={[s.tournHeadRow, s.tournHead, (sub || court) && s.tournHeadTight]}>
                 {/* The flex slot is what lets FitText measure the room there
                     IS rather than the room the name took — as the cards'
                     titleSlot (u.fitSlot). Without it the stamp is pushed off
@@ -766,7 +766,7 @@ export default function ScheduleScreen() {
                 never "…". Uppercased here so the measurement is of the string
                 that is drawn. */}
             {court ? (
-              <View style={s.courtHead}>
+              <View style={[s.courtHead, title && s.courtHeadUnderName]}>
                 {/* ADMINS RENAME A COURT BY TAPPING IT (owner, 2026-09-17 for
                     the sheet, 2026-09-20 for the tap): the name it sets is
                     the court's everywhere the schedule is served, and the
@@ -1294,17 +1294,27 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: S.sm,
     marginTop: -S.xs, marginBottom: S.xs,
   },
+  /* UNDER A TOURNAMENT'S NAME the court is that name's second line, and the
+     row above has already pulled 10pt up for it (tournHeadTight) — so this
+     drops its own pull, or the two would stack to -14 and run the lines
+     together. The measured result is the past day's exactly: -5.5pt between
+     the boxes, 3pt between the ink.
+
+     A court with no name above it — the second court of the same event —
+     keeps courtHead's own spacing, which is the block it has always had. */
+  courtHeadUnderName: { marginTop: 0 },
   courtGroup: { marginTop: -S.xs },
   /* AIR BEFORE A TOURNAMENT (owner, 2026-09-20): 17pt from the controls
      above it was not enough to read as a new section. Only where a name is
      actually drawn — a second court of the same event carries no title, so
      its group stays tight against the first. */
   tournHead: { marginTop: S.md, marginBottom: -(S.sm - 2) },
-  /* A PAST DAY'S NAME SITS DOWN ON ITS ROUND (owner, 2026-09-20). The round
-     is the name's second line, not a label of its own, and 4.5pt of box gap
-     reads as more than that on the phone: iOS puts a line's whole leading
-     ABOVE its glyphs (feedback_ios_lineheight_sinks_caps), so the small
-     eyebrow's 6pt of leading all landed between the two.
+  /* THE NAME SITS DOWN ON ITS SECOND LINE (owner, 2026-09-20) — the round on
+     a past day, the court on today's, whichever follows it. That line is the
+     name's second line, not a label of its own, and 4.5pt of box gap reads
+     as more than that on the phone: iOS puts a line's whole leading ABOVE
+     its glyphs (feedback_ios_lineheight_sinks_caps), so the small eyebrow's
+     6pt of leading all landed between the two.
 
      Ten points come OUT of the gap below and go INTO the space above, so the
      name moves down and the cards under it do not move at all. Measured on
@@ -1320,7 +1330,7 @@ const s = StyleSheet.create({
      Only where a round follows: the court view's heading is already tight
      against the court name, and pulling this one further would run the two
      together. */
-  tournHeadOverSub: { marginTop: S.md + 10, marginBottom: -(S.sm - 2) - 10 },
+  tournHeadTight: { marginTop: S.md + 10, marginBottom: -(S.sm - 2) - 10 },
   // The name and the event's stamp share the line, the stamp hard right.
   tournHeadRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   // As the cards' titleSlot (u.fitSlot): the flex is what makes onLayout
