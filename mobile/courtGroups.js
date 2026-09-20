@@ -6,10 +6,17 @@
  * not Infinity — two unseeded courts would compare as NaN and a NaN
  * comparator leaves the array in whatever order it started.
  *
- * BY TOURNAMENT when more than one is showing (owner, 2026-09-17):
- * tournaments in name order, as a past day's record is, each one's courts
- * ranked among themselves; the first court of each carries the tournament's
- * heading (`title`), the rest none. One tournament: no headings at all.
+ * BY TOURNAMENT, ALWAYS (owner, 2026-09-17; always 2026-09-20): tournaments
+ * in name order, as a past day's record is, each one's courts ranked among
+ * themselves, and the first court of each carrying the tournament's heading
+ * (`title`) while the rest carry none.
+ *
+ * The heading used to appear only where two tournaments were showing, on the
+ * grounds that it says nothing when there is only one. It does say something:
+ * WHICH one. Ticking a tournament off left the courts of the remaining event
+ * under no name at all, so the page stopped telling the reader whose courts
+ * these were at exactly the moment they had narrowed to them — and a court
+ * called "Grandstand" or "Center Court" belongs to any tournament you like.
  *
  * Returns [{ key, court, title, list }], each list in the court's own
  * running order. */
@@ -25,7 +32,6 @@ export function courtGroups(entries) {
     if (!courts.has(k)) courts.set(k, [])
     courts.get(k).push(e)
   }
-  const many = byT.size > 1
   const tournaments = [...byT.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name))
   const out = []
   for (const [t, { name, courts }] of tournaments) {
@@ -41,9 +47,11 @@ export function courtGroups(entries) {
     })
     ranked.sort((a, b) => a.best - b.best || b.count - a.count || a.court.localeCompare(b.court))
     ranked.forEach((r, i) => out.push({
-      key: many ? `${t} ${r.court}` : r.court,
+      // The tournament is always in the key: two events on one day can both
+      // have a "Court 1", and a shared key would collide them into one group.
+      key: `${t} ${r.court}`,
       court: r.court,
-      title: many && i === 0 ? name : null,
+      title: i === 0 ? name : null,
       list: r.list,
     }))
   }
