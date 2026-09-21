@@ -876,6 +876,11 @@ const u = StyleSheet.create({
      of the box (the draw's pills taught this); the font's own line, centred
      by the box, puts them on its middle. */
   badgeText: { fontFamily: 'Archivo_700Bold', fontSize: 11 },
+  /* The round's colour, and only its colour: entryChip above gives it every
+     other dimension. No fill — the entry chip's is part of what the
+     qualifier's green is saying. */
+  roundChip: { borderColor: C.borderOn },
+  roundChipText: { color: C.muted },
   // A three-letter code at the size that keeps its pill as wide as a WC's.
   badgeTextWide: { fontSize: 9.5 },
 })
@@ -947,22 +952,29 @@ export function EntryChip({ entryType }) {
  * different").
  *
  * It was a lookalike of its own in schedule.jsx — same height and radius, but
- * an 11pt label where a three-character entry chip drops to 9.5, a neutral
- * border instead of the qualifier's, and, because it was a SIBLING of the
- * card rather than a child of the player's line, top-aligned where the entry
- * chip centres. Three ways to be nearly right.
+ * an 11pt label where a three-character entry chip drops to 9.5, and, because
+ * it was a SIBLING of the card rather than a child of the player's line,
+ * top-aligned where the entry chip centres.
  *
- * So it is the same markup, reading the same tokens, and it is rendered INSIDE
- * the first player's line — which is what makes the alignment exact rather
- * than matched by eye: the two chips are laid out by one row, on one set of
- * rules, and nothing keeps them in step because nothing can fall out of step.
+ * So it is the same markup, the same geometry and the same text ladder, and it
+ * is rendered INSIDE the first player's line — which is what makes the
+ * alignment exact rather than matched by eye: the two chips are laid out by
+ * one row, on one set of rules, and nothing keeps them in step because nothing
+ * can fall out of step.
+ *
+ * THE COLOUR IS THE ONE THING THAT DOES NOT MATCH, and that is deliberate
+ * (owner, 2026-09-21: "Don't make the round the same green colour as player
+ * identifier. Make it the grey you had it before"). The qualifier's green
+ * MEANS something about a player — how they got into the draw — so spending
+ * it on a round label would say that twice and claim it about the match. Grey
+ * keeps the round a label: the neutral border and a muted ink, no fill.
  */
 export function RoundChip({ round }) {
   if (!round) return null
   const label = String(round)
   return (
-    <View style={[u.entryChip, { backgroundColor: BADGE.qual.bg, borderColor: BADGE.qual.line }]}>
-      <Text style={[u.badgeText, label.length > 2 && u.badgeTextWide, { color: BADGE.qual.fg }]}
+    <View style={[u.entryChip, u.roundChip]}>
+      <Text style={[u.badgeText, label.length > 2 && u.badgeTextWide, u.roundChipText]}
             numberOfLines={1}>
         {label}
       </Text>
