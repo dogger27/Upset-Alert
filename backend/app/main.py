@@ -3,6 +3,7 @@ import logging
 import logging.handlers
 import os
 from contextlib import asynccontextmanager
+from typing import Optional
 
 import traceback
 
@@ -12,7 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.middleware import RateLimitMiddleware, SecurityHeadersMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from app.database import init_db
 
@@ -251,6 +252,12 @@ _UNSUB_PREF_LABELS = {
     "draw_released": "draw-release emails",
     "draw_changed": "draw-change emails",
     "qualifiers_added": "qualifier emails",
+    # Added 2026-09-21: this key had no label, so the one digest that names
+    # "standout-pick emails" in its footer landed the reader on "you have been
+    # unsubscribed from the selected email type". The opt-out worked; the page
+    # just could not say what it had done. tests/test_email_unsubscribe_header
+    # now fails if a footer names a type this map cannot.
+    "standout_pick": "standout-pick emails",
 }
 
 
@@ -282,8 +289,14 @@ def _unsubscribe_page(message: str, ok: bool = True) -> str:
 </body></html>"""
 
 
-@app.get("/unsubscribe", response_class=HTMLResponse)
-async def unsubscribe(token: str = ""):
+async def _apply_unsubscribe(token: str) -> Optional[str]:
+    """Act on an unsubscribe token. Returns the label to show, or None if the
+    token is not one of ours.
+
+    Shared by the link a reader clicks and the POST a mail provider makes on
+    their behalf (RFC 8058), so the two can never drift into a link that opts
+    out and a one-click that does not.
+    """
     from sqlalchemy import delete, select
     from app.core.security import verify_unsubscribe_token
     from app.database import AsyncSessionLocal
@@ -291,10 +304,7 @@ async def unsubscribe(token: str = ""):
 
     result = verify_unsubscribe_token(token)
     if not result:
-        return HTMLResponse(
-            _unsubscribe_page("This unsubscribe link is invalid or has expired.", ok=False),
-            status_code=400,
-        )
+        return None
     user_id, pref_key = result
     async with AsyncSessionLocal() as db:
         await db.execute(
@@ -316,8 +326,39 @@ async def unsubscribe(token: str = ""):
         if exists is None:
             db.add(NotificationOptOut(user_id=user_id, pref_key=pref_key))
         await db.commit()
-    label = _UNSUB_PREF_LABELS.get(pref_key, "the selected email type")
+    return _UNSUB_PREF_LABELS.get(pref_key, "the selected email type")
+
+
+@app.get("/unsubscribe", response_class=HTMLResponse)
+async def unsubscribe(token: str = ""):
+    label = await _apply_unsubscribe(token)
+    if label is None:
+        return HTMLResponse(
+            _unsubscribe_page("This unsubscribe link is invalid or has expired.", ok=False),
+            status_code=400,
+        )
     return HTMLResponse(_unsubscribe_page(f"You have been unsubscribed from {label}."))
+
+
+@app.post("/unsubscribe", response_class=PlainTextResponse)
+async def unsubscribe_one_click(token: str = ""):
+    """RFC 8058 one-click, the other half of the List-Unsubscribe-Post header.
+
+    Gmail, Yahoo and AOL show an "Unsubscribe" control beside the sender name
+    when a message carries List-Unsubscribe; pressing it POSTs here with the
+    body `List-Unsubscribe=One-Click`. The body is not read — the token in the
+    query string is the whole request, and the provider expects the opt-out to
+    have happened by the time it gets a 2xx, with no page to confirm on.
+    Answering GET alone would make the header a lie and cost the domain the
+    reputation the header was added to protect (see services/email.py).
+
+    No auth on purpose: the signed token IS the credential, and a provider
+    carries no cookie of the reader's. Idempotent, so a retried POST is safe.
+    """
+    label = await _apply_unsubscribe(token)
+    if label is None:
+        return PlainTextResponse("Invalid or expired unsubscribe token.", status_code=400)
+    return PlainTextResponse(f"Unsubscribed from {label}.")
 
 @app.get("/debug/tasks/{key}")
 async def debug_tasks(key: str):
