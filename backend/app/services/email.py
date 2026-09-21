@@ -46,6 +46,79 @@ _WRAP_CLOSE = '</div>'
 _BODY_OPEN  = '<div style="padding:28px 24px;background:#ffffff;color:#111111">'
 _BODY_CLOSE = '</div>'
 
+# ── THE FOOTER EVERY EMAIL CARRIES, AND THE HEADER PROVIDERS READ ─────────
+#
+# Six digests each rendered their own near-identical unsubscribe line, and the
+# thing a mail provider actually reads — the List-Unsubscribe HEADER — was on
+# none of them. A mail-tester run on 2026-09-21 scored the welcome email 9/10
+# with SPF, DKIM and DMARC all passing and flagged exactly one defect: "Your
+# message does not contain a List-Unsubscribe header."
+#
+# THAT is the mechanism behind "some users say upset alert emails go to their
+# spam" (owner, 2026-09-21) — not the spam score, which is nowhere near the
+# threshold. With no header, a reader who wants out of a digest has exactly
+# one button that works from the inbox list: Report Spam. Gmail and Yahoo read
+# every one of those as a verdict on upsetalert.ca rather than on that digest,
+# and at under a hundred sends a day a handful of them is enough to route
+# EVERYONE's mail to the spam folder — verification emails included, so a new
+# user never gets in. The header gives that reader a one-click way out that
+# costs the domain nothing.
+#
+# It is applied in send_async and not by the callers, so that no email added
+# later can be missing it — the same reason the outbound kill switch lives in
+# _send rather than in the twenty places that send mail.
+_FOOTER_MARK = "<!--ua-footer-->"
+
+
+def _footer(unsubscribe_url: str = "", unsubscribe_label: str = "") -> str:
+    """Who sent this and why it arrived; and the way out, when there is one.
+
+    The identity lines are not filler. "Your message contains 25% of text"
+    was the other thing the 2026-09-21 run objected to (SpamAssassin's
+    HTML_IMAGE_ONLY_16, worth a point): the short transactional emails are a
+    logo and two sentences, and a footer that names the sender is both the
+    conventional fix and the honest one.
+    """
+    manage = ""
+    if unsubscribe_url:
+        manage = (
+            f'<br><a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
+            f'Unsubscribe from {unsubscribe_label or "these emails"}</a>'
+        )
+    return (
+        f'{_FOOTER_MARK}<div style="max-width:560px;margin:16px auto 0;padding:0 12px;'
+        f'text-align:center;font-family:sans-serif;font-size:12px;line-height:1.7;'
+        f'color:#9ca3af">'
+        f'Upset Alert &middot; fantasy tennis predictions'
+        f'<br>You are receiving this because you have an account at '
+        f'<a href="{BASE_URL}" style="color:#9ca3af;text-decoration:underline">upsetalert.ca</a>.'
+        f'{manage}</div>'
+    )
+
+
+def _finalise(params: "resend.Emails.SendParams", unsubscribe_url: str = "",
+              unsubscribe_label: str = "") -> dict:
+    """Add the footer to any message, and the unsubscribe headers to a
+    subscription one. Pure and idempotent, so it is testable without a
+    network and cannot append the footer twice.
+    """
+    out = dict(params)
+    html = out.get("html") or ""
+    if html and _FOOTER_MARK not in html:
+        out["html"] = html + _footer(unsubscribe_url, unsubscribe_label)
+    if unsubscribe_url:
+        # RFC 8058. List-Unsubscribe-Post is a PROMISE that this URL answers a
+        # POST of exactly that body and unsubscribes without asking the reader
+        # to confirm — main.py's `POST /unsubscribe` is the promise being kept.
+        # Never send -Post for a URL that only answers GET: a provider that
+        # tries one-click and gets a 405 has been told the sender lies.
+        out["headers"] = {
+            **(out.get("headers") or {}),
+            "List-Unsubscribe": f"<{unsubscribe_url}>",
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        }
+    return out
+
 
 def _tournament_label(tournament_name: str, category: str, gender: str) -> str:
     """Return 'Wimbledon ATP' for GS or 'Canadian Open ATP1000' for tour events.
@@ -111,7 +184,9 @@ def _send(params: resend.Emails.SendParams) -> Optional[Exception]:
         return e
 
 
-async def send_async(params: resend.Emails.SendParams) -> None:
+async def send_async(params: resend.Emails.SendParams, *,
+                     unsubscribe_url: str = "",
+                     unsubscribe_label: str = "") -> None:
     if not settings.resend_api_key:
         return  # Email disabled in this environment (no RESEND_API_KEY set)
     if settings.environment != "production":
@@ -121,6 +196,7 @@ async def send_async(params: resend.Emails.SendParams) -> None:
         logger.info("Skipping email send (ENVIRONMENT=%r, not 'production'): %r", settings.environment, params.get("subject"))
         return
     from app.services.system_log import app_log
+    params = _finalise(params, unsubscribe_url, unsubscribe_label)
     exc = await asyncio.to_thread(_send, params)
     to = params.get("to", [])
     subject = params.get("subject", "")
@@ -144,21 +220,47 @@ async def send_verification(email: str, username: str, token: str, code: str) ->
         "from": FROM,
         "to": [email],
         "subject": "Verify your Upset Alert email",
+        # WHY THIS EMAIL IS WORDY ON PURPOSE. It used to be the brand image, a
+        # six-digit code and a Verify button: 248 bytes of readable text around
+        # a remote image and a single link, which is the exact shape of a
+        # phishing mail. Outlook is the strictest filter on that shape, and
+        # this is the email a Hotmail account filed as spam (owner, 2026-09-21)
+        # — the worst one to lose, because an account that never gets it never
+        # gets in at all. Every paragraph below answers a question a real
+        # recipient has, and together they make the message read as what it is.
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
-          <h1 style="font-size:22px;margin:0 0 12px">Hi {username}, verify your email</h1>
-          <p style="color:#444;line-height:1.6;margin:0 0 20px">
-            Enter this code on the site, or click the button below. Expires in 24 hours.
+          <h1 style="font-size:22px;margin:0 0 12px">Hi {username}, confirm your email address</h1>
+          <p style="color:#444;line-height:1.6;margin:0 0 16px">
+            An Upset Alert account was created with this address. Enter the six-digit
+            code below on the site to finish setting it up &mdash; or press the button,
+            which does the same thing without the typing.
           </p>
-          <div style="margin:0 0 24px;text-align:center">
+          <div style="margin:0 0 20px;text-align:center">
             <span style="display:inline-block;font-size:36px;font-weight:700;letter-spacing:10px;
                          padding:16px 24px;background:#f3f4f6;border-radius:8px;color:#111">
               {code}
             </span>
           </div>
-          <a href="{verify_url}" style="display:inline-block;padding:12px 24px;
+          <a href="{verify_url}" style="display:inline-block;padding:12px 24px;margin:0 0 20px;
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
-            Verify Email
+            Confirm my email address
           </a>
+          <p style="color:#444;line-height:1.6;margin:0 0 16px">
+            The code stops working 24 hours after this email was sent. If yours has
+            run out, sign in at upsetalert.ca and ask for a new one &mdash; it takes a
+            moment and the old code is discarded.
+          </p>
+          <p style="color:#444;line-height:1.6;margin:0 0 16px">
+            Once your address is confirmed you can join a league and start making
+            picks. Upset Alert is a fantasy tennis game: you predict who wins each
+            match of an ATP or WTA draw, and you score points for the upsets you
+            call correctly before anyone else does.
+          </p>
+          <p style="color:#6b7280;line-height:1.6;margin:0 0 14px;font-size:13px">
+            If you did not create this account, no one can use the code without this
+            email, and nothing else will be sent to you. You can ignore this message
+            and the unconfirmed account is removed on its own.
+          </p>
         {_BODY_CLOSE}{_WRAP_CLOSE}""",
     })
 
@@ -170,14 +272,28 @@ async def send_welcome(email: str, username: str) -> None:
         "subject": "Welcome to Upset Alert!",
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
           <h1 style="font-size:22px;margin:0 0 12px">Welcome to Upset Alert, {username}!</h1>
-          <p style="color:#444;line-height:1.6;margin:0 0 24px">
-            You're all set to start picking upsets and climbing the leaderboard.
-            Head over to the site to join a league and make your first picks.
+          <p style="color:#444;line-height:1.6;margin:0 0 16px">
+            Your email address is confirmed, so your account is ready. Join a league
+            and make your first picks &mdash; every league plays the same draws, so you
+            can be in more than one at a time.
           </p>
-          <a href="{BASE_URL}" style="display:inline-block;padding:12px 24px;
+          <a href="{BASE_URL}" style="display:inline-block;padding:12px 24px;margin:0 0 20px;
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
-            Go to Upset Alert
+            Join a league and pick
           </a>
+          <p style="color:#444;line-height:1.6;margin:0 0 16px">
+            <b>How it works.</b> When an ATP or WTA draw is published you pick a winner
+            for every first-round match, and then for each round after it. Picks lock
+            when the first match of that draw starts. Calling an upset that most of
+            the field missed is worth more than calling the favourite, which is where
+            the game is won.
+          </p>
+          <p style="color:#444;line-height:1.6;margin:0 0 16px">
+            <b>What we will email you.</b> A note when a draw opens for picking, when
+            the players in a draw change, and when a round finishes and the standings
+            move. Every one of those is a separate setting you control, and each email
+            carries a link that turns that type off on its own.
+          </p>
         {_BODY_CLOSE}{_WRAP_CLOSE}""",
     })
 
@@ -189,16 +305,29 @@ async def send_password_reset(email: str, reset_token: str) -> None:
         "to": [email],
         "subject": "Reset your Upset Alert password",
         "html": f"""{_WRAP_OPEN}{_LOGO_HEADER}{_BODY_OPEN}
-          <h1 style="font-size:22px;margin:0 0 12px">Reset your password</h1>
-          <p style="color:#444;line-height:1.6;margin:0 0 24px">
-            Click the button below to reset your password. This link expires in 1 hour.
+          <h1 style="font-size:22px;margin:0 0 12px">Reset your Upset Alert password</h1>
+          <p style="color:#444;line-height:1.6;margin:0 0 16px">
+            Somebody asked to reset the password on the Upset Alert account that uses
+            this email address. If that was you, press the button below and choose a
+            new one.
           </p>
-          <a href="{reset_url}" style="display:inline-block;padding:12px 24px;
+          <a href="{reset_url}" style="display:inline-block;padding:12px 24px;margin:0 0 20px;
              background:#1b4332;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
-            Reset Password
+            Choose a new password
           </a>
-          <p style="margin-top:24px;font-size:13px;color:#888">
-            If you didn't request this, you can safely ignore this email.
+          <p style="color:#444;line-height:1.6;margin:0 0 16px">
+            The link works once and expires an hour after this email was sent. After
+            that, ask for another from the sign-in page at upsetalert.ca &mdash; there
+            is no limit on how many times you can do this.
+          </p>
+          <p style="color:#444;line-height:1.6;margin:0 0 16px">
+            Your current password still works until you set a new one, so nothing is
+            locked in the meantime and your leagues and picks are untouched.
+          </p>
+          <p style="color:#6b7280;line-height:1.6;margin:0 0 14px;font-size:13px">
+            If you did not ask for this, you do not need to do anything. The link
+            cannot be used without this email, your password has not changed, and no
+            one has been given access to your account.
           </p>
         {_BODY_CLOSE}{_WRAP_CLOSE}""",
     })
@@ -431,13 +560,6 @@ async def send_draw_release_digest(
     # is what lists them (it is also where the matching push notification goes).
     cta_url = f"{BASE_URL}/tournaments/{draws[0]['id']}" if n == 1 else BASE_URL
     cta_text = "Make Your Picks" if n == 1 else "View All Draws"
-    unsubscribe = (
-        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af;'
-        f'font-family:sans-serif">'
-        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
-        f'Unsubscribe from draw-release emails</a></p>'
-        if unsubscribe_url else ""
-    )
 
     await send_async({
         "from": FROM,
@@ -456,8 +578,9 @@ async def send_draw_release_digest(
               "" if tz_known else " Times shown in UTC — open the site to see your local time."
             }
           </p>
-        {_BODY_CLOSE}{_WRAP_CLOSE}{unsubscribe}""",
-    })
+        {_BODY_CLOSE}{_WRAP_CLOSE}""",
+    }, unsubscribe_url=unsubscribe_url,
+       unsubscribe_label="draw-release emails")
 
 
 def _round_complete_league_block(name: str, rows: list[tuple], is_last: bool) -> str:
@@ -595,12 +718,6 @@ async def send_round_complete_notification(
     )
     results_widget = _round_results_widget(round_name, match_results or [])
     # Standalone footer, outside the card entirely — not part of any widget/box.
-    unsubscribe = (
-        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af">'
-        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
-        f'Unsubscribe from round-completion emails</a></p>'
-        if unsubscribe_url else ""
-    )
     await send_async({
         "from": FROM,
         "to": [email],
@@ -614,9 +731,9 @@ async def send_round_complete_notification(
           <p style="color:#444;line-height:1.6;margin:0 0 20px">Here are the current standings for the leagues you are competing in:</p>
           <div style="margin:0 0 24px">{blocks}</div>
           {results_widget}
-        {_BODY_CLOSE}{_WRAP_CLOSE}
-        {unsubscribe}""",
-    })
+        {_BODY_CLOSE}{_WRAP_CLOSE}""",
+    }, unsubscribe_url=unsubscribe_url,
+       unsubscribe_label="round-completion emails")
 
 
 def _round_abbrev(round_name: str) -> str:
@@ -795,12 +912,6 @@ async def send_round_complete_digest(
         intro = f"{event_label or f'Week of {week_label}'} &middot; {scope}"
     sections = "".join(_draw_section(d, i == len(draws) - 1) for i, d in enumerate(draws))
     summary = _week_summary(summary_rows, round_name) if len(summary_rows) > 1 else ""
-    unsubscribe = (
-        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af">'
-        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
-        f'Unsubscribe from {unsubscribe_label}</a></p>'
-        if unsubscribe_url else ""
-    )
     # Always the leagues page: this email is about where everyone placed, and
     # that is the page that answers it for every draw at once.
     #
@@ -829,9 +940,9 @@ async def send_round_complete_digest(
           </div>
           {summary}
           {sections}
-        {_WRAP_CLOSE}
-        {unsubscribe}""",
-    })
+        {_WRAP_CLOSE}""",
+    }, unsubscribe_url=unsubscribe_url,
+       unsubscribe_label=unsubscribe_label)
 
 
 
@@ -929,13 +1040,6 @@ async def send_draw_change_digest(
     )
 
     sections = "".join(_draw_change_section(d, i == len(draws) - 1) for i, d in enumerate(draws))
-    unsubscribe = (
-        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af;'
-        f'font-family:sans-serif">'
-        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
-        f'Unsubscribe from draw-change emails</a></p>'
-        if unsubscribe_url else ""
-    )
 
     await send_async({
         "from": FROM,
@@ -946,8 +1050,9 @@ async def send_draw_change_digest(
           <div style="padding:0 24px 24px;background:#ffffff">
             <p style="color:#9ca3af;line-height:1.6;margin:0;font-size:12px">{_esc(footer)}</p>
           </div>
-        {_WRAP_CLOSE}{unsubscribe}""",
-    })
+        {_WRAP_CLOSE}""",
+    }, unsubscribe_url=unsubscribe_url,
+       unsubscribe_label="draw-change emails")
 
 
 def _matchup_row(change: dict, is_last: bool) -> str:
@@ -1063,13 +1168,6 @@ async def send_qualifiers_added_digest(
     sections = "".join(_qualifiers_section(d, i == len(draws) - 1) for i, d in enumerate(draws))
     cta_url = f"{BASE_URL}/tournaments/{draws[0]['id']}" if len(draws) == 1 else BASE_URL
     cta_text = "Check Your Picks" if open_draws else "View Draw" if len(draws) == 1 else "View Draws"
-    unsubscribe = (
-        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af;'
-        f'font-family:sans-serif">'
-        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
-        f'Unsubscribe from qualifier emails</a></p>'
-        if unsubscribe_url else ""
-    )
 
     await send_async({
         "from": FROM,
@@ -1088,8 +1186,9 @@ async def send_qualifiers_added_digest(
           <div style="padding:0 24px 24px;background:#ffffff">
             <p style="color:#9ca3af;line-height:1.6;margin:0;font-size:12px">{_esc(footer)}</p>
           </div>
-        {_WRAP_CLOSE}{unsubscribe}""",
-    })
+        {_WRAP_CLOSE}""",
+    }, unsubscribe_url=unsubscribe_url,
+       unsubscribe_label="qualifier emails")
 
 
 def _standout_row(pick: dict, is_last: bool) -> str:
@@ -1149,13 +1248,6 @@ async def send_standout_pick_digest(
 
     rows = "".join(_standout_row(p, i == n - 1) for i, p in enumerate(picks))
     cta_url = f"{BASE_URL}/tournaments/{top['draw_id']}"
-    unsubscribe = (
-        f'<p style="max-width:560px;margin:16px auto 0;text-align:center;font-size:12px;color:#9ca3af;'
-        f'font-family:sans-serif">'
-        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">'
-        f'Unsubscribe from standout-pick emails</a></p>'
-        if unsubscribe_url else ""
-    )
 
     await send_async({
         "from": FROM,
@@ -1174,8 +1266,9 @@ async def send_standout_pick_digest(
           <div style="padding:10px 10px 20px;background:#ffffff">
             <table width="100%" cellpadding="0" cellspacing="0" border="0">{rows}</table>
           </div>
-        {_WRAP_CLOSE}{unsubscribe}""",
-    })
+        {_WRAP_CLOSE}""",
+    }, unsubscribe_url=unsubscribe_url,
+       unsubscribe_label="standout-pick emails")
 
 
 _ALERT_STYLES = {

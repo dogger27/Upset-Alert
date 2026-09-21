@@ -73,8 +73,11 @@ import app.services.email as email_mod   # noqa: E402  (after the module docstri
 def _capture(monkeypatch):
     sent = {}
 
-    async def fake_send(params):
-        sent.update(params)
+    async def fake_send(params, *, unsubscribe_url="", unsubscribe_label=""):
+        # Captured through _finalise, not around it: the footer and the
+        # List-Unsubscribe headers are added there, so anything asserting on
+        # "what was sent" should see the message as a provider would.
+        sent.update(email_mod._finalise(params, unsubscribe_url, unsubscribe_label))
         return None
 
     # send_draw_release_digest builds the params and hands them to send_async.
