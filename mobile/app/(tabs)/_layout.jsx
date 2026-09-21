@@ -25,6 +25,7 @@ import { setCurrentDraw, useCurrentDraw } from '../../currentDraw'
 import { GROUP_TONE, groupDrawsByStatus, showGroupHeadings } from '../../drawGroups'
 import { useLastLeague } from '../../lastLeague'
 import { pruneScheduleTournaments, setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
+import { holdSelection } from '../../scheduleRows'
 import { C, S, T } from '../../theme'
 
 /* THE TAB BAR'S OWN HEIGHT ARITHMETIC, because it has to be reproduced to be
@@ -393,15 +394,21 @@ export default function TabLayout() {
       {choosable.map(t => {
         const on = !!draft?.has(t.id)
         return (
-          /* TAP TICKS, HOLD ISOLATES (owner, 2026-09-21) — the same gesture
-             the Schedule's pills have, because this sheet is the same list and
-             a gesture that works on one and not the other is a gesture nobody
-             trusts. "Select all" and "Clear" already sit above; this is the
-             third thing people want and the only one that needed five taps. */
+          /* TAP TICKS, HOLD ISOLATES, HOLD THE LONE ONE FOR ALL (owner,
+             2026-09-21) — the same gesture the Schedule's pills have, and the
+             same rule (scheduleRows.holdSelection), because this sheet is the
+             same list and a gesture that works on one and not the other is a
+             gesture nobody trusts. The all case TICKS EVERY ROW rather than
+             handing the store its null: this sheet shows its answer as
+             checkboxes, and clearing them all to mean "everything" is the one
+             thing its own Clear button already warns is confusing. */
           <Pressable key={t.id} style={s.row} accessibilityRole="button"
                      accessibilityState={{ selected: on }}
-                     accessibilityHint="Hold to choose only this tournament"
-                     onLongPress={() => setDraft(new Set([t.id]))}
+                     accessibilityHint={on && draft?.size === 1
+                       ? 'Hold to choose every tournament'
+                       : 'Hold to choose only this tournament'}
+                     onLongPress={() => setDraft(holdSelection(draft, t.id)
+                       ?? new Set(choosable.map(x => x.id)))}
                      delayLongPress={320}
                      onPress={() => setDraft(prev => {
                        const next = new Set(prev ?? [])

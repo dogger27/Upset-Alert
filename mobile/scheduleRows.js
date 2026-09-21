@@ -31,6 +31,29 @@ export function sameDrawSet(a, b) {
   return true
 }
 
+/* WHAT A LONG HOLD ON ONE TOURNAMENT SHOULD SELECT.
+ *
+ * A hold isolates: show only the one held (owner, 2026-09-21). Holding the
+ * one that is ALREADY alone then shows everything again — "Long holding on a
+ * draw when only one draw is selected should select ALL draws" — so the
+ * gesture is its own undo and a reader who has isolated a draw is never stuck
+ * tapping four pills back on.
+ *
+ * `null` is the store's own word for every tournament, and what this returns
+ * for the all case; `selected` may be null on the way in for the same reason.
+ *
+ * HOLDING A DIFFERENT PILL STILL ISOLATES IT, even while some other draw is
+ * the only one showing. The alternative reading — any hold means "all" once
+ * one draw is alone — would make the second isolate unreachable by the very
+ * gesture that performs it, and "show me this one instead" is the thing people
+ * are actually doing when they hold a pill that is not lit.
+ */
+export function holdSelection(selected, id) {
+  if (selected && selected.size === 1 && selected.has(id)) return null
+  return new Set([id])
+}
+
+
 /* THE LIVE DRAWS, AS TOURNAMENTS. Two draws of a combined event are one
  * entry: the name, the id the schedule rows carry, and the tours present so
  * the row can show both badges. Men first, so a pair never swaps sides.
