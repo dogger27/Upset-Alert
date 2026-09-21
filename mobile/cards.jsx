@@ -994,8 +994,14 @@ export function RoundChip({ round, ghost = false }) {
   return (
     <View style={[u.entryChip, u.roundChip, ghost && u.roundChipGhost]}
           accessibilityElementsHidden={ghost} importantForAccessibility={ghost ? 'no-hide-descendants' : 'auto'}>
-      <Text style={[u.badgeText, label.length > 2 && u.badgeTextWide, u.roundChipText]}
-            numberOfLines={1}>
+      {/* ONE SIZE FOR EVERY ROUND, so no badgeTextWide here. That rule drops a
+          THREE-character label to 9.5pt, and it is right where it lives: an
+          entry code is one of a set — [WC] [ALT] [LL] — that has to keep one
+          pill width. A round is one of a different set, read down a rail, and
+          the rule made "Q1" 11pt beside "R32" at 9.5 (owner spotted it,
+          2026-09-21: "Is Q1 a bigger font size than the R32?"). It was: two
+          characters against three. */}
+      <Text style={[u.badgeText, u.roundChipText]} numberOfLines={1}>
         {label}
       </Text>
     </View>
