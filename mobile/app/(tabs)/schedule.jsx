@@ -669,8 +669,7 @@ export default function ScheduleScreen() {
                       name and never the thing you read first. */}
                   {tier ? (
                     <Text style={[s.eventTier, on ? s.eventTierOn : { color: C.faint },
-                                  { fontSize: pillSize * PILL_TIER_RATIO,
-                                    lineHeight: leading(pillSize * PILL_TIER_RATIO * 1.2) }]}
+                                  { fontSize: pillSize * PILL_TIER_RATIO }]}
                           numberOfLines={1} ellipsizeMode="clip">
                       {tier}
                     </Text>
@@ -682,8 +681,7 @@ export default function ScheduleScreen() {
                       SHORT name. The full name stays the spoken label, so
                       nothing is lost to a screen reader. */}
                   <Text style={[s.eventName, on ? s.eventNameOn : { color: C.muted },
-                                { fontSize: pillSize,
-                                  lineHeight: leading(pillSize * 1.2) }]}
+                                { fontSize: pillSize }]}
                         numberOfLines={1} ellipsizeMode="clip">
                     {t.short || t.name}
                   </Text>
@@ -1592,7 +1590,21 @@ const s = StyleSheet.create({
        if you look for it, and lets them read as labels. */
     borderRadius: R.xs, borderWidth: 1, borderColor: C.border,
     backgroundColor: C.card,
-    paddingHorizontal: PILL_PAD, paddingVertical: 5,
+    /* NO lineHeight ON EITHER LINE, and almost no vertical padding (owner,
+       2026-09-21: "make the pill boxes way less tall reduce all spaces both
+       above and below all text").
+
+       The tallness was a lineHeight of 1.2x on each line, and on iOS RN adds
+       everything a lineHeight gives beyond the font's natural line ABOVE the
+       glyphs rather than around them — so it paid for the height twice: once
+       in the box and once as a gap over each word, which also sank both lines
+       off centre (feedback_ios_lineheight_sinks_caps). Dropping it lets
+       Archivo's own line box set the height, which centres its capitals to a
+       tenth of a point on its own, and is the SAFEST thing under Dynamic Type
+       besides: fontSize scales with the reader's text setting and there is no
+       fixed line box left for the glyphs to outgrow
+       (feedback_dynamic_type_lineheight). */
+    paddingHorizontal: PILL_PAD, paddingVertical: 1,
     /* flexShrink STAYS, as the last guard against a row wider than the phone:
        the solver is what keeps the text whole, and if it is ever wrong it is
        better to squeeze the boxes than to push the last one off the screen.
