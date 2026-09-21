@@ -277,17 +277,23 @@ async def _stored_slots(db, tournament_id: int, day: date) -> list[tuple]:
 async def build_day_document(db, tournament, draws, day: date, season_year: int,
                              venue_tz: Optional[str]) -> Optional[dict]:
     """One day's schedule from the feeds: {url, bytes, parser, count, atp, wta,
-    sources} ready for ingest_document, None when no feed has a row, or
+    sources} ready for ingest_document, None when no feed has a row,
     {"declined": why, ...} when the feeds have the day but cannot state it
-    (see `declined`) — the caller then gives the day to the PDF."""
+    (see `declined`), or {"unfed": why} when nothing answered and a draw had
+    no feed to ask at all — the caller then gives the day to the PDF."""
     from app.services import schedule_shadow, wta_feed
 
     event_id = await schedule_shadow.wta_event_id(db, tournament.id, draws)
     parts = {"day": day.isoformat(), "wta": None, "sofa": []}
     sources = []
+    unfed = []
     for draw, src in plan(draws, event_id):
         try:
-            if src == "wta":
+            if src == "none":
+                women = (getattr(draw, "gender", "") or "").upper() == "F"
+                unfed.append(f"the {'women' if women else 'men'}'s draw has no "
+                             f"{'WTA event id or ' if women else ''}Sofascore id yet")
+            elif src == "wta":
                 key = ("wta", event_id)
                 if key not in _events:
                     _events[key] = await asyncio.to_thread(wta_feed.fetch_matches, event_id, season_year)
@@ -324,6 +330,15 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
             logger.info("feed %s unavailable for %s %s: %s", src, tournament.name, day, exc)
 
     if parts["wta"] is None and not [p for p in parts["sofa"] if not p.get("courts_only")]:
+        # NOTHING TO ASK IS NOT A FEED THAT HAD NOTHING (Chengdu 2026-09-22).
+        # A new tournament's first sheet always arrives before its ids: the
+        # Sofascore id is stamped by sofa_resolver, hourly, once Sofascore
+        # publishes the bracket, and the WTA event id is read off the first
+        # sheet's own URL. The PDF is the only source for those hours, which
+        # is the ordinary state, not a gap — and an id still missing when the
+        # draw is due is sofa_resolver._coverage_check's to report.
+        if unfed:
+            return {"unfed": "; ".join(unfed), "sources": sources}
         return None
     sheet_count = await _sheet_match_count(db, tournament.id, day)
     names = await schedule_shadow.court_names(db, tournament.id, min_votes=3)
