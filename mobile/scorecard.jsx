@@ -127,13 +127,15 @@ export function MatchCard({ e, scale = 1, badges = true, round = null }) {
                 size when necessary": it is already the rule, it just has to be
                 given the real width (owner, 2026-09-14). */}
             <EntryChip entryType={sideEntryType(e.players, side)} />
-            {/* THE ROUND, ON THE TOP PLAYER'S LINE AND NOWHERE ELSE (owner,
-                2026-09-21). Here rather than beside the card so it is laid
-                out by the same row as the entry chip to its left: identical
-                formatting and exact alignment, by construction. Callers that
-                pass no round — every screen but the schedule's compact list —
-                render nothing and are untouched. */}
-            {idx === 0 && <RoundChip round={round} />}
+            {/* THE ROUND, DRAWN ON THE TOP PLAYER'S LINE AND HELD OPEN ON THE
+                OTHER (owner, 2026-09-21). Here rather than beside the card so
+                it is laid out by the same row as the entry chip to its left:
+                identical formatting and exact alignment, by construction. The
+                bottom line draws the same chip invisibly, so both lines' entry
+                chips share one right edge — see RoundChip's `ghost`. Callers
+                that pass no round — every screen but the schedule's compact
+                list — render nothing and are untouched. */}
+            <RoundChip round={round} ghost={idx !== 0} />
             {end && <Text style={s.end}>{end}</Text>}
             {winner != null && (
               <Text style={[s.mark, scale < 1 && { fontSize: Math.round(13 * scale), lineHeight: leading(Math.round(16 * scale)) }, { color: winner === idx ? C.greenLit : C.lossMark }]}>
