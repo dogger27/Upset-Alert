@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models.prediction import UserPrediction
 from app.models.rankings import TePlayer, TeRankingsSnapshot
 from app.models.tournament import DrawEntry, Match, Draw, Tournament, default_short_name
+from app.services.events import attach
 from app.models.user import User
 from app.schemas.league import LeaderboardEntry, LeagueTournamentOut
 from app.schemas.tournament import DrawEntryOut, DrawOut, MatchOut, TournamentCreate, TournamentOut
@@ -212,6 +213,10 @@ async def create_tournament(
     db.add(t)
     await db.flush()  # get ID before scraping
     await _do_scrape(t, db)
+    # The event this draw belongs to — matched on when it is played, not on
+    # its name alone. See services/events.py for what that cost when it was
+    # the name and the year.
+    await attach(db, t)
     await db.commit()
     await db.refresh(t)
     return t

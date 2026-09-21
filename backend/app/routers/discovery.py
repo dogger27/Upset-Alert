@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.tournament import Draw
 from app.models.user import User
 from app.routers.tournaments import _do_scrape
+from app.services.events import attach
 from app.services.discovery import discover_tournaments
 
 router = APIRouter(prefix="/discover", tags=["discovery"])
@@ -98,5 +99,9 @@ async def add_discovered(
     db.add(t)
     await db.flush()
     await _do_scrape(t, db)
+    # AFTER the scrape, because the event is matched on when the draw is
+    # PLAYED and the scrape is what settles its dates. A namesake played at
+    # another time of year is a different tournament — services/events.py.
+    await attach(db, t)
     await db.commit()
     return {"id": t.id, "name": t.name}
