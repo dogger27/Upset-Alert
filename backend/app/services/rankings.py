@@ -24,12 +24,85 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 # Tennis Explorer stores nationality as an English country name; draw entries
-# use IOC 3-letter codes. Only needed for players Wikipedia lists as "neutral"
-# (currently Russia/Belarus) whose draw-entry nationality comes through blank.
-# Extend as needed if other neutrals appear.
+# use IOC 3-letter codes.
+#
+# This began as two entries — Russia and Belarus, the "neutrals" Wikipedia
+# leaves blank — because Wikipedia supplied every other code. A draw built
+# from Tennis Explorer (te_draw.py, 2026-09-21) carries NO codes at all, and
+# came through with 3 of 28 nationalities. So the table is now DERIVED FROM
+# OUR OWN DATA rather than typed: every te_players country name joined to the
+# IOC code its linked draw entries actually carry, kept where the join agreed
+# (68 names; 60 with three or more rows and >=90% agreement, the rest
+# unanimous). "N. Mariana Isl." is deliberately absent — not an IOC nation.
+# Regenerate the same way if a new name appears; do not guess codes by hand.
 COUNTRY_TO_IOC = {
-    "russia": "RUS",
+    "andorra": "AND",
+    "argentina": "ARG",
+    "armenia": "ARM",
+    "australia": "AUS",
+    "austria": "AUT",
     "belarus": "BLR",
+    "belgium": "BEL",
+    "bolivia": "BOL",
+    "bosnia and herzeg.": "BIH",
+    "brazil": "BRA",
+    "bulgaria": "BUL",
+    "burundi": "BDI",
+    "canada": "CAN",
+    "chile": "CHI",
+    "china": "CHN",
+    "chinese taipei": "TPE",
+    "colombia": "COL",
+    "croatia": "CRO",
+    "czech republic": "CZE",
+    "denmark": "DEN",
+    "egypt": "EGY",
+    "finland": "FIN",
+    "france": "FRA",
+    "georgia": "GEO",
+    "germany": "GER",
+    "great britain": "GBR",
+    "greece": "GRE",
+    "hong kong": "HKG",
+    "hungary": "HUN",
+    "india": "IND",
+    "indonesia": "INA",
+    "italy": "ITA",
+    "japan": "JPN",
+    "jordan": "JOR",
+    "kazakhstan": "KAZ",
+    "latvia": "LAT",
+    "lebanon": "LBN",
+    "lithuania": "LTU",
+    "mexico": "MEX",
+    "monaco": "MON",
+    "montenegro": "MNE",
+    "morocco": "MAR",
+    "netherlands": "NED",
+    "new zealand": "NZL",
+    "north macedonia": "MKD",
+    "norway": "NOR",
+    "paraguay": "PAR",
+    "peru": "PER",
+    "philippines": "PHI",
+    "poland": "POL",
+    "portugal": "POR",
+    "qatar": "QAT",
+    "romania": "ROU",
+    "russia": "RUS",
+    "serbia": "SRB",
+    "slovakia": "SVK",
+    "slovenia": "SLO",
+    "south korea": "KOR",
+    "spain": "ESP",
+    "sweden": "SWE",
+    "switzerland": "SUI",
+    "thailand": "THA",
+    "tunisia": "TUN",
+    "turkey": "TUR",
+    "ukraine": "UKR",
+    "usa": "USA",
+    "uzbekistan": "UZB",
 }
 
 # ---------------------------------------------------------------------------

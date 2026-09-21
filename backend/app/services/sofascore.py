@@ -983,6 +983,31 @@ def _geometry_agrees(draw_size: int, bracket_size: int) -> bool:
     return _next_power_of_two(draw_size) == bracket_size
 
 
+# The scheduler's floor on fieldless identity lookups. bootstrap_draw calls
+# resolve_without_field last, after the cheap sources; when the floor says
+# "not yet" this makes that call decline instantly and cost nothing.
+_identity_allowed = True
+
+
+class identity_gate:
+    """`with identity_gate(False): ...` makes resolve_without_field decline."""
+
+    def __init__(self, allowed: bool):
+        self.allowed = allowed
+        self.prev = True
+
+    def __enter__(self):
+        global _identity_allowed
+        self.prev = _identity_allowed
+        _identity_allowed = self.allowed
+        return self
+
+    def __exit__(self, *exc):
+        global _identity_allowed
+        _identity_allowed = self.prev
+        return False
+
+
 async def resolve_without_field(draw: Draw) -> Optional[tuple]:
     """Identify a tournament for a draw that has NO entries to match against.
 
@@ -1015,6 +1040,8 @@ async def resolve_without_field(draw: Draw) -> Optional[tuple]:
     """
     from app.services.sofa_draw_shape import draw_shape, main_draw_start
 
+    if not _identity_allowed:
+        return None                      # the scheduler's floor: not this pass
     if not draw.draw_size or not draw.start_date:
         return None                      # nothing to corroborate against
 

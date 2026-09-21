@@ -93,6 +93,9 @@ class ShapeEntrant:
     sofa_slug: Optional[str] = None
     seed: Optional[int] = None
     entry_type: Optional[str] = None
+    nationality: Optional[str] = None      # IOC code, when the source states it
+    te_slug: Optional[str] = None          # Tennis Explorer slug, when the source states it
+    ranking: Optional[int] = None          # entry ranking, when the source states it
 
 
 @dataclass
@@ -379,7 +382,7 @@ def shape_to_parsed(shape: DrawShape):
 
     players = [
         PlayerEntry(bracket_position=e.bracket_position, name=e.name,
-                    nationality=None, seed=e.seed, entry_type=e.entry_type)
+                    nationality=e.nationality, seed=e.seed, entry_type=e.entry_type)
         for e in shape.entrants
     ]
     byes = set(shape.byes)

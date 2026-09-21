@@ -1842,32 +1842,45 @@ async def toggle_unlock_selections(
 # Internal scrape helper
 # ---------------------------------------------------------------------------
 
-async def bootstrap_from_sofascore(tournament: Draw, db: AsyncSession) -> dict:
-    """Build a draw's shape from Sofascore when Wikipedia has no article.
+async def bootstrap_draw(tournament: Draw, db: AsyncSession) -> dict:
+    """Build a draw's shape from the best source that has it, when we have none.
 
-    THE CASE THIS IS FOR, and the only one. Hangzhou and Chengdu started in two
-    days on 2026-09-21 with no mainspace Wikipedia article, no entries and no
-    Sofascore identity — a draw the site could not show at all. Wikipedia has
-    been the sole author of draw SHAPE, and the standing direction is to
-    eliminate it where that can be done reliably.
+    THE CASE, AND THE ONLY ONE: a draw with NO entries — Hangzhou and Chengdu
+    on 2026-09-21, two days from play with no Wikipedia article, nothing to
+    show and picks impossible. Once a draw has a field, whatever wrote it owns
+    it and the normal pipeline keeps it current; re-shaping a live draw from
+    another source would put two writers on one bracket and risk clearing
+    results the way feedback_scraper_clears_espn_winner records. So this
+    bootstraps, records where the shape came from, and gets out of the way.
 
-    SCOPED TO A DRAW WITH NO ENTRIES, deliberately and permanently. Once a
-    draw has a field, Wikipedia (or whatever wrote it) owns it and the normal
-    pipeline keeps it current; re-shaping a live draw from a cup tree would put
-    two writers on one bracket and risk clearing results the way
-    feedback_scraper_clears_espn_winner records. So this bootstraps and then
-    gets out of the way.
+    SOURCES, IN ORDER OF TRUST, each returning the same DrawShape:
 
-    Identity comes from `resolve_without_field`, which needs the tour, the
-    bracket geometry and the dates to agree AND to be the only candidate that
-    fits — it returns None rather than guess. The shape is then handed to
-    `_do_scrape`, so the write is the same write Wikipedia gets.
+      wta_official   the WTA's own draw sheet as JSON — every slot, byes
+                     explicit, seeds, entry types, IOC nationality, the
+                     tour's player ids. Women's draws only.
+      tennisexplorer the complete field at two days out for either tour,
+                     keyed by the te_slug this project already stores; seeds
+                     when printed, never required.
+      sofascore      identity from tour + bracket + dates (resolve_without_
+                     field), shape from the cup tree — which is a view over
+                     EVENTS and so hides a player until his first match
+                     exists. Last, because it is the one that fills late.
+
+    A shape is accepted only if `bracket_is_complete` — every slot occupied
+    or a bye — because Sofascore's tree, and possibly the others', fills in
+    over days, and a half-filled bracket written and stamped released is worse
+    than no bracket (the bootstrap would never revisit it).
+
+    The shape goes through shape_to_parsed into _do_scrape, so the write is
+    the same write Wikipedia gets.
     """
-    from app.services.sofa_draw_shape import bracket_is_complete, shape_to_parsed
-    from app.services.sofascore import resolve_without_field
-    from app.services.system_log import app_log
+    import logging
 
-    report: dict = {"draw_id": tournament.id, "bootstrapped": False}
+    from app.services.sofa_draw_shape import bracket_is_complete, shape_to_parsed
+    from app.services.system_log import app_log
+    logger = logging.getLogger(__name__)
+
+    report: dict = {"draw_id": tournament.id, "bootstrapped": False, "tried": []}
 
     existing = (await db.execute(
         select(func.count()).select_from(DrawEntry).where(
@@ -1876,41 +1889,113 @@ async def bootstrap_from_sofascore(tournament: Draw, db: AsyncSession) -> dict:
         report["error"] = f"draw already has {existing} entries — not ours to rebuild"
         return report
 
-    found = await resolve_without_field(tournament)
-    if found is None:
-        report["error"] = "no Sofascore tournament could be identified without a field"
-        return report
+    shape, source, ids = None, None, {}
 
-    uid, season_id, shape = found
-    # A HALF-FILLED CUP TREE IS NOT A DRAW. Sofascore fills its bracket
-    # incrementally — Hangzhou read 20 entrants in a 32 bracket two days out,
-    # against Wikipedia's 28 — and writing that would present a partial field
-    # as the draw AND stamp it released, since 20 clears the 50% bar. The
-    # bootstrap only runs on a draw with no entries, so it would never come
-    # back to finish the job.
-    if not bracket_is_complete(shape):
-        report["error"] = (
-            f"Sofascore bracket is incomplete: {shape.entrant_count} entrants "
-            f"+ {len(shape.byes)} byes in a {shape.bracket_size} bracket")
-        report.update(uid=uid, season_id=season_id)
+    # 1. The tour's own sheet, for a women's draw.
+    if (tournament.gender or "").upper() == "F":
+        from app.services import wta_draw
+        row = await db.get(Tournament, tournament.tournament_id) if tournament.tournament_id else None
+        event_id = wta_draw.event_id_for(tournament, row)
+        if event_id:
+            report["tried"].append("wta_official")
+            try:
+                got = wta_draw.fetch_shape(int(event_id), int(tournament.year))
+            except Exception as exc:
+                logger.warning("WTA draw fetch failed for draw %s: %s", tournament.id, exc)
+                got = None
+            if got and bracket_is_complete(got):
+                shape, source = got, "wta_official"
+            elif got:
+                report["wta_official"] = "incomplete"
+
+    # 2. Tennis Explorer, either tour.
+    if shape is None:
+        from app.services import te_draw
+        report["tried"].append("tennisexplorer")
+        try:
+            got = await te_draw.fetch_shape(tournament)
+        except Exception as exc:
+            logger.warning("TE draw fetch failed for draw %s: %s", tournament.id, exc)
+            got = None
+        if got and bracket_is_complete(got):
+            # TE prints SURNAMES. The slug is the identity, and the TE player
+            # index this project already keeps (5,800+ slugs, from the
+            # rankings scrape) turns it back into the full name the rest of
+            # the pipeline resolves on — locally, no request. 8 of 8 on the
+            # first draw measured. A slug the index lacks keeps its surname.
+            from app.models.rankings import TePlayer
+            from app.services.rankings import COUNTRY_TO_IOC
+            slugs = [e.te_slug for e in got.entrants if e.te_slug]
+            if slugs:
+                rows = (await db.execute(select(TePlayer).where(
+                    TePlayer.te_slug.in_(slugs)))).scalars().all()
+                by_slug = {r.te_slug: r for r in rows}
+                nats = 0
+                for e in got.entrants:
+                    r = by_slug.get(e.te_slug) if e.te_slug else None
+                    if r is None:
+                        continue
+                    full = (r.name_display or f"{r.first_name or ''} {r.last_name or ''}").strip()
+                    if full:
+                        e.name = full
+                    # The index stores an English country name; entries store
+                    # the IOC code, through the same map assign_rankings uses.
+                    ioc = COUNTRY_TO_IOC.get((r.nationality or "").strip().lower())
+                    if ioc and not e.nationality:
+                        e.nationality, nats = ioc, nats + 1
+                report["te_names_resolved"] = f"{len(by_slug)}/{len(slugs)}"
+                report["te_nationalities"] = nats
+            shape, source = got, "tennisexplorer"
+        elif got:
+            report["tennisexplorer"] = "incomplete"
+
+    # 3. Sofascore, last: identity is dearer and the tree fills late.
+    if shape is None:
+        from app.services.sofascore import resolve_without_field
+        report["tried"].append("sofascore")
+        found = await resolve_without_field(tournament)
+        if found is not None:
+            uid, season_id, got = found
+            ids = {"sofa_tournament_id": uid, "sofa_season_id": season_id}
+            if bracket_is_complete(got):
+                shape, source = got, "sofascore"
+            else:
+                report["sofascore"] = (f"incomplete: {got.entrant_count} entrants + "
+                                       f"{len(got.byes)} byes in a {got.bracket_size} bracket")
+
+    if shape is None:
+        report["error"] = "no source has a complete bracket for this draw yet"
         return report
 
     parsed = shape_to_parsed(shape)
     await _do_scrape(tournament, db, parsed=parsed)
-    # Identity is worth keeping: the next pass reads the field directly.
-    tournament.sofa_tournament_id = uid
-    tournament.sofa_season_id = season_id
 
-    report.update(bootstrapped=True, uid=uid, season_id=season_id,
-                  bracket_size=shape.bracket_size,
-                  entrants=shape.entrant_count, byes=len(shape.byes))
+    # What the writer cannot carry, set here: the slugs a source stated, and
+    # the identity Sofascore resolved, so the next pass reads the field direct.
+    slugs = {e.bracket_position: e.te_slug for e in shape.entrants if e.te_slug}
+    if slugs:
+        rows = (await db.execute(select(DrawEntry).where(
+            DrawEntry.draw_id == tournament.id,
+            DrawEntry.bracket_position.in_(list(slugs))))).scalars().all()
+        for e in rows:
+            if not e.te_slug:
+                e.te_slug = slugs[e.bracket_position]
+    for k, v in ids.items():
+        setattr(tournament, k, v)
+
+    report.update(bootstrapped=True, source=source, bracket_size=shape.bracket_size,
+                  entrants=shape.entrant_count, byes=len(shape.byes), **ids)
     await app_log(
-        "info", "sofascore",
+        "info", "draws",
         f"Built {tournament.year} {tournament.name} ({tournament.gender}) from "
-        f"Sofascore: {shape.entrant_count} entrants in a {shape.bracket_size} "
+        f"{source}: {shape.entrant_count} entrants in a {shape.bracket_size} "
         f"bracket, {len(shape.byes)} bye(s) — no Wikipedia article was needed",
         report)
     return report
+
+
+# The name the first version shipped under, kept for anything that imported it.
+bootstrap_from_sofascore = bootstrap_draw
 
 
 async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = False,
