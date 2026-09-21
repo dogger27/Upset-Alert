@@ -180,3 +180,56 @@ def test_a_day_with_every_stored_match_is_not_thin_whatever_the_count():
     assert not accounts_for([("doubles", {"stearns", "jovic"})], ms)
     assert not accounts_for([("singles", set())], ms)
     assert not accounts_for([], ms)
+
+
+def _feed_day(draws, monkeypatch, sofa_rows=()):
+    """build_day_document for 2026-09-22 with no WTA event id and Sofascore
+    answering `sofa_rows` for every draw that has an id."""
+    import asyncio
+    from app.services import schedule_feeds, schedule_shadow
+
+    async def no_event_id(*_a, **_k):
+        return None
+
+    async def sofa_parts(*_a, **_k):
+        return list(sofa_rows)
+
+    monkeypatch.setattr(schedule_shadow, "wta_event_id", no_event_id)
+    monkeypatch.setattr(schedule_feeds, "_sofa_parts", sofa_parts)
+    t = SimpleNamespace(id=17, name="Chengdu Open")
+    return asyncio.run(schedule_feeds.build_day_document(
+        None, t, draws, date(2026, 9, 22), 2026, "Asia/Shanghai"))
+
+
+def test_a_draw_with_no_feed_to_ask_is_unfed_not_a_feed_gap(monkeypatch):
+    """Chengdu 2026-09-22: the qualifying sheet published hours before the
+    resolver stamped the draw's Sofascore id, so no feed was ever asked — and
+    the PDF fallback warned that "no feed had a schedule" (system_logs 4118).
+    The day is handed to the PDF all the same, with the reason."""
+    got = _feed_day([_draw("M", sofa=False)], monkeypatch)
+    assert got == {"unfed": "the men's draw has no Sofascore id yet", "sources": []}
+    women = _feed_day([_draw("F", sofa=False)], monkeypatch)
+    assert women["unfed"] == "the women's draw has no WTA event id or Sofascore id yet"
+    # A combined event whose fed half has nothing for the day: the unfed half
+    # is the explanation, and it has its own alarm in sofa_resolver.
+    both = _feed_day([_draw("M", sofa=False), _draw("F")], monkeypatch)
+    assert both["unfed"] == "the men's draw has no Sofascore id yet"
+
+
+def test_every_draw_fed_and_none_with_the_day_is_still_a_gap(monkeypatch):
+    assert _feed_day([_draw("M")], monkeypatch) is None
+
+
+def test_only_a_day_every_feed_could_have_supplied_warns():
+    from app.services.order_of_play import _pdf_fallback_note
+    t = SimpleNamespace(id=17, name="Chengdu Open")
+    day = date(2026, 9, 22)
+    level, msg, key = _pdf_fallback_note(
+        t, day, {}, {day: "the men's draw has no Sofascore id yet"})
+    assert (level, key) == ("info", "pdf_unfed_17")
+    assert "no feed had a schedule" not in msg and "no Sofascore id" in msg
+    assert _pdf_fallback_note(t, day, {day: "3 row(s) with no court"}, {})[0] == "info"
+    # Another day unfed says nothing about this one.
+    assert _pdf_fallback_note(t, day, {}, {date(2026, 9, 23): "x"}) == (
+        "warning", "Chengdu Open 2026-09-22: no feed had a schedule; the PDF filled in",
+        "pdf_fallback_17")

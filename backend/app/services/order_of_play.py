@@ -596,6 +596,34 @@ async def _ingest_feed_days(tournament, draws, feed_days: dict, venue_tz) -> Non
                           dedup_key=f"feed_ingest_{tournament.id}", dedup_hours=6)
 
 
+def _pdf_fallback_note(tournament, pdf_date, declined_days: dict,
+                       unfed_days: dict) -> tuple[str, str, str]:
+    """(level, message, dedup key) for a day the PDF filled in, by why."""
+    if pdf_date in declined_days:
+        # INFO, not a warning: the WTA publishes every sheet's "Followed By"
+        # matches unordered until they are played, so this is the ordinary
+        # state of a next day rather than a gap anyone can act on.
+        return ("info",
+                f"{tournament.name} {pdf_date}: the feeds could not state "
+                f"the day ({declined_days[pdf_date]}); the PDF filled in",
+                f"pdf_declined_{tournament.id}")
+    if pdf_date in unfed_days:
+        # INFO too: no feed could be ASKED, because an id is not resolved yet
+        # — which every new tournament's first sheet beats (see
+        # schedule_feeds.build_day_document). The missing id has its own
+        # alarm, timed to the draw being due: sofa_resolver._coverage_check.
+        return ("info",
+                f"{tournament.name} {pdf_date}: no feed to ask yet "
+                f"({unfed_days[pdf_date]}); the PDF filled in",
+                f"pdf_unfed_{tournament.id}")
+    # A warning, deliberately: every draw had a feed and none of them had the
+    # day — a feed down, or one that has dropped the tournament — and the
+    # watcher should look at it.
+    return ("warning",
+            f"{tournament.name} {pdf_date}: no feed had a schedule; the PDF filled in",
+            f"pdf_fallback_{tournament.id}")
+
+
 async def refresh_order_of_play() -> int:
     """
     Point every eligible draw at today's OOP, or at nothing.
@@ -663,6 +691,7 @@ async def refresh_order_of_play() -> int:
             # on a court), and then the log says so.
             feed_days: dict = {}
             declined_days: dict = {}
+            unfed_days: dict = {}
             if tournament.name not in _SLAM_FEEDS:
                 for day_ in (today - timedelta(days=1), today,
                              today + timedelta(days=1), today + timedelta(days=2)):
@@ -675,6 +704,8 @@ async def refresh_order_of_play() -> int:
                                     describe_exception(exc))
                     if fd and fd.get("declined"):
                         declined_days[day_] = fd["declined"]
+                    elif fd and fd.get("unfed"):
+                        unfed_days[day_] = fd["unfed"]
                     elif fd:
                         feed_days[day_] = fd
             if feed_days:
@@ -818,23 +849,11 @@ async def refresh_order_of_play() -> int:
                     async with schedule_svc.day_write_lock:   # see schedule.day_write_lock
                         ingested = await with_write_retry(_ingest, what=f"oop ingest {tournament.id}")
                         await with_write_retry(_estimates, what=f"oop estimates {tournament.id}")
-                    if not (ingested or {}).get("skipped") and pdf_date in declined_days:
-                        # INFO, not a warning: the WTA publishes every sheet's
-                        # "Followed By" matches unordered until they are
-                        # played, so this is the ordinary state of a next day
-                        # rather than a gap anyone can act on.
-                        await app_log("info", "order_of_play",
-                                      f"{tournament.name} {pdf_date}: the feeds could not state "
-                                      f"the day ({declined_days[pdf_date]}); the PDF filled in",
-                                      dedup_key=f"pdf_declined_{tournament.id}", dedup_hours=24)
-                    elif not (ingested or {}).get("skipped"):
-                        # A warning, deliberately: a day no feed could supply
-                        # is a gap in the feeds (an id not yet resolved, a
-                        # feed down), and the watcher should look at it.
-                        await app_log("warning", "order_of_play",
-                                      f"{tournament.name} {pdf_date}: no feed had a schedule; "
-                                      f"the PDF filled in",
-                                      dedup_key=f"pdf_fallback_{tournament.id}", dedup_hours=24)
+                    if not (ingested or {}).get("skipped"):
+                        level, msg, key = _pdf_fallback_note(
+                            tournament, pdf_date, declined_days, unfed_days)
+                        await app_log(level, "order_of_play", msg,
+                                      dedup_key=key, dedup_hours=24)
                 except Exception as exc:
                     await app_log("warning", "order_of_play",
                                   f"Schedule ingest failed for '{tournament.name}': "
