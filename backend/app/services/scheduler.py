@@ -1583,6 +1583,22 @@ async def _check_draw_health() -> None:
                 dedup_key=f"wiki_never_resolved_{t.id}", dedup_hours=DRAW_HEALTH_REALERT_HOURS,
             )
 
+    # THE REST OF THE LIFECYCLE, not just its opening. The two checks above
+    # both ask "has this draw arrived yet"; every draw fault the owner
+    # reported in the week of 2026-09-21 was at the other end — a stale end
+    # date, a stuck status, a row holding two tournaments, entries with no
+    # rank. See services/draw_invariants.py for the doctrine and the
+    # incidents. Its own session: a check must never share one with a writer.
+    try:
+        from app.services.draw_invariants import check_and_log
+
+        async with AsyncSessionLocal() as db:
+            violations = await check_and_log(db)
+        if violations:
+            logger.info("Draw invariant sweep: %d violation(s)", len(violations))
+    except Exception as exc:
+        logger.error("Draw invariant sweep failed: %s", exc)
+
 
 # How stale rankings may get before it stops being the normal weekly rhythm.
 # Weeks are Monday-anchored and refreshed weekly, so the honest maximum lag is
@@ -2369,7 +2385,8 @@ def start_scheduler() -> None:
         next_run_time=datetime.now(timezone.utc) + timedelta(minutes=2),
     )
     # Sanity sweep for silent failures (released-but-not-open, wiki title
-    # never resolving) — see _check_draw_health docstring.
+    # never resolving) — see _check_draw_health docstring — and, at the end of
+    # it, the draw-lifecycle law in services/draw_invariants.py.
     scheduler.add_job(
         _on_shutdown_quietly(_check_draw_health),
         "interval",
