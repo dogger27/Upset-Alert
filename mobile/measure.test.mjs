@@ -107,4 +107,36 @@ const edgeWidth = widthAt(PILLS, edgeSize, EDGE)
 ok('and still fits with room to spare', edgeWidth < 358,
    `(${edgeWidth.toFixed(0)}pt of 358)`)
 
+/* RENAMING A TOURNAMENT RE-SOLVES THE ROW (owner, 2026-09-21: "When I change
+   the short name of a tournament name, the text in the pills should
+   accommodate, and horizontally scale accordingly"). The solve takes the
+   LABELS, so a longer short name means a smaller shared size and a shorter one
+   gives the size back — and the row keeps fitting either way.
+
+   Measured on a 250pt row: narrow enough that even the UNCHANGED row is
+   already shrinking, so a rename can be seen to move the size in BOTH
+   directions. At a width where the base size still caps the answer, shortening
+   a name cannot show up at all — which is how the first version of this test
+   passed on a 0.04pt margin and then failed outright. */
+const NARROW = 250
+const rename = (from, to) => PILLS.map(p => (p.name === from ? { ...p, name: to } : p))
+const base = fitPillSize(PILLS, { ...EDGE, avail: NARROW })
+const longer = fitPillSize(rename('SP', 'Sao Paulo Open'), { ...EDGE, avail: NARROW })
+const shorter = fitPillSize(rename('Singapore', 'SGP'), { ...EDGE, avail: NARROW })
+
+ok('a longer short name shrinks the whole row', longer < base - 0.5,
+   `(${base.toFixed(2)}pt -> ${longer.toFixed(2)}pt)`)
+ok('a shorter one gives the size back', shorter > base + 0.5,
+   `(${base.toFixed(2)}pt -> ${shorter.toFixed(2)}pt)`)
+
+// Both renamed rows still fit, which is the point of re-solving at all.
+for (const [what, pills, size] of [
+  ['longer', rename('SP', 'Sao Paulo Open'), longer],
+  ['shorter', rename('Singapore', 'SGP'), shorter],
+]) {
+  const w = widthAt(pills, size, EDGE)
+  ok(`the ${what} row still fits`, w < NARROW, `(${w.toFixed(0)}pt of ${NARROW})`)
+}
+
+
 console.log(fail ? `\n${fail} failed` : '\n  all passed'); process.exit(fail ? 1 : 0)
