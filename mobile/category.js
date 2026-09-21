@@ -24,3 +24,24 @@ export function eventTour(genders) {
   if (seen.length !== 1) return null
   return seen[0] === 'F' ? 'WTA' : 'ATP'
 }
+
+
+/* THE TIER AN EVENT PLAYS AT, as one short string: "500", "1000", "GS".
+ *
+ * A combined week whose halves differ keeps both, joined — Beijing is a WTA
+ * 1000 beside an ATP 500, and "1000" alone would be a claim about the men's
+ * draw that is not true. Halves at the same tier say it once, which is the
+ * common case (Chengdu and Hangzhou are both ATP 250).
+ *
+ * Empty string, never a placeholder, when nothing is known: a pill draws the
+ * line only if there is something to put on it, and a stray dash above a
+ * tournament name reads as a missing number rather than an absent one.
+ */
+export function tierWord(categories) {
+  const seen = []
+  for (const c of categories || []) {
+    const short = categoryShort(c)
+    if (short && !seen.includes(short)) seen.push(short)
+  }
+  return seen.join('/')
+}

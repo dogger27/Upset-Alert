@@ -193,7 +193,10 @@ export const T = {
 /* Spacing. One scale, used everywhere, so gaps are chosen rather than typed. */
 export const S = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 }
 
-export const R = { sm: 8, md: 12, lg: 16, pill: 999 }
+/* xs is a corner you notice only if you look — the Schedule's tournament
+   pills (owner, 2026-09-21), which read as labels rather than buttons and
+   lost their shape entirely at `pill`. */
+export const R = { xs: 3, sm: 8, md: 12, lg: 16, pill: 999 }
 
 // Apple's minimum. The website follows the same rule, so a control that feels
 // right in one client feels right in the other.

@@ -42,3 +42,41 @@ export function textWidth(text, family, fontSize) {
   }
   return (units / t.upm) * fontSize * FONT_SCALE
 }
+
+
+/* THE ONE TEXT SIZE AT WHICH A WHOLE ROW OF PILLS FITS THE WIDTH IT HAS.
+ *
+ * The Schedule's tournament filter used to wrap onto a second line, which cost
+ * a row of the screen and moved the list down as the week changed. The owner
+ * asked for one line instead (2026-09-21), so the pills share a size chosen to
+ * make that true — ONE size for all of them, not each shrunk to its own box: a
+ * row where "Korea" is set larger than "Hangzhou" reads as a mistake, and the
+ * pills are a set of equals.
+ *
+ * Each pill is as wide as the WIDER OF ITS TWO LINES — the tier number above
+ * and the name below — so a short name under a long number ("SP" under
+ * "1000") is measured by the number.
+ *
+ * Solved rather than searched. Text width is linear in font size but the
+ * padding and borders are not, so the answer is
+ *
+ *     size = (available - fixed chrome) / (total text width at size 1)
+ *
+ * which is exact in one step. Never ABOVE the caller's size — a row with room
+ * to spare keeps its intended size rather than inflating to fill the space,
+ * which is the mistake adjustsFontSizeToFit makes in the other direction.
+ *
+ * `chrome` is one pill's horizontal padding AND border, both sides, in points.
+ */
+export function fitPillSize(pills, { avail, family, size, tierRatio = 0.8,
+                                     chrome = 0, gap = 0, min = 7 } = {}) {
+  const n = pills?.length || 0
+  if (!n || !avail || !(size > 0)) return size
+  const fixed = n * chrome + gap * (n - 1)
+  const unit = pills.reduce((sum, p) => sum + Math.max(
+    textWidth(p?.name, family, 1),
+    textWidth(p?.tier, family, tierRatio),
+  ), 0)
+  if (unit <= 0) return size
+  return Math.max(min, Math.min(size, (avail - fixed) / unit))
+}
