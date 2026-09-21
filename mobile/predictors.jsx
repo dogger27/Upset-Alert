@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getLeagues, getPredictors } from './api'
 import { nameForms } from './names'
+import { predictorsMessage } from './lock'
 import { shortRound } from './rounds'
 import { useApi } from './useApi'
 import { C, R, S, T } from './theme'
@@ -67,6 +68,15 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueI
   const statusStyle = !pending ? s.pillDone : !known ? s.pillTbd : live ? s.pillLive : s.pillUpcoming
 
   const fieldSize = (d?.correct?.length || 0) + (d?.incorrect?.length || 0)
+  /* WITHHELD IS NOT EMPTY, and the difference is the whole sheet. Under
+     match-by-match locking the server returns both columns empty with
+     `hidden` set, because picks stay editable through round one and a
+     visible bracket is a bracket to copy. Rendering the columns then says
+     "No one." about a match the whole field predicted — which is what it
+     did on a completed Singapore first-rounder six people had picked, one
+     of them correctly (owner, 2026-09-21). lock.js owns the sentence, so
+     this explanation and the standings' cannot drift apart. */
+  const withheld = predictorsMessage(d)
 
   return (
     <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -141,7 +151,7 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueI
         {q.loading && !d ? <Loading /> : null}
         {q.error ? <Text style={s.err}>Couldn’t load predictions.</Text> : null}
 
-        {d ? (
+        {withheld ? <Text style={s.withheld}>{withheld}</Text> : d ? (
           <ScrollView style={s.list} contentContainerStyle={{ paddingBottom: S.lg }}>
             {/* BOTH, always, empty or not. A missing heading reads as a
                 loading gap or a bug, where "Right (0)" is a fact about the
@@ -352,6 +362,11 @@ const s = StyleSheet.create({
   // full one's names would — the eye reads it as the section's content rather
   // than as another heading.
   none: { ...T.tiny, color: C.faint, paddingVertical: 4, paddingLeft: 20 },
+  /* Centred and roomy, unlike `none`'s indented aside: this replaces the
+     whole answer rather than qualifying one column of it. */
+  withheld: { ...T.small, color: C.muted, textAlign: 'center',
+              paddingVertical: S.lg, paddingHorizontal: S.md,
+              lineHeight: leading(T.small.fontSize, 1.45) },
   bucket: { marginBottom: S.xs },
   bucketHead: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
