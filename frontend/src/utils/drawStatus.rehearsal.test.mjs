@@ -116,11 +116,26 @@ const DRAWS = SEASON.map(([id, tournament_id, start, len, label]) => ({
   released_on: plus(start, -7),
 }))
 
-/* The server's answer, modelled. See the header for what this stands in for. */
+/* The server's answer, modelled — and CHECKED against the real property on
+ * 2026-09-21 by walking Draw.computed_status across a 6-day week, which
+ * corrected two things this model had wrong:
+ *
+ *   ON THE START DATE ITSELF a draw reads 'open', not 'active'. The property
+ *   only says 'active' on day 0 once picks have locked or closing_time has
+ *   passed; until the first ball the bracket is still pickable.
+ *
+ *   THE COMPLETION FALLBACK IS `(today - start_date) > 14 days`, which owes
+ *   nothing to end_date. It never fires on a healthy draw because the scrapers
+ *   stamp status='completed' when the final is decided — which is what this
+ *   models — but when a scrape dies mid-event it leaves eight days of a
+ *   finished tournament reading Active. That fault is upstream of every line
+ *   in drawStatus.js and no client rule can repair it, so it is not modelled
+ *   here: it belongs to backend draw_invariants.py's
+ *   `not_completed_after_its_end`, which now catches it. */
 function serverStatus(draw, day) {
-  if (day > draw.end_date) return 'completed'
-  if (day >= draw.start_date) return 'active'
-  if (day >= draw.released_on) return 'open'
+  if (day > draw.end_date) return 'completed'          // the scrapers stamp it
+  if (day > draw.start_date) return 'active'
+  if (day >= draw.released_on) return 'open'           // incl. the start date
   return 'upcoming'
 }
 

@@ -15,14 +15,15 @@ import pytest
 from app.services.draw_invariants import (
     ABSOLUTE_MAX_SPAN_DAYS,
     CATEGORY_SPAN_DAYS,
-    STALE_ACTIVE_DAYS,
+    UNFINISHED_GRACE_DAYS,
     completed_with_unplayed_final,
     dates_out_of_order,
     duration_outside_envelope,
     end_date_behind_play,
     entries_without_draw_rank,
+    not_completed_after_its_end,
     row_holds_two_events,
-    stale_active,
+    not_completed_after_its_end,
 )
 
 
@@ -140,28 +141,41 @@ def test_the_envelopes_cover_every_category_in_the_table():
         assert category in CATEGORY_SPAN_DAYS
 
 
-# ── stale_active: Guadalajara ─────────────────────────────────────────────
+# ── not_completed_after_its_end ──────────────────────────────────────────
 
-def test_active_days_after_its_last_day():
-    """"Why is Guadalajara still showing as Active?" — owner, 2026-09-21,
-    two days after its final."""
-    why = stale_active("active", date(2026, 9, 19), date(2026, 9, 22))
+def test_a_draw_the_scrapers_never_finished():
+    """Walked against the real computed_status: a status left at anything but
+    'completed' reads 'active' until 14 days past START, which for a 6-day
+    week is eight days after the final was played."""
+    why = not_completed_after_its_end("active", date(2026, 9, 19), date(2026, 9, 22))
     assert why and "3d after end_date" in why
 
 
-def test_active_on_its_last_day_is_lawful():
-    assert stale_active("active", date(2026, 9, 21), date(2026, 9, 21)) is None
+@pytest.mark.parametrize("status", ["active", "upcoming", "open", None])
+def test_every_unfinished_status_counts_not_just_active(status):
+    """The earlier check asked only about 'active' and so missed the identical
+    eight phantom days in a draw abandoned at 'upcoming'."""
+    assert not_completed_after_its_end(status, date(2026, 9, 1), date(2026, 9, 21))
+
+
+def test_a_finished_draw_is_lawful():
+    assert not_completed_after_its_end(
+        "completed", date(2026, 9, 19), date(2026, 9, 30)) is None
+
+
+def test_on_its_last_day_it_is_lawful():
+    assert not_completed_after_its_end(
+        "active", date(2026, 9, 21), date(2026, 9, 21)) is None
 
 
 def test_a_late_result_gets_its_grace():
-    """A result can land a day late; that is not a stuck draw."""
-    inside = date(2026, 9, 21 + STALE_ACTIVE_DAYS)
-    assert stale_active("active", date(2026, 9, 21), inside) is None
+    """A result can land a day or two late; that is not an abandoned scrape."""
+    inside = date(2026, 9, 21 + UNFINISHED_GRACE_DAYS)
+    assert not_completed_after_its_end("active", date(2026, 9, 21), inside) is None
 
 
-@pytest.mark.parametrize("status", ["completed", "upcoming", "open", None])
-def test_only_active_can_be_stale_active(status):
-    assert stale_active(status, date(2026, 1, 11), date(2026, 9, 21)) is None
+def test_no_end_date_no_judgement():
+    assert not_completed_after_its_end("active", None, date(2026, 9, 21)) is None
 
 
 # ── completed_with_unplayed_final ─────────────────────────────────────────

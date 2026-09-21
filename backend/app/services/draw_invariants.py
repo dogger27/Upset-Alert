@@ -78,12 +78,13 @@ CATEGORY_SPAN_DAYS = {
 # have never seen, or a NULL one.
 ABSOLUTE_MAX_SPAN_DAYS = 15
 
-# How long after its last day a draw may still be stamped `active`. The status
-# column is written by the scrapers, and a draw whose final is done stops being
-# active the moment the result lands — but a result can arrive late, and a
-# rain-delayed final legitimately pushes play past end_date (which is what
-# `end_date_behind_play` is for). Two days is past both.
-STALE_ACTIVE_DAYS = 2
+# How long after its last day a draw may still be unfinished. The status column
+# is written by the scrapers, and a draw whose final is done stops being active
+# the moment the result lands — but a result can arrive late, and a rain-delayed
+# final legitimately pushes play past end_date (which is what
+# `end_date_behind_play` is for, and what adopt_scheduled_end_date repairs).
+# Two days is past both.
+UNFINISHED_GRACE_DAYS = 2
 
 
 # ── the law, as pure predicates ───────────────────────────────────────────
@@ -139,29 +140,38 @@ def duration_outside_envelope(category: Optional[str],
     return None
 
 
-def stale_active(status: Optional[str], end_date: Optional[date],
-                 today: date) -> Optional[str]:
-    """Still stamped `active` well after its last day.
+def not_completed_after_its_end(status: Optional[str], end_date: Optional[date],
+                                today: date) -> Optional[str]:
+    """Its last day has passed and the scrapers never finished it.
 
-    NOT the check that catches Guadalajara, and it is worth being exact about
-    that. When the owner asked "Why is Guadalajara still showing as Active?"
-    on 2026-09-21 its stored status was already `completed` — the word on
-    screen came from the FRONTEND cohort, which clustered it with SP Open a
-    day later and is now fixed in drawStatus.js with its own tests. Setting
-    this draw's status back to `active` does not trip this check either: two
-    days is inside the grace below. The root cause that a backend check can
-    see is SP Open's stale end_date, and `end_date_behind_play` owns it.
+    THIS IS THE ONE WORTH MEASURING, because of what computed_status does when
+    the stored status is anything but `completed`. Walked against the real
+    property on 2026-09-21, for an ordinary 6-day week whose final is on day
+    +6:
 
-    What this check is for is the other way that word gets stuck: the status
-    column is written by the scrapers, and one that stops mid-event — a
-    result that never lands, a scrape that dies after the semi-finals — leaves
-    `active` behind with nothing to clear it.
+        status 'completed' on time    active day +0..+6, completed from +7
+        status left at 'active'       active day +1..+14, completed from +15
+        status left at 'upcoming'     active day +1..+14, completed from +15
+
+    The fallback that retires a draw nobody updated is `(today - start_date) >
+    14 days`, which owes nothing to end_date — so a scrape that dies after the
+    semi-finals leaves EIGHT DAYS of a tournament reading Active with its final
+    already played. Nothing logs a scrape that simply stopped, so nothing has
+    ever reported this; the owner reporting a draw "still showing as Active" is
+    the only detector there has been.
+
+    Generalised from an earlier `stale_active`, which asked only about
+    status == 'active' and so missed the identical fault in a draw the scrapers
+    left at 'upcoming' or 'open' — the same eight phantom days, from a status
+    that looks harmless in the column.
     """
-    if status != "active" or end_date is None:
+    if status == "completed" or end_date is None:
         return None
     late = (today - end_date).days
-    if late > STALE_ACTIVE_DAYS:
-        return f"status 'active' {late}d after end_date {end_date}"
+    if late > UNFINISHED_GRACE_DAYS:
+        return (f"status {status!r} {late}d after end_date {end_date} — "
+                f"computed_status reads 'active' until "
+                f"14 days past start_date")
     return None
 
 
@@ -314,7 +324,8 @@ async def check(db, *, today: Optional[date] = None) -> list[dict]:
             end_date_behind_play(d.end_date, last_play.get(d.id)))
         add(d, "duration_outside_envelope",
             duration_outside_envelope(d.category, d.start_date, d.end_date))
-        add(d, "stale_active", stale_active(d.status, d.end_date, today))
+        add(d, "not_completed_after_its_end",
+            not_completed_after_its_end(d.status, d.end_date, today))
         add(d, "completed_with_unplayed_final",
             completed_with_unplayed_final(d.status, finals.get(d.id)))
         if d.id in entries_by_draw:
