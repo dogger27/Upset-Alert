@@ -38,6 +38,12 @@ def _canon_entry_type(value: str) -> Optional[str]:
     return _ENTRY_TYPE_CANON.get(value.strip().upper())
 
 
+# Wikipedia's staging namespace. A draw article is sometimes written here
+# first and moved to mainspace a day or two before play; the move leaves a
+# redirect behind, so a Draft-prefixed read keeps resolving afterwards.
+_DRAFT_PREFIX = "Draft:"
+
+
 class WikiPageNotFound(ValueError):
     """
     The requested Wikipedia page does not exist.
@@ -1195,6 +1201,41 @@ async def scrape_tournament(
                 break
             except ValueError:
                 continue
+        if wikitext is None:
+            # THE DRAW MAY BE STAGED IN THE `Draft:` NAMESPACE.
+            #
+            # 2026-09-21: Hangzhou and Chengdu started in two days with no
+            # mainspace article, so neither draw could go Active — while both
+            # were sitting complete in `Draft:`. `Draft:2026 Chengdu Open –
+            # Singles` was 11,499 bytes with `| draw = 28 (4 Q / 3 WC)`, 40
+            # named RD1 slots and seed cells reading 1–8 / Q / WC / NG, in the
+            # same {{16TeamBracket-Compact-Tennis3-Byes}} template this parser
+            # already handles. One editor has staged there since ~2026-07-28.
+            #
+            # Tried only after every mainspace variant has failed, so a live
+            # article always wins over a draft of it. And once the page is
+            # moved, the `Draft:` title SURVIVES AS A REDIRECT and fetch_wikitext
+            # sets redirects=1 — so this same call keeps working afterwards,
+            # through the same code path, rather than being a state to unwind.
+            #
+            # NEVER PERSIST THE PAGE ID. draws.wiki_page_id is unique, and a
+            # draft's id belongs to a page that will be redirected or deleted;
+            # pinning it would leave the draw permanently pointed at a corpse.
+            # `parsed.wiki_page_id = resolved_id or None` further down is what
+            # makes 0 the right answer here, and 0 is already this function's
+            # established "no id" sentinel.
+            for draft_of in singles_title_variants(wiki_page_title, gender):
+                try:
+                    wikitext, _ = await fetch_wikitext(
+                        f"{_DRAFT_PREFIX}{draft_of}", force_refresh=force_refresh)
+                except ValueError:
+                    continue
+                resolved_id = 0
+                _scraper_logger.info(
+                    "No mainspace article for %r — read the draw from "
+                    "%s%s instead (page id deliberately not stored)",
+                    wiki_page_title, _DRAFT_PREFIX, draft_of)
+                break
         if wikitext is None:
             raise
 
