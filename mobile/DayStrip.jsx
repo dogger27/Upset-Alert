@@ -1,7 +1,22 @@
-/* DayStrip — the schedule's day selector: Q1, Q2, 1, 2 … one chip per day
- * that has a sheet, the chosen day lit and a size up, the strip sliding
- * sideways when the days outnumber the width and keeping the chosen chip
- * as near the centre as the ends allow.
+/* DayStrip — the schedule's day selector: one chip per day that has a sheet,
+ * the chosen day lit and a size up, the strip sliding sideways when the days
+ * outnumber the width and keeping the chosen chip as near the centre as the
+ * ends allow.
+ *
+ * DOTS, NOT NUMBERS (owner, 2026-09-21: "Instead of this Q1, Q2, 1,2,3, etc,
+ * we are going to use the regular circle dots the we scrub between. Except
+ * 'today' will be a 'T'"). The same 6pt circle the standings' snapshot rail
+ * scrubs between, so the two scrubbers are one idiom. A day strip of Q1 Q2 1 2
+ * 3 … made the reader parse ten labels to find a position; a rail of dots is
+ * read at a glance, and the one thing a reader needs in words — WHICH day is
+ * chosen — the bar already spells out in its right-hand slot.
+ *
+ * TODAY IS A "T", because it is the one day that means something before you
+ * have chosen it. It takes the label's own ink, so it lights and darkens with
+ * every other chip rather than needing rules of its own.
+ *
+ * The numbers are not lost, only unprinted: each chip's accessibility label
+ * still says "Qualifying day 1" or "Day 3" with its date.
  *
  * NO SCROLLVIEW. A programmatic scrollTo on a Fabric ScrollView paints one
  * stale frame before it settles (RoundScrub.jsx, and the memory
@@ -30,6 +45,7 @@ const RUBBER = 0.6
 const RUBBER_FACTOR = 0.6
 const MOVE = { duration: 240, easing: Easing.bezier(0.22, 0.61, 0.36, 1) }
 const FACE = 'Archivo_500Medium', SIZE = 13         // a chip
+const DOT = 6                                       // the standings rail's circle
 const FACE_ON = 'Archivo_700Bold', SIZE_ON = 15     // the chosen one, a size up
 
 /* `right` — a node pinned at the far right of the bar, outside the sliding
@@ -59,8 +75,16 @@ export function DayStrip({ days, active, onPick, right }) {
      2026-09-17). Chosen from font metrics before layout, so there is no
      trial pass on screen: `stripLayout.js`, on its own suite. */
   const activeIndex = days.findIndex(d => d.date === active)
+  /* WHAT EACH CHIP HAS TO HOLD, for the tightening below: a dot is DOT wide
+     whatever the day is, and today's "T" is measured like any other glyph. The
+     widths are all far under the loosest level's minimum, so the strip settles
+     on the roomiest spacing and never needs to scroll — which is the point of
+     dots, and is left to fall out of the existing machinery rather than being
+     special-cased here. */
   const widths = useMemo(
-    () => days.map((d, i) => textWidth(d.label, i === activeIndex ? FACE_ON : FACE, i === activeIndex ? SIZE_ON : SIZE)),
+    () => days.map((d, i) => (d.isToday
+      ? textWidth('T', i === activeIndex ? FACE_ON : FACE, i === activeIndex ? SIZE_ON : SIZE)
+      : DOT)),
     [days, activeIndex],
   )
   const { level } = useMemo(() => pickLevel(widths, activeIndex, vw - 2 * S.md), [widths, activeIndex, vw])
@@ -132,7 +156,7 @@ export function DayStrip({ days, active, onPick, right }) {
           style={[s.row, { gap: level.gap }, slide]}
           onLayout={e => setCw(e.nativeEvent.layout.width)}
         >
-          {days.map(({ date, label }) => {
+          {days.map(({ date, label, isToday }) => {
             const on = date === active
             return (
               <Pressable
@@ -153,7 +177,12 @@ export function DayStrip({ days, active, onPick, right }) {
                 accessibilityState={{ selected: on }}
                 accessibilityLabel={`${label.startsWith('Q') ? `Qualifying day ${label.slice(1)}` : `Day ${label}`}, ${date}`}
               >
-                <Text style={[s.text, on && s.textOn]}>{label}</Text>
+                {/* The dot takes the ink the label would have: C.muted on the
+                    bar, C.bg on the chosen chip's bright fill — so one rule
+                    covers both, and a green dot can never land on green. */}
+                {isToday
+                  ? <Text style={[s.text, on && s.textOn]}>T</Text>
+                  : <View style={[s.dot, on && s.dotOn]} />}
               </Pressable>
             )
           })}
@@ -208,6 +237,10 @@ const s = StyleSheet.create({
     height: leading(27), borderRadius: 7,
     backgroundColor: C.greenLit, borderColor: C.greenBright,
   },
+  /* The standings rail's circle, to the point (standingsTools.jsx): 6pt, and
+     the day's own ink rather than a colour of its own. */
+  dot: { width: DOT, height: DOT, borderRadius: DOT / 2, backgroundColor: C.muted },
+  dotOn: { backgroundColor: C.bg },
   text: { fontFamily: FACE, fontSize: SIZE, color: C.muted },
   textOn: { fontFamily: FACE_ON, fontSize: SIZE_ON, color: C.bg },
 })

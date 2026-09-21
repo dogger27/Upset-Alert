@@ -8,12 +8,19 @@
  * qualifying round spread over two days is Q3 and Q4: each chip is a day,
  * not a round. Day 1 unknown (no main-draw sheet yet): every day is a
  * main-draw day, numbered from 1. */
-export function dayLabels(dates, mainStart) {
+/* `todayIso` FLAGS TODAY rather than the strip working it out, because the
+ * label and the flag are one answer about one day and belong in one place —
+ * and this module is already the one that knows what a day is called.
+ *
+ * The label is still built for every day even though the strip now draws dots
+ * (owner, 2026-09-21): it is what the accessibility label says, so "Q1" and
+ * "Day 3" survive losing their glyphs. */
+export function dayLabels(dates, mainStart, todayIso = null) {
   const out = []
   let q = 0, d = 0
   for (const date of dates || []) {
     const qual = mainStart != null && date < mainStart
-    out.push({ date, label: qual ? `Q${++q}` : String(++d) })
+    out.push({ date, label: qual ? `Q${++q}` : String(++d), isToday: date === todayIso })
   }
   return out
 }
