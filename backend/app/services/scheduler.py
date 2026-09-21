@@ -44,6 +44,17 @@ async def _auto_discover_tournaments() -> None:
             try:
                 summary = await sync_season(db, year, scrape_new=True)
                 logger.info("✓ Sync complete for %d: %s", year, summary)
+                # THE WTA'S OWN LIST, AFTER WIKIPEDIA'S PAGE, so the tour has
+                # the last word on the women's dates, keys every draw it lists
+                # by liveScoringId, and adds anything Wikipedia does not know.
+                try:
+                    from app.services.wta_season import sync_wta_season
+                    wta = await sync_wta_season(db, year, scrape_new=True)
+                    await db.commit()
+                    logger.info("✓ WTA season list for %d: %s", year, wta)
+                except Exception as exc:                          # noqa: BLE001
+                    await db.rollback()
+                    logger.warning("WTA season list failed for %d: %s", year, exc)
             except Exception as exc:
                 await db.rollback()
                 logger.warning("Failed to sync tournaments for %d: %s", year, exc)
@@ -332,6 +343,9 @@ async def _refresh_dates_from_event_page(draw_id: int) -> None:
             if d is None or d.status in ("active", "completed"):
                 return
 
+            from app.services.tournament_sync import official_dates
+            if await official_dates(db, d):
+                return                 # the WTA's season list keeps these dates
             start, end = await fetch_event_dates(d.wiki_page_title, d.year, d.gender)
             if not start:
                 return

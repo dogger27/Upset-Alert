@@ -49,6 +49,9 @@ class DiscoveredTournament:
     # read from an explicit season-page wikilink (Pass 1). Guessed titles must
     # never overwrite the title of a tournament whose page is already resolved.
     title_is_guess: bool = False
+    # The tour's own id for this event, when the discovery came from the tour
+    # rather than from Wikipedia (wta_season.py sets the WTA liveScoringId).
+    wta_id: Optional[int] = None
 
     @property
     def sort_key(self):

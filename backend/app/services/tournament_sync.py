@@ -281,7 +281,14 @@ async def _apply_update(
             ("draw_size", discovered.draw_size),
             ("num_rounds", _num_rounds(discovered.draw_size)),
         ]
-    if not dates_frozen:
+    # THE TOUR'S OWN DATES ARE NOT WIKIPEDIA'S TO MOVE. A women's draw whose
+    # tournament carries a WTA id has its dates kept by wta_season.py from the
+    # official season list; Wikipedia's season page may still name, categorise
+    # and place it, but its dates stand aside.
+    dates_official = await official_dates(db, existing)
+    if dates_official:
+        eff_start = existing.start_date
+    if not dates_frozen and not dates_official:
         fields += [
             ("start_date", eff_start),
             ("week", tennis_week(eff_start, existing.year) if eff_start else None),
@@ -329,6 +336,57 @@ async def _apply_update(
     return changed
 
 
+async def create_discovered(db: AsyncSession, d: DiscoveredTournament, year: int,
+                            *, scrape_new: bool = False) -> Draw:
+    """Create the Draw a discovery describes. Shared by the Wikipedia season
+    sync and the WTA's official season list (wta_season.py), so the two cannot
+    drift in what a new draw is born with."""
+    draw_direct, draw_qualifiers = await calculate_draw_release_dates(
+        d.start_date, d.category, d.gender, db=db
+    )
+    variant_id = await _resolve_variant_id(db, d.category, d.draw_size, d.name)
+    t = Draw(
+        name=d.name,
+        year=year,
+        gender=d.gender,
+        surface=d.surface,
+        category=d.category,
+        draw_size=d.draw_size,
+        num_rounds=_num_rounds(d.draw_size),
+        start_date=d.start_date,
+        week=tennis_week(d.start_date, year) if d.start_date else None,
+        end_date=d.end_date,
+        draw_release_direct=draw_direct,
+        draw_release_qualifiers=draw_qualifiers,
+        city=d.city,
+        country=d.country,
+        wiki_page_title=d.wiki_page_title,
+        variant_id=variant_id,
+        status="upcoming",
+    )
+    db.add(t)
+    await db.flush()
+    if scrape_new:
+        from app.routers.tournaments import _do_scrape
+        await _do_scrape(t, db)
+    return t
+
+
+async def official_dates(db: AsyncSession, draw: Draw) -> bool:
+    """Whether the tour's own feed, not Wikipedia, is this draw's date authority.
+
+    True for a women's draw whose tournament carries a WTA liveScoringId: the
+    WTA's season list states main-draw dates (measured equal to ours on
+    Guadalajara, Seoul, Singapore and Beijing, 2026-09-21) and wta_season.py
+    keeps them current. Every Wikipedia date path defers to this.
+    """
+    if (draw.gender or "").upper() != "F" or not draw.tournament_id:
+        return False
+    from app.models.tournament import Tournament
+    row = await db.get(Tournament, draw.tournament_id)
+    return bool(row and row.wta_live_scoring_id)
+
+
 async def sync_season(
     db: AsyncSession,
     year: int,
@@ -341,7 +399,6 @@ async def sync_season(
     Returns a summary dict with keys: updated, inserted, skipped, duplicates_found.
     """
     from app.services.discovery import discover_tournaments
-    from app.services.draw_dates import calculate_draw_release_dates
 
     discovered = await discover_tournaments(year)
     logger.info("Discovered %d tournaments for %d", len(discovered), year)
@@ -386,35 +443,7 @@ async def sync_season(
         # only rolls back this one record and leaves the rest of the sync intact.
         try:
             async with db.begin_nested():
-                draw_direct, draw_qualifiers = await calculate_draw_release_dates(
-                    d.start_date, d.category, d.gender, db=db
-                )
-                variant_id = await _resolve_variant_id(db, d.category, d.draw_size, d.name)
-                t = Draw(
-                    name=d.name,
-                    year=year,
-                    gender=d.gender,
-                    surface=d.surface,
-                    category=d.category,
-                    draw_size=d.draw_size,
-                    num_rounds=_num_rounds(d.draw_size),
-                    start_date=d.start_date,
-                    week=tennis_week(d.start_date, year) if d.start_date else None,
-                    end_date=d.end_date,
-                    draw_release_direct=draw_direct,
-                    draw_release_qualifiers=draw_qualifiers,
-                    city=d.city,
-                    country=d.country,
-                    wiki_page_title=d.wiki_page_title,
-                    variant_id=variant_id,
-                    status="upcoming",
-                )
-                db.add(t)
-                await db.flush()
-
-                if scrape_new:
-                    from app.routers.tournaments import _do_scrape
-                    await _do_scrape(t, db)
+                await create_discovered(db, d, year, scrape_new=scrape_new)
 
             inserted += 1
             logger.info("Added %d %s (%s)", year, d.name, d.gender)

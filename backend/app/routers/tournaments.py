@@ -2260,7 +2260,10 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     # schedule pages can include qualifying days which shift the date by 1-2 days.
     # Skip date updates once the tournament is active/completed: qualifying can
     # start a day before the Wikipedia-reported date, and Wikipedia lags real play.
-    if tournament.status not in ("active", "completed") and getattr(parsed, "carries_dates", True):
+    from app.services.tournament_sync import official_dates
+    if (tournament.status not in ("active", "completed")
+            and getattr(parsed, "carries_dates", True)
+            and not await official_dates(db, tournament)):
         # A RELEASED DRAW'S START DATE NEVER MOVES BACKWARDS. Moving it earlier
         # is the one date change that can close a draw people are picking:
         # Draw.computed_status calls any draw whose start has passed "active",

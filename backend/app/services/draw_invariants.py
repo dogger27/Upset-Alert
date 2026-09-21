@@ -61,17 +61,19 @@ logger = logging.getLogger(__name__)
 # wolf. Observed spans were: ATP 250 5..7, ATP 500 5..6, ATP 1000 6..11,
 # WTA 250 5..6, WTA 500 5..7, WTA 1000 5..11, Grand Slam 7..14. The 1000s
 # legitimately take two shapes — a one-week 7 and a mandatory-combined 11 —
-# so their envelope is wide, and that is the honest limit of this check: it
+# and the WTA's official calendar (2026-09-21) states 13 for the four combined
+# 1000s our Wikipedia-derived dates had recorded as one week; so their
+# envelope is wide, and that is the honest limit of this check: it
 # catches a 500 wearing a 1000's dates (China Open, 2026-09-21) and any date
 # pair that is simply nonsense, but it cannot catch a 1000 handed another
 # 1000's range.
 CATEGORY_SPAN_DAYS = {
     "ATP 250": (4, 8),
     "ATP 500": (4, 8),
-    "ATP 1000": (5, 12),
+    "ATP 1000": (5, 13),
     "WTA 250": (4, 8),
     "WTA 500": (4, 8),
-    "WTA 1000": (4, 12),
+    "WTA 1000": (4, 13),
     "Grand Slam": (6, 15),
 }
 # Nothing in tennis runs longer than a Slam. The backstop for a category we

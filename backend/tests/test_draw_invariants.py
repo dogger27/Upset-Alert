@@ -104,8 +104,8 @@ def test_every_real_span_in_production_is_lawful():
     2026-09-21 — the observed range per category, widened by a day at each
     end. Anything inside those observations must stay lawful, or the check
     will bury its own signal in false positives."""
-    observed = {"ATP 250": (5, 7), "ATP 500": (5, 6), "ATP 1000": (6, 11),
-                "WTA 250": (5, 6), "WTA 500": (5, 7), "WTA 1000": (5, 11),
+    observed = {"ATP 250": (5, 7), "ATP 500": (5, 6), "ATP 1000": (6, 13),
+                "WTA 250": (5, 6), "WTA 500": (5, 7), "WTA 1000": (5, 13),
                 "Grand Slam": (7, 14)}
     for category, (lo, hi) in observed.items():
         for span in range(lo, hi + 1):

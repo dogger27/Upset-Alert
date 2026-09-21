@@ -1,0 +1,304 @@
+{
+ "content": [
+  {
+   "title": "US Open - New York, NY, USA",
+   "tournamentGroup": {
+    "id": 905,
+    "name": "US OPEN",
+    "level": "Grand Slam",
+    "metadata": {}
+   },
+   "level": "Grand Slam",
+   "startDate": "2026-08-30",
+   "endDate": "2026-09-13",
+   "city": "NEW YORK",
+   "country": "USA",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 128,
+   "doublesDrawSize": 64,
+   "liveScoringId": "905",
+   "status": "past",
+   "year": 2026
+  },
+  {
+   "title": "Guadalajara Open presentado por Santander - Guadalajara, MEX",
+   "tournamentGroup": {
+    "id": 2075,
+    "name": "GUADALAJARA 500",
+    "level": "WTA 500",
+    "metadata": {}
+   },
+   "level": "WTA 500",
+   "startDate": "2026-09-13",
+   "endDate": "2026-09-19",
+   "city": "GUADALAJARA",
+   "country": "MEX",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 28,
+   "doublesDrawSize": 16,
+   "liveScoringId": "2075",
+   "status": "past",
+   "year": 2026
+  },
+  {
+   "title": "SP Open - Sao Paulo, BRA",
+   "tournamentGroup": {
+    "id": 1139,
+    "name": "SAO PAULO",
+    "level": "WTA 250",
+    "metadata": {}
+   },
+   "level": "WTA 250",
+   "startDate": "2026-09-14",
+   "endDate": "2026-09-20",
+   "city": "SAO PAULO",
+   "country": "BRA",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 32,
+   "doublesDrawSize": 16,
+   "liveScoringId": "1139",
+   "status": "past",
+   "year": 2026
+  },
+  {
+   "title": "Korea Open - Seoul, KOR",
+   "tournamentGroup": {
+    "id": 1024,
+    "name": "SEOUL",
+    "level": "WTA 500",
+    "metadata": {}
+   },
+   "level": "WTA 250",
+   "startDate": "2026-09-21",
+   "endDate": "2026-09-27",
+   "city": "SEOUL",
+   "country": "KOR",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 32,
+   "doublesDrawSize": 16,
+   "liveScoringId": "1024",
+   "status": "live",
+   "year": 2026
+  },
+  {
+   "title": "Singapore Tennis Open presented by BNP Paribas - Singapore, SIN",
+   "tournamentGroup": {
+    "id": 1152,
+    "name": "SINGAPORE",
+    "level": "WTA 500",
+    "metadata": {}
+   },
+   "level": "WTA 500",
+   "startDate": "2026-09-21",
+   "endDate": "2026-09-27",
+   "city": "SINGAPORE",
+   "country": "SIN",
+   "surface": "Hard",
+   "inOutdoor": "I",
+   "singlesDrawSize": 28,
+   "doublesDrawSize": 16,
+   "liveScoringId": "1152",
+   "status": "inProgress",
+   "year": 2026
+  },
+  {
+   "title": "China Open - Beijing, CHN",
+   "tournamentGroup": {
+    "id": 1020,
+    "name": "BEIJING",
+    "level": "WTA 1000",
+    "metadata": {}
+   },
+   "level": "WTA 1000",
+   "startDate": "2026-09-30",
+   "endDate": "2026-10-11",
+   "city": "BEIJING",
+   "country": "CHN",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 96,
+   "doublesDrawSize": 32,
+   "liveScoringId": "1020",
+   "status": "future",
+   "year": 2026
+  },
+  {
+   "title": "Wuhan Open - Wuhan, CHN",
+   "tournamentGroup": {
+    "id": 1075,
+    "name": "WUHAN",
+    "level": "WTA 1000",
+    "metadata": {}
+   },
+   "level": "WTA 1000",
+   "startDate": "2026-10-12",
+   "endDate": "2026-10-18",
+   "city": "WUHAN",
+   "country": "CHN",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 56,
+   "doublesDrawSize": 28,
+   "liveScoringId": "1075",
+   "status": "future",
+   "year": 2026
+  },
+  {
+   "title": "Kinoshita Group Japan Open - Osaka, JPN",
+   "tournamentGroup": {
+    "id": 405,
+    "name": "OSAKA",
+    "level": "WTA 250",
+    "metadata": {}
+   },
+   "level": "WTA 250",
+   "startDate": "2026-10-19",
+   "endDate": "2026-10-25",
+   "city": "OSAKA",
+   "country": "JPN",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 32,
+   "doublesDrawSize": 16,
+   "liveScoringId": "405",
+   "status": "future",
+   "year": 2026
+  },
+  {
+   "title": "Ningbo Open - Ningbo, CHN",
+   "tournamentGroup": {
+    "id": 2092,
+    "name": "NINGBO",
+    "level": "WTA 500",
+    "metadata": {}
+   },
+   "level": "WTA 500",
+   "startDate": "2026-10-19",
+   "endDate": "2026-10-25",
+   "city": "NINGBO",
+   "country": "CHN",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 28,
+   "doublesDrawSize": 16,
+   "liveScoringId": "2092",
+   "status": "future",
+   "year": 2026
+  },
+  {
+   "title": "Guangzhou Open - Guangzhou, CHN",
+   "tournamentGroup": {
+    "id": 1023,
+    "name": "GUANGZHOU",
+    "level": "WTA 250",
+    "metadata": {}
+   },
+   "level": "WTA 250",
+   "startDate": "2026-10-26",
+   "endDate": "2026-11-01",
+   "city": "GUANGZHOU",
+   "country": "CHN",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 32,
+   "doublesDrawSize": 16,
+   "liveScoringId": "1023",
+   "status": "future",
+   "year": 2026
+  },
+  {
+   "title": "Toray Pan Pacific Open Tennis - Tokyo, JPN",
+   "tournamentGroup": {
+    "id": 1056,
+    "name": "TOKYO",
+    "level": "WTA 500",
+    "metadata": {}
+   },
+   "level": "WTA 500",
+   "startDate": "2026-10-26",
+   "endDate": "2026-11-01",
+   "city": "TOKYO",
+   "country": "JPN",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 28,
+   "doublesDrawSize": 16,
+   "liveScoringId": "1056",
+   "status": "future",
+   "year": 2026
+  },
+  {
+   "title": "Prudential Hong Kong Tennis Open - Hong Kong, China",
+   "tournamentGroup": {
+    "id": 1074,
+    "name": "HONG KONG",
+    "level": "WTA 250",
+    "metadata": {}
+   },
+   "level": "WTA 250",
+   "startDate": "2026-11-02",
+   "endDate": "2026-11-08",
+   "city": "HONG KONG",
+   "country": "HKG",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 32,
+   "doublesDrawSize": 16,
+   "liveScoringId": "1074",
+   "status": "future",
+   "year": 2026
+  },
+  {
+   "title": "Chennai Open - Chennai, IND",
+   "tournamentGroup": {
+    "id": 1148,
+    "name": "CHENNAI",
+    "level": "WTA 250",
+    "metadata": {}
+   },
+   "level": "WTA 250",
+   "startDate": "2026-11-02",
+   "endDate": "2026-11-08",
+   "city": "CHENNAI",
+   "country": "IND",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 32,
+   "doublesDrawSize": 16,
+   "liveScoringId": "1148",
+   "status": "future",
+   "year": 2026
+  },
+  {
+   "title": "WTT W50 - LEIRIA, PORTUGAL",
+   "tournamentGroup": {
+    "id": 4826,
+    "name": "LLEIRIA",
+    "level": "ITF",
+    "metadata": {}
+   },
+   "level": "ITF",
+   "startDate": "2026-08-31",
+   "endDate": "2026-09-06",
+   "city": "",
+   "country": "POR",
+   "surface": "Hard",
+   "inOutdoor": "O",
+   "singlesDrawSize": 32,
+   "doublesDrawSize": 16,
+   "liveScoringId": "",
+   "status": "past",
+   "year": 2026
+  }
+ ],
+ "pageInfo": {
+  "page": 0,
+  "numPages": 0,
+  "pageSize": 100,
+  "numEntries": 14
+ }
+}
