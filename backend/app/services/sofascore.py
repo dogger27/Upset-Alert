@@ -175,6 +175,26 @@ class SofascoreBlocked(CurlError):
     """
 
 
+class SofascoreUnavailable(CurlError):
+    """
+    Sofascore's own servers failed to answer: a 5xx, Cloudflare's 52x included.
+
+    NOT a block, for the same reason a 404 is not. Every sweep catches
+    SofascoreBlocked to stand down for at least thirty minutes and tell the
+    owner Sofascore refused us — right for a 403, and wrong for a server that
+    hiccuped once. A single 503 on a doubles season page paused that sweep for
+    half an hour and mailed a warning (2026-09-21) while the breaker was never
+    open and the very next request would have been answered. A refusal is
+    about this host; a 5xx is about theirs, and nothing we stop doing makes it
+    end sooner. So it takes each caller's ordinary failure path: skip this
+    page or event and ask again next pass. A real outage still surfaces — the
+    live poller counts consecutive failures and escalates on its own.
+
+    A CurlError like its siblings, so is_transient_http_error() files it under
+    "the far end, not us".
+    """
+
+
 # Serialised, paced access. Every request in the process goes through one lock
 # so concurrent callers cannot each think they are the only one; _MIN_INTERVAL
 # is the floor between any two. Deliberately slow — this runs once per draw.
@@ -292,6 +312,8 @@ async def _get(path: str) -> dict:
     """
     One paced request. Raises SofascoreBlocked on 403 and while the breaker is
     open, so a caller mid-draw stops instead of walking the rest of its list.
+    A 404 is SofascoreNotFound and a 5xx SofascoreUnavailable — answers, not
+    refusals, so neither stops anything.
     """
     global _last_request_at, _blocked_until, _consecutive_blocks
 
@@ -387,6 +409,8 @@ async def _get(path: str) -> dict:
     # none of them a reason to stop talking to the host.
     if status == 404:
         raise SofascoreNotFound(f"404 on {path}")
+    if 500 <= status < 600:
+        raise SofascoreUnavailable(f"HTTP {status} on {path}")
     if status != 200:
         raise SofascoreBlocked(f"HTTP {status} on {path}")
     # Answered — so whatever was refusing us has stopped. Back to the tight
