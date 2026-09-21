@@ -251,7 +251,11 @@ def test_a_missing_size_is_not_a_team_event():
             assert (await db.get(Tournament, t.id)).wta_live_scoring_id == 710
             assert d.draw_size == 32, "a 0 from the list must not shrink the draw"
         async with Session() as db:          # and with no draw to match, nothing is created
-            r = await wta_season.sync_wta_season(db, 2026, events=[dict(e, liveScoringId="711")], today=date(2026, 6, 1))
+            # A different city and week, so neither the name nor the city
+            # tie-break can find the Eastbourne draw created above.
+            stranger = dict(e, title="Nowhere Open - Nowhere, XXX", tournamentGroup={"name": "NOWHERE"},
+                            city="NOWHERE", startDate="2026-08-03", endDate="2026-08-09", liveScoringId="711")
+            r = await wta_season.sync_wta_season(db, 2026, events=[stranger], today=date(2026, 6, 1))
             assert r["created"] == 0 and r.get("unsized") == 1
         await engine.dispose()
     asyncio.run(go())
