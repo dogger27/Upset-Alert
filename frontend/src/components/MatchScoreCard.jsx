@@ -12,7 +12,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import useFlashOnChange from '../hooks/useFlashOnChange'
-import { nationalityIso2, splitPlayerName } from '../utils/flags'
+import { nationalityIso2, seedMark, splitPlayerName } from '../utils/flags'
 import { rootFontPx, textWidth } from '../utils/text'
 import { parseSet } from '../utils/score'
 import '../pages/Schedule.css'
@@ -113,7 +113,7 @@ const DOUBLES_RUNGS = [
 /** The team's seed: the sheet prints it against both partners, and it belongs
  *  to neither of them separately. */
 function teamSeedOf(players) {
-  return players.map(p => (p.seed != null ? `[${p.seed}]` : splitPlayerName(p.name).seed))
+  return players.map(p => seedMark(splitPlayerName(p.name).seed, p.seed))
     .find(Boolean) ?? null
 }
 
@@ -184,7 +184,8 @@ function PlayerName({ raw, surnameOnly, hideSeed, nationality, seed: seedProp, t
   const isTeam = !!members
   // A seeding sent as a field beats one parsed out of the name: a resolved
   // player's name comes from the bracket and never carried brackets to parse.
-  const seed = seedProp != null ? `[${seedProp}]` : printedSeed
+  // Only the NUMBER, though — the sheet's [WC] beside it stays (seedMark).
+  const seed = seedMark(printedSeed, seedProp)
   // Our own record wins over whatever the sheet printed: it drops the country
   // when space is tight, and a slot resolved from an "OR" carries the bracket's
   // name, which never had one inline.
