@@ -393,8 +393,16 @@ export default function TabLayout() {
       {choosable.map(t => {
         const on = !!draft?.has(t.id)
         return (
+          /* TAP TICKS, HOLD ISOLATES (owner, 2026-09-21) — the same gesture
+             the Schedule's pills have, because this sheet is the same list and
+             a gesture that works on one and not the other is a gesture nobody
+             trusts. "Select all" and "Clear" already sit above; this is the
+             third thing people want and the only one that needed five taps. */
           <Pressable key={t.id} style={s.row} accessibilityRole="button"
                      accessibilityState={{ selected: on }}
+                     accessibilityHint="Hold to choose only this tournament"
+                     onLongPress={() => setDraft(new Set([t.id]))}
+                     delayLongPress={320}
                      onPress={() => setDraft(prev => {
                        const next = new Set(prev ?? [])
                        if (next.has(t.id)) next.delete(t.id)
