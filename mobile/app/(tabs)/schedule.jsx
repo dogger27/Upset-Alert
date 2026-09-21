@@ -1351,15 +1351,23 @@ const TOUR_BAR = { ATP: '#2563eb', WTA: '#db2777' }
    — and both player rows indent past it, so it stands alone at the left
    instead of sitting directly over the first seed badge.
 
-   MEASURED, not eyeballed: the strip starts at left:10, a LineTag pads 4
-   either side, and s.rowWhen is Archivo 500 at 11pt, where "11:30 PM" is
-   47.0pt and "12:00 AM" 47.6pt — so an ordinary clock ends at 65.6pt and 70
-   leaves a 4pt gap after it. The ladder's long form ("NB 3:30 PM", 77.4pt)
-   overruns that by 7, which costs nothing visible: a tag is drawn at top:-9
-   and is 16 tall, so it straddles the border inside the row's 6pt of top
-   padding and never reaches the player lines. Sizing every row for that rare
-   phrase would take 10pt of name width from all of them. */
-const MINI_CLOCK_COL = 70
+   MEASURED, not eyeballed. The strip starts at left:10, a LineTag pads 4
+   either side, and s.rowWhen is Archivo 500 at 11pt, so:
+
+       "11:30"     ends at 46.1pt      "11:30 PM"  ends at 65.0pt
+       "12:00"     ends at 46.4pt      "12:00 AM"  ends at 65.6pt
+
+   IT CLEARS THE TIME, NOT THE MERIDIEM (owner, 2026-09-21: "don't indent it
+   so much"). 70 cleared the whole tag with 4pt to spare and read as a gutter;
+   48 clears the digits — the part that IS the time — and leaves only the
+   smaller "AM"/"PM" above the badge's left edge. The clock still plainly
+   leads the row, and 22pt goes back to the names.
+
+   Nothing can collide either way: a tag is drawn at top:-9 and is 16 tall, so
+   it straddles the border inside the row's 6pt of top padding and never
+   reaches the player lines. That is also why the ladder's long forms ("NB
+   3:30 PM") need no allowance of their own. */
+const MINI_CLOCK_COL = 48
 
 const PILL_SIZE = 13          // the size a roomy row keeps; never exceeded
 const PILL_TIER_RATIO = 0.8   // the tier line, relative to the name
