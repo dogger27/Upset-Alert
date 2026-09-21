@@ -131,7 +131,13 @@ const DRAWS = SEASON.map(([id, tournament_id, start, len, label]) => ({
  *   finished tournament reading Active. That fault is upstream of every line
  *   in drawStatus.js and no client rule can repair it, so it is not modelled
  *   here: it belongs to backend draw_invariants.py's
- *   `not_completed_after_its_end`, which now catches it. */
+ *   `not_completed_after_its_end`, which now catches it.
+ *
+ * HELD TO THE REAL PROPERTY BY
+ * backend/tests/test_computed_status_matches_client_model.py, which walks
+ * Draw.computed_status across these same shapes and fails with the day it
+ * diverged. If that suite goes red, these four lines are what to correct —
+ * and then re-run this file's mutation matrix. */
 function serverStatus(draw, day) {
   if (day > draw.end_date) return 'completed'          // the scrapers stamp it
   if (day > draw.start_date) return 'active'
