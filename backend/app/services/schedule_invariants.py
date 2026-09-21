@@ -690,6 +690,11 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                                           Match.player1_id.isnot(None),
                                           Match.player2_id.isnot(None)))).scalars().all()
                   } if draw_ids else {}
+    # The same pairings the other way round, and every spelling held for an
+    # entry — `bracket_player_unlinked`.
+    match_pair = {mid: pair for pair, mid in pair_match.items()}
+    de_names = {de.id: [nm for nm in dict.fromkeys((de.name, de.sofa_name)) if nm]
+                for de in dents}
 
     # The SERVE path's own resolver, run here so the law can see the shape the
     # API actually hands out. See settled_side_not_two below for why a check
@@ -1162,6 +1167,39 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                          " vs ".join(p.raw_name or "" for p in (na[0], nb[0]))
                          + f" is bracket match {pair_match[pair]}, "
                            f"but match_id is {e.match_id}")
+
+        # 2026-09-22, Korea Open doc 382: three R32 rows held their own
+        # bracket match and printed its player — "[WC] Sohyun PARK KOR"
+        # against the draw's "Park So-hyun", "[Q] Ye-Xin MA CHN" against "Ma
+        # Yexin" — with no draw_entry_id, so the cards lost the nationality,
+        # the draw rank and Ku's Tennis Explorer profile. Every linker missed
+        # them at once: the ingest's subset match knew one spelling of a
+        # hyphen, and `stamp_linked_rows` read the sheet's COUNTRY and the
+        # draw's GIVEN name as the two surnames. Nothing here looked, because
+        # an unlinked player is usually an expected state (a qualifier the
+        # draw has not caught up with). This one is not: the row's own
+        # bracket match already names her. Stated in the law's own reading of
+        # a person (`_person_words`, both spellings of a hyphen) so it sees
+        # the day the service's matchers all go blind together. A substitute
+        # the draw has not caught up with names nobody in the match, and
+        # stays silent. Over every stored row: these three, nothing else.
+        if (e.discipline == "singles" and e.stage == "main"
+                and e.match_id in match_pair and not e.is_tbd
+                and len(na) == 1 and len(nb) == 1):
+            held = {p.draw_entry_id for p in (na[0], nb[0]) if p.draw_entry_id}
+            for p in (na[0], nb[0]):
+                if (p.draw_entry_id or "/" in (p.raw_name or "")
+                        or _names_nobody(p.raw_name)):
+                    continue
+                words = _person_words(p.raw_name)
+                hit = [i for i in match_pair[e.match_id] - held
+                       if any(_sides_agree(words, _person_words(nm))
+                              for nm in de_names.get(i, ()))]
+                if hit:
+                    flag("bracket_player_unlinked", e,
+                         f"side {p.side}: {p.raw_name!r} is entry {hit[0]} of "
+                         f"its own bracket match {e.match_id}, but "
+                         f"draw_entry_id is NULL")
 
         # 2026-09-13, Guadalajara: three Q2 rows wore main-draw R32 match ids
         # and the two checks above were both blind to it — for the same reason
@@ -2215,7 +2253,7 @@ async def relink_resolvable(db, tournament_id: int, play_date) -> list[str]:
     from app.models.schedule import ScheduleEntryPlayer
     from app.models.tournament import Draw, DrawEntry
     from app.services.schedule import (
-        _ascii_fold, _names_a_team, _norm, _resolve_players,
+        _entry_tokens, _names_a_team, _resolve_players,
     )
 
     rows = (await db.execute(
@@ -2236,8 +2274,11 @@ async def relink_resolvable(db, tournament_id: int, play_date) -> list[str]:
     if not todo:
         return []
 
-    # The same roster the ingest resolves against, in the same shape: both
-    # folds of both spellings per entry (see schedule.py, where it is built).
+    # The same roster the ingest resolves against, from the same builder:
+    # both folds of both spellings per entry, and both spellings of a hyphen
+    # (schedule._entry_tokens). This was a hand-written second copy, and it
+    # went blind with the first — Korea 2026-09-22, "Park So-hyun" in the
+    # draw against "Sohyun PARK KOR" on the sheet — see bracket_player_unlinked.
     draw_rows = (await db.execute(
         select(Draw).where(Draw.tournament_id == tournament_id))).scalars().all()
     draws = []
@@ -2246,7 +2287,7 @@ async def relink_resolvable(db, tournament_id: int, play_date) -> list[str]:
             select(DrawEntry.id, DrawEntry.name, DrawEntry.sofa_name)
             .where(DrawEntry.draw_id == d.id))).all()
         draws.append({'draw': d, 'entries': [
-            (e[0], set(_norm(nm or '').split()), set(_ascii_fold(nm or '').split()))
+            (e[0], *_entry_tokens(nm))
             for e in ents for nm in dict.fromkeys((e[1], e[2])) if nm]})
     if not any(d['entries'] for d in draws):
         return []

@@ -538,8 +538,54 @@ def _match_tokens(raw: str) -> tuple[set, set]:
     # cleaned name stripped twice and turned "[WC] Luca POW GBR" into "Luca",
     # which is a subset of "Luca Van Assche": a confidently wrong player.
     # Three capitals are a surname as often as a country — LUZ, GUO, POW.
+    return _probe_tokens(cleaned)
+
+
+def _probe_tokens(cleaned: str) -> tuple[set, set]:
+    """Both folds of one already-cleaned spelling, initials left out."""
     return ({t for t in _norm(cleaned).split() if not _is_initial(t)},
             {t for t in _ascii_fold(cleaned).split() if not _is_initial(t)})
+
+
+def _match_spellings(raw: str) -> list[tuple[set, set]]:
+    """`_match_tokens` for every spelling of a hyphen the sheet may mean.
+
+    A HYPHEN IS TWO SPELLINGS (`_name_tokens`, rankings._match_token_set,
+    history.tml.name_keys), and the ingest's own matcher was the copy that
+    never learned it. Korea Open 2026-09-22 (doc 382): the WTA printed "[Q]
+    Ye-Xin MA CHN" where the draw holds "Ma Yexin" — {ye, xin, ma} is no
+    subset of {ma, yexin} — and "Sohyun PARK KOR" / "Yeonwoo KU KOR" where it
+    holds "Park So-hyun" / "Ku Yeon-woo". Three main-draw R32 players went
+    unlinked, and with them the nationality, the draw rank and the Tennis
+    Explorer profile every card keys on the id.
+
+    Each spelling is its OWN probe rather than one union: the subset test
+    needs every token of a probe in the entry, so a probe carrying both
+    spellings could only ever meet an entry that carries both too.
+    """
+    first = _match_tokens(raw)
+    cleaned = _clean_name(raw or '')
+    if '-' not in cleaned or _names_a_team(cleaned):
+        return [first]
+    return [first, _probe_tokens(cleaned.replace('-', ''))]
+
+
+def _entry_tokens(name: str) -> tuple[set, set]:
+    """Both folds of a draw entry's name, carrying BOTH spellings of a hyphen.
+
+    The mirror of `_match_spellings`, for the draw writing the hyphen where
+    the sheet joins it ("Park So-hyun" against "Sohyun PARK KOR"). The joined
+    token is ADDED to the split ones: an entry can only become a superset,
+    the direction the subset test already tolerates — a probe must still
+    name nobody the entry does not.
+
+    One builder for `ingest_document` and the law's `relink_resolvable`, so
+    the two rosters cannot drift apart.
+    """
+    spellings = [name or ''] + (
+        [(name or '').replace('-', '')] if '-' in (name or '') else [])
+    return ({t for s in spellings for t in _norm(s).split()},
+            {t for s in spellings for t in _ascii_fold(s).split()})
 
 
 async def _resolve_players(db, draws: list, tour: Optional[str], names: list) -> list:
@@ -549,14 +595,15 @@ async def _resolve_players(db, draws: list, tour: Optional[str], names: list) ->
     resolve at all, because losing qualifiers never reach draw_entries."""
     out = []
     for raw in names:
-        probes = _match_tokens(raw)
+        spellings = _match_spellings(raw)
         found = None
-        for idx, probe in enumerate(probes):
-            if not probe:
+        for idx in (0, 1):
+            probes = [s[idx] for s in spellings if s[idx]]
+            if not probes:
                 continue
             for draw in draws:
                 for eid, ent_tokens in ((e[0], e[1 + idx]) for e in draw['entries']):
-                    if probe <= ent_tokens:
+                    if any(p <= ent_tokens for p in probes):
                         found = eid if found is None else found
             if found is not None:
                 break
@@ -575,14 +622,16 @@ def _candidates(draws, names) -> set:
     """
     out = set()
     for raw in names:
-        for idx, probe in enumerate(_match_tokens(raw)):
-            if not probe:
+        spellings = _match_spellings(raw)
+        for idx in (0, 1):
+            probes = [s[idx] for s in spellings if s[idx]]
+            if not probes:
                 continue
             # Same two-fold priority as _resolve_players: take the ASCII fold
             # only when the exact one names nobody, so the looser test can
             # never widen a set the strict one had already narrowed.
             hits = {e[0] for draw in draws for e in draw['entries']
-                    if probe <= e[1 + idx]}
+                    if any(p <= e[1 + idx] for p in probes)}
             if hits:
                 out |= hits
                 break
@@ -993,11 +1042,11 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         # Each entry carries BOTH folds — see _match_tokens — and BOTH
         # spellings: Wikipedia's from the draw and Sofascore's when we have it
         # ("Alexander" and "Aleksandr" Shevchenko; the sheet prints the
-        # latter). Built once here rather than per name, because every slot
-        # on the sheet probes it.
+        # latter) — and both spellings of a hyphen, see _entry_tokens. Built
+        # once here rather than per name, because every slot on the sheet
+        # probes it.
         draws.append({'draw': d,
-                      'entries': [(e[0], set(_norm(nm or '').split()),
-                                   set(_ascii_fold(nm or '').split()))
+                      'entries': [(e[0], *_entry_tokens(nm))
                                   for e in ents
                                   for nm in dict.fromkeys((e[1], e[5])) if nm],
                       # Everything a sheet prints about a player, for a slot
@@ -2666,20 +2715,35 @@ def fold_index(rows) -> dict:
 
 
 def surname_agrees(sheet_name: str, draw_name: str) -> bool:
-    """The same surname under a plain ASCII fold — the sheet's last token
-    against the draw's. The given name is left out on purpose: the sheet
-    prints "Aleksandr SHEVCHENKO" where the draw has "Alexander Shevchenko",
-    and no fold equates those; the surname does. "A. SHEVCHENKO" agrees too.
-    A different surname is a different player (a substitute), and must not."""
-    import unicodedata
-    def last(name):
-        toks = [t for t in re.split(r"\s+", (name or "").strip()) if t]
-        if not toks:
-            return ""
-        t = unicodedata.normalize("NFKD", toks[-1]).encode("ascii", "ignore").decode()
-        return t.casefold().strip(".,")
-    a, b = last(sheet_name), last(draw_name)
-    return bool(a) and a == b
+    """The same surname, the sheet's against the draw's. The given name is
+    left out on purpose: the sheet prints "Aleksandr SHEVCHENKO" where the
+    draw has "Alexander Shevchenko", and no fold equates those; the surname
+    does. "A. SHEVCHENKO" agrees too. A different surname is a different
+    player (a substitute), and must not.
+
+    It read the LAST TOKEN of both, and both were wrong for a whole class of
+    rows. The last token of a sheet name is the COUNTRY — "[Q] Ye-Xin MA CHN"
+    signed as "chn" — so every WTA row that prints one could never agree
+    (`carry_surname` paid for this exact reading on 2026-09-13; this copy
+    never moved onto it). And the draw writes a Korean or Chinese player
+    surname FIRST ("Ma Yexin", "Park So-hyun"), so its last token is the given
+    name. Korea Open 2026-09-22 (doc 382): three R32 rows held their own
+    bracket match with one side unlinked, `stamp_linked_rows` looked at all
+    three and linked none. Now: the sheet's surname by its capitals, found at
+    EITHER end of the draw's name, under both folds (`_norm` expands an
+    umlaut the German way; the sheets print plain ASCII — see `_fold`).
+    """
+    # A run of initials is capitals too ("J.J. WOLF"); no surname has a dot.
+    sur = [w for w in carry_surname(sheet_name).split() if '.' not in w]
+    if not sur:
+        return False
+    n = len(sur)
+    for folded in (_norm(draw_name or ''),
+                   _ascii_fold(draw_name or '').replace('-', ' ').replace("'", '')):
+        words = folded.split()
+        if len(words) >= n and (words[-n:] == sur or words[:n] == sur):
+            return True
+    return False
 
 
 async def stamp_linked_rows(db, tournament_id: int) -> int:
