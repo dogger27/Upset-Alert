@@ -1035,17 +1035,15 @@ function LineTags({ first, alt, when, tournament }) {
 }
 
 
-/* THE ROUND, AS A PILL AT THE BOX'S TOP RIGHT (owner, 2026-09-21). Quieter
-   than an entry chip — a round LABELS the match, where [Q] and [WC] say
-   something about a player — so it borrows the chip's geometry and takes the
-   neutral border and a muted ink rather than the qualifier's colour. */
+/* THE ROUND, AS A PILL ON THE TOP PLAYER'S OWN LINE (owner, 2026-09-21).
+   Quieter than an entry chip — a round LABELS the match, where [Q] and [WC]
+   say something about a player — so it borrows the chip's geometry and takes
+   the neutral border and a muted ink rather than the qualifier's colour. */
 function RoundPill({ round }) {
   if (!round) return null
   return (
-    <View style={s.miniRoundRow} pointerEvents="none">
-      <View style={s.miniRoundPill}>
-        <Text style={s.miniRoundPillText} numberOfLines={1}>{round}</Text>
-      </View>
+    <View style={s.miniRoundPill} pointerEvents="none">
+      <Text style={s.miniRoundPillText} numberOfLines={1}>{round}</Text>
     </View>
   )
 }
@@ -1125,9 +1123,19 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
       {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
       {/* The first row's tags are drawn by MiniRows, over the card's edge. */}
       {!first ? <LineTags alt={alt} when={when} tournament={tournament} /> : null}
-      <RoundPill round={round} />
-      <View style={s.miniCard}>
-        <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
+      {/* THE CARD AND THE ROUND, SIDE BY SIDE, TOP-ALIGNED (owner,
+          2026-09-21). A row rather than an absolute pill, and that choice is
+          what does the work: the card takes the width the pill leaves, so the
+          entry chips inside it — [WC], [Q] — right-align against the pill's
+          left edge on their own, with no width to measure and nothing to keep
+          in step when the label is "R32" one week and "F" the next.
+          flex-start puts the pill's top on the top player's line; both are
+          leading(16) tall, so they read as one row. */}
+      <View style={[s.miniBody, round && s.miniBodyRound]}>
+        <View style={[s.miniCard, round && s.miniCardRound]}>
+          <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
+        </View>
+        <RoundPill round={round} />
       </View>
     </Wrap>
   )
@@ -1465,10 +1473,11 @@ const s = StyleSheet.create({
   rows: { borderRadius: R.md, borderWidth: 2, borderColor: C.borderLit, backgroundColor: C.card, overflow: 'hidden', marginHorizontal: -(S.lg - S.sm) },
   row: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, minHeight: leading(34) },
   rowNext: { borderTopWidth: 1, borderTopColor: C.border },
-  /* The pill's band now provides the clearance under the border tags that this
-     padding used to, so it gives 4pt back — a row that grew by the pill's
-     height would otherwise cost the list about a match a screen. */
-  miniRow: { paddingHorizontal: 0, paddingTop: 2, paddingBottom: 5 },
+  // A touch tighter than the tag's full 8 below the line: the glyphs stop short
+  // of it (owner, 2026-09-17). Back to 6 now the round shares the top player's
+  // line instead of sitting in a band of its own above the card — with nothing
+  // between the border and the names, this padding is the clearance again.
+  miniRow: { paddingHorizontal: 0, paddingTop: 6, paddingBottom: 5 },
   // The wrapper carries the card's side margin so the first row's tags can sit on its edge.
   /* EDGE TO EDGE (owner, 2026-09-18): the mid view's card is rows across the
      whole screen — the page's own padding taken back, no corners, no side
@@ -1479,13 +1488,14 @@ const s = StyleSheet.create({
   // Room for a tab on either side: the tour bar, the tab, a hair.
   /* INDENTED (owner, 2026-09-21): the content used to start 8pt in, which put
      the seed badge almost against the tour bar on the left edge. */
-  miniCard: { paddingLeft: 16, paddingRight: 27 },
-  /* The pill's own band, inside the box and above the card, so it can never
-     land on a name or on an entry chip — both of which live at the right of a
-     player's line. Right-aligned to the same inset the card keeps clear for
-     the side tab. */
-  miniRoundRow: { flexDirection: 'row', justifyContent: 'flex-end',
-                  paddingRight: 27, marginBottom: 1 },
+  miniCard: { flex: 1, minWidth: 0, paddingLeft: 16, paddingRight: 27 },
+  /* With a round beside it the card gives up the side-tab reserve to the row,
+     and keeps only the MARGIN the owner asked for between an entry chip and
+     the round pill. Without a round the card keeps the 27 itself, so a past
+     day's rows are exactly where they were. */
+  miniCardRound: { paddingRight: 8 },
+  miniBody: { flexDirection: 'row', alignItems: 'flex-start' },
+  miniBodyRound: { paddingRight: 27 },
   miniRoundPill: {
     height: leading(16), borderRadius: 3, borderWidth: 1, borderColor: C.borderOn,
     paddingHorizontal: leading(5), alignItems: 'center', justifyContent: 'center',
