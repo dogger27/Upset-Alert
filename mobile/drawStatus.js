@@ -44,51 +44,72 @@ function todayPacific() {
   return _day
 }
 
-// Cluster draws where consecutive end_dates are ≤1 day apart.
-// Returns { [id]: { cohortMaxDate, cohortHasActive, isLastWeek } }
-// isLastWeek is true for exactly one cohort: the most recently completed one.
-// A cohort is "still active" (not yet completed) if any draw is status='active',
-// OR if cohortMaxDate >= todayPacific() (Rule 3: stay Active until Pacific midnight).
+/* WHICH DRAWS MOVE TOGETHER, and which week they belong to — two questions,
+ * and they need two different groupings. Returns
+ * { [id]: { cohortMaxDate, cohortHasActive, isLastWeek } }.
+ *
+ * THE EVENT decides whether a finished draw keeps showing as Active. A
+ * combined tournament is two draws under one name, and a men's final does
+ * not retire the event while the women's is still on court — that is the
+ * whole point of the rule, and an event is exactly the set of draws sharing
+ * a tournament_id.
+ *
+ * It used to be a DATE CLUSTER: any two draws whose end dates were within a
+ * day of each other moved as one. That welded unrelated tournaments
+ * together, and the failure was visible — 2026 Guadalajara finished on the
+ * 19th and went on reading "Active" for two days because SP Open, a
+ * different event in a different country, ended on the 20th (owner,
+ * 2026-09-21: "Is it waiting for SP Open to finish so they can move
+ * together?"). It also made the bucket depend on a date that can be wrong:
+ * SP Open's own end date was stale by a rain delay at the time.
+ *
+ * THE WEEK still decides which finished cohort is "Last Week", and there the
+ * date proximity is right: that section is a week's worth of tournaments,
+ * not one event. So the clustering survives for exactly that, and for
+ * nothing else.
+ */
 export function computeCohortInfo(draws) {
-  const withDate = (draws || [])
-    .filter(t => t.end_date)
-    .sort((a, b) => a.end_date.localeCompare(b.end_date))
+  const withDate = (draws || []).filter(t => t.end_date)
   if (!withDate.length) return {}
 
+  // ── the event ────────────────────────────────────────────────────────────
+  // A draw with no tournament_id is its own event; nothing else can be said
+  // about it, and pretending otherwise is how the date cluster went wrong.
+  const events = new Map()
+  for (const t of withDate) {
+    const key = t.tournament_id != null ? `t${t.tournament_id}` : `d${t.id}`
+    if (!events.has(key)) events.set(key, [])
+    events.get(key).push(t)
+  }
   const result = {}
-  let clusterStart = 0
+  for (const members of events.values()) {
+    const cohortMaxDate = members.reduce(
+      (mx, t) => (t.end_date > mx ? t.end_date : mx), members[0].end_date)
+    const cohortHasActive = members.some(t => t.status === 'active')
+    for (const t of members) result[t.id] = { cohortMaxDate, cohortHasActive, isLastWeek: false }
+  }
 
-  for (let i = 1; i <= withDate.length; i++) {
-    const isLast = i === withDate.length
+  // ── the week, for "Last Week" alone ──────────────────────────────────────
+  const sorted = [...withDate].sort((a, b) => a.end_date.localeCompare(b.end_date))
+  const weeks = []
+  let clusterStart = 0
+  for (let i = 1; i <= sorted.length; i++) {
+    const isLast = i === sorted.length
     const gap = isLast ? Infinity
-      : new Date(withDate[i].end_date + 'T00:00:00') - new Date(withDate[i - 1].end_date + 'T00:00:00')
+      : new Date(sorted[i].end_date + 'T00:00:00') - new Date(sorted[i - 1].end_date + 'T00:00:00')
     if (isLast || gap > ONE_DAY_MS) {
-      const cluster = withDate.slice(clusterStart, i)
-      const cohortMaxDate = cluster[cluster.length - 1].end_date
-      const cohortHasActive = cluster.some(t => t.status === 'active')
-      for (const t of cluster) result[t.id] = { cohortMaxDate, cohortHasActive, isLastWeek: false }
+      weeks.push(sorted.slice(clusterStart, i))
       clusterStart = i
     }
   }
 
-  // Among cohorts that are truly completed (not still active), the one with the
-  // most recent cohortMaxDate is "Last Week". All others go to Previous.
+  // The most recent week in which nothing is still playing. A week holding an
+  // active draw is not last week, whatever its dates say.
   const today = todayPacific()
-  const completedDates = [
-    ...new Set(
-      Object.values(result)
-        .filter(r => !r.cohortHasActive && r.cohortMaxDate < today)
-        .map(r => r.cohortMaxDate)
-    ),
-  ].sort()
-
-  const lastWeekDate = completedDates.at(-1) ?? null
-
-  if (lastWeekDate) {
-    for (const id in result) {
-      if (result[id].cohortMaxDate === lastWeekDate) result[id].isLastWeek = true
-    }
-  }
+  const finished = weeks.filter(
+    w => w.every(t => t.status !== 'active') && w[w.length - 1].end_date < today)
+  const lastWeek = finished[finished.length - 1]
+  if (lastWeek) for (const t of lastWeek) result[t.id].isLastWeek = true
 
   return result
 }
