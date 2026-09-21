@@ -87,6 +87,9 @@ def test_nothing_named_on_both_sides_is_no_agreement():
     ("Fábián Marozsán", "Fabian Marozsan"), ("Zhang Zhizhen", "Zhizhen Zhang"),
     ("Cui Jie", "Jie Cui"), ("Tomás Martín Etcheverry", "Tomas Martin Etcheverry"),
     ("Cristina Bucșa", "Cristina Bucsa"), ("Liang En-shuo", "En-Shuo Liang"),
+    # hyphen AND order at once — what held the WTA sheet off the Korea Open
+    ("Park So-hyun", "Sohyun Park"), ("Back Da-yeon", "Dayeon Back"),
+    ("Ku Yeon-woo", "Yeonwoo Ku"), ("Ma Yexin", "Ye-Xin Ma"),
 ])
 def test_cross_source_spellings_are_the_same_person(a, b):
     """Measured 2026-09-21 between Wikipedia, the WTA sheet, Tennis Explorer

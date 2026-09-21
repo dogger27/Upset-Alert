@@ -7,6 +7,13 @@ from app.services.draw_changes import classify_change, same_person
 
 SAME = [
     ("Qinwen Zheng", "Zheng Qinwen"),        # the reported alarm
+    # Hyphen AND order at once: the WTA sheet against Wikipedia, Korea Open
+    # 2026-09-21 — four wildcards and a qualifier that held the official
+    # sheet off the draw at "88% agreement".
+    ("Park So-hyun", "Sohyun Park"),
+    ("Back Da-yeon", "Dayeon Back"),
+    ("Ku Yeon-woo", "Yeonwoo Ku"),
+    ("Ma Yexin", "Ye-Xin Ma"),
     ("Zheng Qinwen", "Qinwen Zheng"),
     ("Frances Tiafoe", "Francis Tiafoe"),    # the first one, a one-letter edit
     ("J. Struff", "Jan-Lennard Struff"),

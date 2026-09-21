@@ -77,6 +77,14 @@ def _within_one_edit(a: str, b: str) -> bool:
     return edits + (len(b) - j) + (len(a) - i) <= 1
 
 
+_HYPHENS = "-\u2010\u2011\u2012\u2013"
+
+
+def _joined(name: str) -> list:
+    """normalize_name's words, with hyphenated words joined instead of split."""
+    return normalize_name(re.sub(f"[{_HYPHENS}]", "", name or "")).split()
+
+
 def same_person(old: str, new: str) -> bool:
     """
     True when two names are the same player written differently.
@@ -98,6 +106,18 @@ def same_person(old: str, new: str) -> bool:
     if not a or not b:
         return False
     if a == b:
+        return True
+    # A HYPHEN IS TWO SPELLINGS, AND SO IS THE ORDER — AT ONCE. normalize_name
+    # turns "So-hyun" into two words and "Sohyun" into one, so the set tests
+    # below could not see that "Park So-hyun" and "Sohyun Park" are one
+    # player: the WTA's own sheet writes Korean and Chinese given names
+    # joined and given-name-first, Wikipedia hyphenated and surname-first, and
+    # on 2026-09-21 that alone held the official sheet off the Korea Open at
+    # "88% agreement" — four wildcards and a qualifier, every one the same
+    # person. Compared with the hyphens JOINED as well, which can only merge
+    # tokens, never split them, so nothing that matched before stops matching.
+    ja, jb = set(_joined(old)), set(_joined(new))
+    if ja and jb and (ja <= jb or jb <= ja):
         return True
     # THE SAME WORDS IN A DIFFERENT ORDER ARE THE SAME PERSON. Sources disagree
     # about which half of a Chinese, Japanese or Korean name comes first, and
