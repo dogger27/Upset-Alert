@@ -1370,16 +1370,21 @@ const TOUR_BAR = { ATP: '#2563eb', WTA: '#db2777' }
        "12:00"     ends at 46.4pt      "12:00 AM"  ends at 65.6pt
 
    IT CLEARS THE TIME, NOT THE MERIDIEM (owner, 2026-09-21: "don't indent it
-   so much"). 70 cleared the whole tag with 4pt to spare and read as a gutter;
-   48 clears the digits — the part that IS the time — and leaves only the
-   smaller "AM"/"PM" above the badge's left edge. The clock still plainly
-   leads the row, and 22pt goes back to the names.
+   so much"). 70 cleared the whole tag with 4pt to spare and read as a gutter.
+   The rule instead is to clear the DIGITS — the part that IS the time — and
+   let the smaller "AM"/"PM" sit above the badge's left edge.
+
+   48 obeyed that rule to the letter and still read tight, because it left the
+   badge 1.6pt past "12:00": a hairline, not a gap. 54 is the digits' end
+   rounded up plus S.sm, the same 8pt the rest of this screen puts between two
+   things that are not part of each other — "a tiny bit" more (owner), and
+   still 11pt short of the meridiem, so the rule holds.
 
    Nothing can collide either way: a tag is drawn at top:-9 and is 16 tall, so
    it straddles the border inside the row's 6pt of top padding and never
    reaches the player lines. That is also why the ladder's long forms ("NB
    3:30 PM") need no allowance of their own. */
-const MINI_CLOCK_COL = 48
+const MINI_CLOCK_COL = 54
 
 const PILL_SIZE = 13          // the size a roomy row keeps; never exceeded
 const PILL_TIER_RATIO = 0.8   // the tier line, relative to the name
