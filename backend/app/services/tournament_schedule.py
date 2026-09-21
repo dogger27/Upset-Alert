@@ -373,6 +373,47 @@ def adopt_observed_start_date(tournament) -> bool:
     return True
 
 
+def adopt_scheduled_end_date(draw, last_main_day) -> bool:
+    """Extend end_date onto the last day the order of play has main-draw play.
+
+    The twin of adopt_observed_start_date, and for the same reason: end_date
+    comes from Wikipedia's calendar, a plan written months ahead, while the
+    order of play is what the tournament is actually doing. When rain moves a
+    final, the sheet says so within the hour and the calendar may never say it
+    at all — 2026 SP Open advertised "Sep 15 - 20" with both finals sitting on
+    the 21st (owner, 2026-09-21).
+
+    It matters more than the dates a card prints. `computed_status` reads
+    end_date to decide a draw is finished, so a postponed final leaves the
+    draw reading "completed" with its last match unplayed — and the same
+    property is what the standings, the cohorts and the draw list all key off.
+    Extending it also un-finishes a draw the scraper called completed early,
+    through the `today <= end_date` arm of that property.
+
+    EXTENDS ONLY, NEVER PULLS IN. A day with no sheet is not evidence that
+    play has stopped — we may simply not have fetched it — and shrinking the
+    range would retire a live tournament. The asymmetry is the point: a
+    postponement adds days, and the calendar's date is the floor.
+
+    Bounded to a week past the plan. A row further out than that is not this
+    tournament running over; it is evidence about some other event, or a
+    misparsed year, and the same reasoning keeps its twin to a single day.
+
+    Main draw only. Qualifying runs before a tournament, so it cannot speak
+    to when one ends.
+
+    Returns True if end_date changed.
+    """
+    if last_main_day is None or draw.end_date is None:
+        return False
+    if last_main_day <= draw.end_date:
+        return False
+    if (last_main_day - draw.end_date).days > 7:
+        return False
+    draw.end_date = last_main_day
+    return True
+
+
 def apply_closing_time(tournament) -> bool:
     """
     Set closing_time on *tournament* from its schedule fields if not already set.

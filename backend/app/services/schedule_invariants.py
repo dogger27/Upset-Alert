@@ -2260,6 +2260,33 @@ async def relink_resolvable(db, tournament_id: int, play_date) -> list[str]:
     return linked
 
 
+async def extend_end_dates(db, tournament_id: int, play_date) -> list[int]:
+    """Let a day of main-draw play push a draw's end_date out to meet it.
+
+    The evidence is the order of play; the judgement is
+    tournament_schedule.adopt_scheduled_end_date, which is where the rules and
+    the reasoning live. This only finds the draws and asks.
+
+    Returns the ids of the draws whose end_date moved, for the caller's log.
+    """
+    from app.models.tournament import Draw
+    from app.services.tournament_schedule import adopt_scheduled_end_date
+
+    # Does this day hold main-draw play at all? Qualifying cannot speak to
+    # when a tournament ends, and a day of nothing cannot either.
+    main = (await db.execute(
+        select(ScheduleEntry.id).where(
+            ScheduleEntry.tournament_id == tournament_id,
+            ScheduleEntry.play_date == play_date,
+            ScheduleEntry.stage == "main").limit(1))).first()
+    if not main:
+        return []
+
+    draws = (await db.execute(
+        select(Draw).where(Draw.tournament_id == tournament_id))).scalars().all()
+    return [d.id for d in draws if adopt_scheduled_end_date(d, play_date)]
+
+
 async def sweep(db) -> int:
     """The law applied to every tournament-day near now.
 
@@ -2286,6 +2313,20 @@ async def sweep(db) -> int:
         # draw_entries, so routing it through a logged fault and the watcher
         # would be ceremony. It runs before the checks so they see the healed
         # state rather than reporting on rows about to be linked.
+        # A DAY OF PLAY PAST THE CALENDAR'S LAST DAY MOVES THE LAST DAY.
+        # Weather postpones a final and the sheet says so within the hour;
+        # Wikipedia's range may never say it. Left alone, computed_status
+        # retires the draw with its final unplayed.
+        moved = await extend_end_dates(db, tid, day)
+        if moved:
+            from app.services.system_log import app_log
+            await db.commit()
+            await app_log(
+                "info", "schedule",
+                f"End date extended to {day} for {len(moved)} draw(s): play is "
+                f"scheduled past the calendar's last day",
+                {"tournament_id": tid, "play_date": str(day), "draw_ids": moved},
+            )
         relinked = await relink_resolvable(db, tid, day)
         if relinked:
             from app.services.system_log import app_log
