@@ -39,6 +39,7 @@ import { SWIPE_PX, SWIPE_VX, swipeStep } from '../../swipeDay'
 import { beginSwipe, endSwipe, unlessSwiping } from '../../swipeGuard'
 import { dayLabels, relativeDayWord } from '../../dayLabels'
 import { rowInTournaments } from '../../scheduleRows'
+import { eventTour } from '../../category'
 import { MatchCard } from '../../scorecard'
 import { matchLine } from '../../matchLine'
 import { courtGroups } from '../../courtGroups'
@@ -100,15 +101,6 @@ export default function ScheduleScreen() {
      Keyed on the arrival, not on the route: the same params re-rendering is
      not an arrival, and paging days inside one visit must not undo itself. */
   useEffect(() => { setPinned(null) }, [tournament, fromDraw, asked])
-  /* The site's filters and their defaults: completed rows shown, doubles
-     hidden, and EVERY TOUR ON, always. tourSel is a SET so ATP+WTA is
-     expressible; null means all of them.
-
-     It used to narrow to the tour of the draw you arrived from, re-seeding on
-     every date change — so paging through days kept switching the chips back
-     on and off under the reader (owner, 2026-09-13). A filter the reader did
-     not set should not appear, and one they did set should not be undone by
-     turning a page. */
   /* WHICH OF THE DAY'S THREE the reader is looking at — null until they pick
      one, and then it follows them (owner, 2026-09-20). This replaces a
      Completed toggle that answered a narrower question: the day has finished
@@ -116,7 +108,6 @@ export default function ScheduleScreen() {
      page says which of the three rather than hiding one of them. */
   const [phase, setPhase] = useState(null)
   const [showDoubles, setShowDoubles] = useState(false)
-  const [tourSel, setTourSel] = useState(null)
   /* Venue clock or the reader's own — an ACCOUNT preference (users.schedule_tz)
      this screen READS and no longer offers. The switch sat in the filter strip,
      beside controls people change every visit, to set something they change
@@ -308,27 +299,6 @@ export default function ScheduleScreen() {
     else cur.add(id)
     setScheduleTournaments(cur.size ? cur : null)
   }
-  /* THE TOURS ON OFFER — among the rows the OTHER filters keep, not among
-     every row fetched. Filtering to one tournament and then being shown an
-     ATP chip for a women's event is a control over nothing; and qualifying
-     rows carry no tour at all, so a qualifying-only day has none. */
-  const toursHere = useMemo(() => {
-    const seen = new Set()
-    for (const e of all) {
-      if (!e.tour) continue
-      if (!rowInTournaments(e, eventFilter)) continue
-      if (e.discipline !== 'singles' && !showDoubles) continue
-      // The PHASE switch is deliberately not consulted: looking at the live
-      // matches must not make a tour's chip vanish, or switching back leaves
-      // the reader with a selection and no chip to undo it.
-      seen.add(e.tour)
-    }
-    return [...seen].sort()
-  }, [all, eventFilter, showDoubles])
-  /* ONE TOUR NEEDS NO CHIPS, and where there are none the filter must not
-     apply either: a selection made on a two-tour day would otherwise empty a
-     one-tour day with no chip on screen to undo it. */
-  const tourChips = toursHere.length > 1
   /* A GENDER BAR on the dense rows (owner, 2026-09-17), on EVERY row (owner,
      2026-09-20). A thin bar at the row's far left in its tour's colour, pink
      or blue, whether or not the day mixes the tours.
@@ -351,29 +321,12 @@ export default function ScheduleScreen() {
      reads as broken.
 
      `showDoubles` is deliberately NOT part of this — a switch cannot be the
-     test of whether to show itself — and nor is the PHASE, for the same
-     reason the tour chips ignore it: a day whose doubles are all finished
-     still has doubles, and the switch has to be there to say so. */
+     test of whether to show itself — and nor is the PHASE: a day whose
+     doubles are all finished still has doubles, and the switch has to be
+     there to say so. */
   const hasDoubles = useMemo(() => all.some(e =>
     e.discipline !== 'singles' && rowInTournaments(e, eventFilter)
   ), [all, eventFilter])
-  /* SEEDED ONCE PER DAY, NOT PER FETCH. This ran on `day.data`, whose identity
-     changes on every poll — and the live subscription refetches this screen
-     about every ten seconds — so switching WTA on held for one cycle and then
-     snapped back to the arriving draw's tour (user, 2026-09-04). The default
-     is still "the tour you came from, else everything"; it is simply a
-     STARTING point the reader is then allowed to keep.
-
-     Keyed on the day and the originating draw, so changing date (or arriving
-     from a different draw) seeds afresh, while a refetch of the same day
-     never touches the selection. */
-  const toggleTour = t => setTourSel(prev => {
-    const cur = new Set(prev ?? toursHere)
-    // NOT NONE, for the same reason the tournament chooser refuses it: both
-    // tours off is an empty screen with nothing on it to explain why.
-    if (cur.has(t)) { if (cur.size > 1) cur.delete(t) } else cur.add(t)
-    return cur
-  })
   const venueMode = tzMode === 'venue'
   // The venue's zone for a row, from the day's tournament list.
   const venueTzOf = e => (day.data?.tournaments || []).find(t => t.id === e.tournament_id)?.venue_timezone || undefined
@@ -429,15 +382,13 @@ export default function ScheduleScreen() {
   const beforePhase = useMemo(() => {
     return all.filter(e => {
       if (view === 'time' && e.discipline !== 'singles' && !showDoubles) return false
-      if (view === 'time' && tourChips && tourSel && e.tour && !tourSel.has(e.tour)) return false
-      // THE TOURNAMENTS THE TAB ASKED ABOUT. Applied in BOTH views, unlike
-      // the tour chips: those are a control on this screen and the court view
-      // deliberately reproduces the whole sheet, while this is an answer the
-      // reader gave on the way in and means the same thing either way.
+      // THE TOURNAMENTS THE TAB ASKED ABOUT, in BOTH views: this is an answer
+      // the reader gave on the way in and means the same thing either way.
+      // (The tour filter that used to sit here went with its chips.)
       if (!rowInTournaments(e, eventFilter)) return false
       return true
     })
-  }, [all, view, showDoubles, tourSel, eventFilter, tourChips])
+  }, [all, view, showDoubles, eventFilter])
 
   /* THE DAY'S THREE, AND WHICH ONE IS SHOWING. Offered only on a day that is
      still happening, and only in the time view — the court view reproduces the
@@ -674,9 +625,19 @@ export default function ScheduleScreen() {
               // days are every live tournament's, so a box can name an event
               // that is idle today. Still a box — ticking it is harmless.
               const playing = all.some(e => e.tournament_id === t.id)
+              /* LIT IN ITS OWN TOUR'S COLOUR — blue ATP, pink WTA (owner,
+                 2026-09-21) — the same pair the rows' gender bars use, so one
+                 glance down the screen reads as one language. A combined week
+                 belongs to neither tour and keeps the neutral green: blending
+                 the two is a gradient decision on a small pill and there is no
+                 such token to borrow (theme.js TOUR.X). */
+              const tint = TOUR_BAR[eventTour(t.genders)]
               return (
                 <Pressable key={t.id} onPress={() => toggleEvent(t.id)}
-                           style={[s.eventBox, on && s.eventBoxOn, !playing && s.eventIdle]}
+                           style={[s.eventBox,
+                                   on && (tint ? { backgroundColor: tint, borderColor: tint }
+                                               : s.eventBoxOn),
+                                   !playing && s.eventIdle]}
                            accessibilityRole="button"
                            accessibilityState={{ selected: on }}
                            accessibilityLabel={playing ? t.name : `${t.name}, no matches this day`}>
@@ -695,27 +656,13 @@ export default function ScheduleScreen() {
           </View>
         )}
 
-        {/* ONLY WHEN THERE IS SOMETHING IN IT. The row used to always hold the
-            density button, so it was always worth drawing; with that gone a
-            day with one tour and no doubles would leave the column's gap
-            around an empty row. */}
-        {view === 'time' && tourChips && (
-        <View style={s.filters}>
-          {/* The tour chips filter the time view only, so the court view does
-              not offer them — the site's rule; a chip that toggles nothing
-              reads as broken. And one tour needs no chip. */}
-          {view === 'time' && tourChips && toursHere.map(t => {
-            const on = !tourSel || tourSel.has(t)
-            return (
-              <Pressable key={t} onPress={() => toggleTour(t)}
-                         style={[s.chip, on && (t === 'WTA' ? s.chipWta : s.chipAtp)]}
-                         accessibilityRole="button" accessibilityState={{ selected: on }}>
-                <Text style={[s.chipText, on && { color: '#fff' }]}>{t}</Text>
-              </Pressable>
-            )
-          })}
-        </View>
-        )}
+        {/* THE ATP / WTA CHIPS ARE GONE (owner, 2026-09-21). They only ever
+            appeared on a day that mixed the tours, and the tournament pills
+            above now carry their tour in their colour — so the tours are
+            already legible where the reader is choosing, and a second control
+            saying the same thing in words was the redundant one. Filtering to
+            a tour is filtering to its tournaments, which those pills do with
+            more precision. The rows keep their gender bars. */}
 
         {/* ── WHAT IS DONE, WHAT IS ON, WHAT IS COMING ────────────────────
             Directly above the list and all the way across it (owner,
@@ -1318,7 +1265,10 @@ const SUB = eyebrowType({ small: true, color: C.faint })
 const TOURN = eyebrowType({ size: 23, color: C.clayLight })
 const TOURN_SMALL = eyebrowType({ size: 18, color: C.clayLight })
 
-// The tour chips' own colours, for the bar.
+/* THE TOUR PAIR, used in the two places this screen names a tour by colour:
+   every row's gender bar, and the tournament pills (owner, 2026-09-21). One
+   pair, so a pink pill and the pink bars beneath it are the same pink. It
+   outlived the ATP/WTA chips it was written for. */
 const TOUR_BAR = { ATP: '#2563eb', WTA: '#db2777' }
 
 const s = StyleSheet.create({
@@ -1407,11 +1357,8 @@ const s = StyleSheet.create({
   todayDate: { fontFamily: 'Archivo_700Bold', fontSize: 14, color: C.ink },
 
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', paddingVertical: 4 },
-  filters: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   chip: { borderRadius: R.pill, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, paddingHorizontal: 10, paddingVertical: 5 },
   chipOn: { backgroundColor: C.green, borderColor: C.green },
-  chipAtp: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  chipWta: { backgroundColor: '#db2777', borderColor: '#db2777' },
   chipText: { ...T.tiny, color: C.muted, fontFamily: 'Archivo_700Bold' },
   // The list button: an icon in a chip, pushed to the row's far right.
   // The Completed chip's height exactly — its text line plus the chip's
