@@ -8,7 +8,7 @@ the owner was the only detector. These tests are the record of what each check
 is for — change a threshold and the incident it stops catching should be
 visible here.
 """
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -16,11 +16,13 @@ from app.services.draw_invariants import (
     ABSOLUTE_MAX_SPAN_DAYS,
     CATEGORY_SPAN_DAYS,
     UNFINISHED_GRACE_DAYS,
+    WRONG_EDITION_DAYS,
     completed_with_unplayed_final,
     dates_out_of_order,
     duration_outside_envelope,
     end_date_behind_play,
     entries_without_draw_rank,
+    finish_decision,
     not_completed_after_its_end,
     row_holds_two_events,
     not_completed_after_its_end,
@@ -170,7 +172,7 @@ def test_on_its_last_day_it_is_lawful():
 
 def test_a_late_result_gets_its_grace():
     """A result can land a day or two late; that is not an abandoned scrape."""
-    inside = date(2026, 9, 21 + UNFINISHED_GRACE_DAYS)
+    inside = date(2026, 9, 21) + timedelta(days=UNFINISHED_GRACE_DAYS)
     assert not_completed_after_its_end("active", date(2026, 9, 21), inside) is None
 
 
@@ -262,3 +264,78 @@ def test_the_detail_names_at_most_six_and_says_there_are_more():
 def test_a_full_draw_of_ranked_players_is_lawful():
     assert entries_without_draw_rank(
         [E(f"Player {i}", ranking=i + 1) for i in range(32)]) is None
+
+
+# ── finish_decision: the repair, not a check ─────────────────────────────
+
+class M:
+    """A Match, as far as the repair is concerned."""
+
+    def __init__(self, id, winner_id=None, is_bye=False):
+        self.id = id
+        self.winner_id = winner_id
+        self.is_bye = is_bye
+
+
+TODAY = date(2026, 9, 21)
+
+
+def test_a_decided_final_finishes_the_draw():
+    """The scraper sets this from a freshly parsed Wikipedia page, so it fires
+    only when a scrape runs AND succeeds. The bracket in our own matches table
+    answers the same question with nobody scraping anything."""
+    why = finish_decision("active", 5, [M(99, winner_id=7)], date(2026, 9, 14), TODAY)
+    assert why and "final is decided" in why and "match 99" in why
+
+
+@pytest.mark.parametrize("status", ["active", "upcoming", "open"])
+def test_any_unfinished_status_is_repaired(status):
+    assert finish_decision(status, 5, [M(1, winner_id=7)], date(2026, 9, 14), TODAY)
+
+
+def test_an_already_completed_draw_is_left_alone():
+    assert finish_decision("completed", 5, [M(1, winner_id=7)],
+                           date(2026, 9, 14), TODAY) is None
+
+
+def test_an_undecided_final_is_not_touched():
+    """The scrape that died BEFORE the final is the case the check owns; there
+    is nothing here to derive and inventing a winner is unthinkable."""
+    assert finish_decision("active", 5, [M(1)], date(2026, 9, 14), TODAY) is None
+
+
+def test_no_final_round_row_no_repair():
+    assert finish_decision("active", 5, [], date(2026, 9, 14), TODAY) is None
+
+
+def test_no_num_rounds_no_repair():
+    """draw_size=0 has happened; a draw with no shape gets no judgement."""
+    assert finish_decision("active", None, [M(1, winner_id=7)],
+                           date(2026, 9, 14), TODAY) is None
+
+
+def test_a_bye_is_not_a_final():
+    assert finish_decision("active", 5, [M(1, winner_id=7, is_bye=True)],
+                           date(2026, 9, 14), TODAY) is None
+
+
+def test_two_matches_in_the_final_round_is_not_understood():
+    """A final is one match. A bracket shaped otherwise is not one this repair
+    reasons about, and guessing is how a draw gets retired unplayed."""
+    assert finish_decision("active", 5, [M(1, winner_id=7), M(2, winner_id=8)],
+                           date(2026, 9, 14), TODAY) is None
+
+
+def test_a_decided_final_for_a_distant_event_is_refused():
+    """A finished bracket for an event a month out means the dates point at the
+    wrong edition — season openers were once stamped a year forward. Refuse and
+    let the checks report the contradiction."""
+    distant = TODAY + timedelta(days=WRONG_EDITION_DAYS + 1)
+    assert finish_decision("active", 5, [M(1, winner_id=7)], distant, TODAY) is None
+
+
+def test_a_draw_starting_tomorrow_with_a_decided_final_is_still_repaired():
+    """Inside the window the contradiction is ordinary — a start_date that has
+    not been snapped forward yet — and the bracket is the better evidence."""
+    assert finish_decision("active", 5, [M(1, winner_id=7)],
+                           date(2026, 9, 22), TODAY)

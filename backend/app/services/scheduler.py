@@ -1590,7 +1590,26 @@ async def _check_draw_health() -> None:
     # rank. See services/draw_invariants.py for the doctrine and the
     # incidents. Its own session: a check must never share one with a writer.
     try:
-        from app.services.draw_invariants import check_and_log
+        from app.services.draw_invariants import check_and_log, finish_decided_draws
+        from app.services.system_log import app_log
+
+        # FIRST, FINISH WHAT THE BRACKET HAS ALREADY DECIDED. A repair, not a
+        # check: the winner is in our own matches table and the derivation is
+        # deterministic, so routing it through a logged fault and the watcher
+        # would be ceremony. It runs BEFORE the checks so they report on the
+        # healed state rather than on draws about to be stamped.
+        async with AsyncSessionLocal() as db:
+            finished = await finish_decided_draws(db)
+            if finished:
+                await db.commit()
+        if finished:
+            await app_log(
+                "info", "draws",
+                f"Finished {len(finished)} draw(s) whose final was already "
+                f"decided: " + "; ".join(x["draw"] for x in finished[:5])
+                + (" …" if len(finished) > 5 else ""),
+                {"draws": finished[:20]},
+            )
 
         async with AsyncSessionLocal() as db:
             violations = await check_and_log(db)

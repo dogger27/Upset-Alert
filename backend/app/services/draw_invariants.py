@@ -231,6 +231,87 @@ def entries_without_draw_rank(entries: list) -> Optional[str]:
             f"seed nor ranking: {shown}" + (" …" if len(blank) > 6 else ""))
 
 
+# ── the repair ────────────────────────────────────────────────────────────
+# A FIX, NOT A CHECK, and it runs before the checks so they see the healed
+# state. Same division as schedule_invariants: where the answer is already in
+# the database and the derivation is deterministic, routing it through a logged
+# fault and the self-heal watcher is ceremony.
+
+# A finished bracket for an event supposedly this far off means the stored
+# dates point at the wrong EDITION — December/January season openers were once
+# stamped a year forward. The repair refuses to act on that contradiction and
+# leaves it to the checks, because stamping it completed would retire a draw
+# that has not been played. Mirrors the guard in routers/tournaments.py.
+WRONG_EDITION_DAYS = 30
+
+
+def finish_decision(status: Optional[str], num_rounds: Optional[int],
+                    final_matches: list, start_date: Optional[date],
+                    today: date) -> Optional[str]:
+    """Whether the bracket itself says this draw is over. Pure.
+
+    `final_matches` is every Match at round_number == num_rounds, as objects
+    carrying `winner_id` and `is_bye`.
+
+    WHY THIS EXISTS WHEN THE SCRAPER ALREADY DOES IT. routers/tournaments.py
+    sets status='completed' on `parsed.has_final_winner` — read off a freshly
+    scraped Wikipedia page. That fires only when a scrape RUNS and SUCCEEDS,
+    so a scrape that dies after the semi-finals, or a draw that has dropped
+    out of the refresh set, never gets the stamp; computed_status then reports
+    'active' until 14 days past start_date, which for a 6-day week is eight
+    days of a finished tournament showing as live. The bracket in our own
+    `matches` table is written by the authoritative result sources and is
+    always there to be read, so it answers the same question without needing
+    anybody to scrape anything.
+    """
+    if status == "completed":
+        return None
+    if not num_rounds or not final_matches:
+        return None
+    # A final is one match and cannot be a bye. Anything else is a bracket
+    # this repair does not understand, and guessing at it is how a draw gets
+    # retired unplayed.
+    real = [m for m in final_matches if not m.is_bye]
+    if len(real) != 1:
+        return None
+    if real[0].winner_id is None:
+        return None
+    if start_date and (start_date - today).days > WRONG_EDITION_DAYS:
+        return None                 # wrong edition; the checks own this
+    return f"the final is decided (match {real[0].id}) but status is {status!r}"
+
+
+async def finish_decided_draws(db) -> list:
+    """Stamp every draw whose own final has a winner. Returns what changed.
+
+    The completion NOTIFICATION that follows is already guarded: the job that
+    fires it takes only draws whose end_date is within three days, precisely
+    so a draw resurrected long after the fact does not mail its standings out
+    as news. So a recent draw gets the completion mail it should have had, and
+    an old one is repaired silently.
+    """
+    today = date.today()
+    draws = (await db.execute(
+        select(Draw).where(Draw.status != "completed"))).scalars().all()
+    if not draws:
+        return []
+    finals = (await db.execute(
+        select(Match).where(Match.draw_id.in_([d.id for d in draws])))).scalars().all()
+    by_draw: dict = {}
+    for m in finals:
+        by_draw.setdefault(m.draw_id, []).append(m)
+
+    changed = []
+    for d in draws:
+        at_final = [m for m in by_draw.get(d.id, []) if m.round_number == d.num_rounds]
+        why = finish_decision(d.status, d.num_rounds, at_final, d.start_date, today)
+        if why:
+            d.status = "completed"
+            changed.append({"draw_id": d.id,
+                            "draw": f"{d.year} {d.name} ({d.gender})", "detail": why})
+    return changed
+
+
 # ── the law applied to the database ───────────────────────────────────────
 
 async def _last_play_day(db, draw_ids: list) -> dict:
@@ -375,6 +456,15 @@ if __name__ == "__main__":  # pragma: no cover
         from app.database import AsyncSessionLocal
 
         async with AsyncSessionLocal() as db:
+            # What the repair WOULD do. Never committed from here: this entry
+            # point is the dry run, and it is expected to be pointed at
+            # production.
+            pending = await finish_decided_draws(db)
+            await db.rollback()
+            for x in pending:
+                print(f"REPAIR  {x['draw']}: {x['detail']}")
+            if pending:
+                print()
             violations = await check(db)
         by_code: dict = {}
         for x in violations:
