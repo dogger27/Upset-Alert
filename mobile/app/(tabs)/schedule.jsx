@@ -217,7 +217,7 @@ export default function ScheduleScreen() {
      singles day, then the count from it. Memoised on the answer, not on
      `available`, which is a fresh array whenever there is no answer yet. */
   const days = useMemo(
-    () => dayLabels(dates.data?.dates || [], dates.data?.main_start ?? null),
+    () => dayLabels(dates.data?.dates || [], dates.data?.main_start ?? null, today()),
     [dates.data],
   )
   /* A pinned day only counts while it EXISTS in the list this page is showing.

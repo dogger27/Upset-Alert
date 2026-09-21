@@ -36,7 +36,32 @@ assert.deepEqual(labels(['2026-09-12', '2026-09-13'], null), ['1', '2'])
 assert.deepEqual(labels(['2026-09-12', '2026-09-13'], undefined), ['1', '2'])
 
 // The date rides along with its label.
-assert.deepEqual(dayLabels(['2026-09-12'], '2026-09-13'), [{ date: '2026-09-12', label: 'Q1' }])
+assert.deepEqual(dayLabels(['2026-09-12'], '2026-09-13'),
+                 [{ date: '2026-09-12', label: 'Q1', isToday: false }])
+
+/* TODAY IS FLAGGED, because the strip draws a "T" for it where every other day
+   is a dot (owner, 2026-09-21). One day at most, and never by accident: the
+   flag is an exact date match, so a strip whose days do not include today —
+   last week's schedule, next week's — draws no T at all rather than guessing
+   which dot deserves one. */
+{
+  const week = ['2026-09-20', '2026-09-21', '2026-09-22']
+  assert.deepEqual(dayLabels(week, '2026-09-20', '2026-09-21').map(d => d.isToday),
+                   [false, true, false])
+  // Exactly one, wherever it falls.
+  assert.equal(dayLabels(week, '2026-09-20', '2026-09-21').filter(d => d.isToday).length, 1)
+  assert.deepEqual(dayLabels(week, '2026-09-20', '2026-09-20').map(d => d.isToday),
+                   [true, false, false])
+  // A day that is not in the strip flags nothing; so does no day at all.
+  assert.deepEqual(dayLabels(week, '2026-09-20', '2026-10-05').map(d => d.isToday),
+                   [false, false, false])
+  assert.deepEqual(dayLabels(week, '2026-09-20').map(d => d.isToday), [false, false, false])
+  assert.deepEqual(dayLabels(week, '2026-09-20', null).map(d => d.isToday), [false, false, false])
+  // The LABELS are untouched by any of it — they are what the accessibility
+  // label still reads out now the glyphs are gone.
+  assert.deepEqual(dayLabels(week, '2026-09-21', '2026-09-21').map(d => d.label),
+                   ['Q1', '1', '2'])
+}
 
 
 // The slot's word: yesterday, today and TOMORROW — the three days a reader has
