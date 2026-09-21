@@ -2948,6 +2948,17 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
             and tournament.draw_released_direct_at is not None):
         tournament.start_date = today
 
+    # A SOURCE THAT CARRIES NO RESULTS DOES NOT GET TO SAY THE DRAW HAS NONE.
+    # The counters above come from the parsed matches; a shape source's are
+    # all resultless, and judging status from them demoted SP Open — thirty
+    # results in — to "upcoming" on the first refresh pass. For such a source
+    # the matches already in the database are the evidence, which also puts
+    # a demoted draw right on the next pass.
+    if not getattr(parsed, "carries_results", True):
+        held = list(existing_matches.values())
+        total_matches = len(held)
+        completed = sum(1 for m in held if m.winner_id is not None)
+        real_completed = sum(1 for m in held if m.winner_id is not None and not m.is_bye)
     started = tournament.start_date is None or tournament.start_date <= today
     if completed == total_matches and completed > 0:
         tournament.status = "completed"

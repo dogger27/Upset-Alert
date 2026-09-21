@@ -113,6 +113,12 @@ class ParsedDraw:
     # to the Monday was refused by the released-draw guard, but it was refused
     # with a warning every refresh.
     carries_dates: bool = True
+    # Whether this source speaks to RESULTS. A shape source (the WTA sheet,
+    # Tennis Explorer, a cup tree read for shape) does not, and the writer
+    # must then judge a draw's status from the matches it already holds —
+    # deriving it from resultless parsed matches demoted three live draws to
+    # "upcoming" on the first refresh pass (2026-09-21).
+    carries_results: bool = True
 
 
 # ---------------------------------------------------------------------------

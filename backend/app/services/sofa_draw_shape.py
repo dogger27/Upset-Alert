@@ -438,4 +438,5 @@ def shape_to_parsed(shape: DrawShape):
         has_qualifiers=any(p.entry_type == "Q" for p in players),
         has_final_winner=False,
         carries_dates=False,        # shape only: the writer leaves dates alone
+        carries_results=False,      # and judges status from the matches it holds
     )

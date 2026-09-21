@@ -146,8 +146,8 @@ def test_a_shape_only_rewrite_keeps_every_result_and_every_advancer(monkeypatch)
         async with Session() as db:
             from datetime import date as _date
             d = Draw(name="Guard Open", year=2026, gender="M", draw_size=4, num_rounds=2,
-                     wiki_page_title="Guard Open", status="upcoming",
-                     start_date=_date(2026, 9, 23), end_date=_date(2026, 9, 29))   # a Wednesday start
+                     wiki_page_title="Guard Open", status="active",
+                     start_date=_date(2026, 9, 16), end_date=_date(2026, 9, 22))   # a Wednesday start, under way
             db.add(d); await db.flush()
             ents = [DrawEntry(draw_id=d.id, name=n, bracket_position=i + 1)
                     for i, n in enumerate(["Alpha One", "Beta Two", "Gamma Three", "Delta Four"])]
@@ -159,8 +159,10 @@ def test_a_shape_only_rewrite_keeps_every_result_and_every_advancer(monkeypatch)
                       winner_id=e[1], status="completed", scores_json=[["6", "6"], ["3", "4"]]),
                 Match(draw_id=d.id, round_number=1, match_number=2, player1_id=e[3], player2_id=e[4],
                       winner_id=e[4], status="completed", scores_json=[["2", "1"], ["6", "6"]]),
+                # The final: both advancers placed by results, not yet played —
+                # so the draw is ACTIVE, and a shape-only rewrite must keep it so.
                 Match(draw_id=d.id, round_number=2, match_number=1, player1_id=e[1], player2_id=e[4],
-                      winner_id=e[4], status="completed", scores_json=[["4", "3"], ["6", "6"]]),
+                      winner_id=None, status="pending"),
             ])
             await db.commit()
 
@@ -176,14 +178,56 @@ def test_a_shape_only_rewrite_keeps_every_result_and_every_advancer(monkeypatch)
             ms = {(m.round_number, m.match_number): m for m in
                   (await db.execute(select(Match).where(Match.draw_id == d.id))).scalars()}
             assert (ms[(2, 1)].player1_id, ms[(2, 1)].player2_id) == (e[1], e[4]), "advancers wiped"
-            assert ms[(2, 1)].winner_id == e[4] and ms[(2, 1)].status == "completed"
+            assert ms[(2, 1)].winner_id is None and ms[(2, 1)].status == "pending"
             assert ms[(1, 1)].winner_id == e[1] and ms[(1, 2)].winner_id == e[4]
             assert ms[(1, 1)].scores_json == [["6", "6"], ["3", "4"]]
             top = (await db.execute(select(DrawEntry).where(
                 DrawEntry.draw_id == d.id, DrawEntry.bracket_position == 1))).scalar_one()
             assert top.seed == 1, "the shape's seed should have been written"
             fresh = await db.get(Draw, d.id)
-            assert fresh.start_date == _date(2026, 9, 23), (
+            assert fresh.start_date == _date(2026, 9, 16), (
                 "a shape source carries no dates; the Wednesday start must not be snapped to Monday")
+            assert parsed.carries_results is False
+            assert fresh.status == "active", (
+                "a shape source carries no results; a live draw with two decided matches and "
+                "its final pending must not be demoted to upcoming")
+
+        await engine.dispose()
+    asyncio.run(go())
+
+
+def test_a_fully_decided_draw_reads_completed_through_a_shape_only_rewrite(monkeypatch):
+    """The other side of the same rule: judged from the matches it holds, a
+    bracket whose final has a winner is completed, whatever the source says."""
+    import app.routers.tournaments as router
+    import app.services.rankings as rankings
+
+    async def no_rankings(*a, **k):
+        return None
+    for mod in (router, rankings):
+        if hasattr(mod, "assign_rankings"):
+            monkeypatch.setattr(mod, "assign_rankings", no_rankings)
+
+    async def go():
+        from datetime import date as _date
+        engine, Session = await _db()
+        async with Session() as db:
+            d = Draw(name="Done Open", year=2026, gender="F", draw_size=2, num_rounds=1,
+                     wiki_page_title="Done Open", status="active",
+                     start_date=_date(2026, 9, 14), end_date=_date(2026, 9, 20))
+            db.add(d); await db.flush()
+            a = DrawEntry(draw_id=d.id, name="Alpha One", bracket_position=1)
+            b = DrawEntry(draw_id=d.id, name="Beta Two", bracket_position=2)
+            db.add_all([a, b]); await db.flush()
+            db.add(Match(draw_id=d.id, round_number=1, match_number=1, player1_id=a.id,
+                         player2_id=b.id, winner_id=b.id, status="completed",
+                         scores_json=[["3", "4"], ["6", "6"]]))
+            await db.commit()
+            shape = DrawShape(bracket_size=2, num_rounds=1, entrants=[
+                ShapeEntrant(bracket_position=1, name="Alpha One"),
+                ShapeEntrant(bracket_position=2, name="Beta Two")])
+            await _do_scrape(d, db, parsed=shape_to_parsed(shape))
+            await db.commit()
+            assert (await db.get(Draw, d.id)).status == "completed"
         await engine.dispose()
     asyncio.run(go())
