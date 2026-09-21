@@ -36,9 +36,14 @@ const { computeCohortInfo, getDisplayStatus } =
   await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'))
 
 let n = 0
+let failures = 0
 function check(name, fn) {
   try { fn(); n += 1; console.log(`  ok  ${name}`) }
-  catch (e) { console.log(`  FAIL ${name}\n      ${e.message}`); process.exitCode = 1 }
+  catch (e) {
+    failures += 1
+    console.log(`  FAIL ${name}\n      ${e.message}`)
+    process.exitCode = 1
+  }
 }
 
 const draw = (id, tournament_id, end_date, status) => ({ id, tournament_id, end_date, status })
@@ -133,16 +138,40 @@ check('an earlier week is Previous, not Last Week', () => {
   assert.equal(bucket(list, 3), 'lastweek')
 })
 
-check('a week holding an active draw is nobody’s Last Week', () => {
-  // The finished event of this week is Previous rather than Last Week: the
-  // week is not over, so there is no last week yet beyond the older one.
+check('a draw that has finished joins Last Week without waiting for its week', () => {
+  /* THIS ASSERTION WAS REVERSED ON 2026-09-21, deliberately. It used to read
+     `bucket(list, 1) === 'lastweek'`, on the rule that a week still being
+     played is nobody's last week, so the finished draw 2 fell through to
+     Previous and the older week kept the heading.
+
+     The season rehearsal showed what that cost: draw 2 read Previous — beside
+     January's events — until draw 3 finished, and then moved BACK to Last
+     Week. Since 250s finish on the Saturday and 500s on the Sunday, that
+     happened most weeks of the year, and a draw moving backwards is precisely
+     what the owner meant by "I want to stop babysitting these constant bugs
+     where draws change their status as we progress through the weeks".
+
+     So a draw that has left Active belongs to the most recent finished week
+     from that moment on. The older week (draw 1) gives up the heading a day
+     or two earlier than it used to, which is a forward move for it too. */
   const list = [
     draw(1, 800, '2026-09-13', 'completed'),
     draw(2, 900, '2026-09-20', 'completed'),
     draw(3, 901, '2026-09-21', 'active'),
   ]
-  assert.equal(bucket(list, 1), 'lastweek')
+  assert.equal(bucket(list, 2), 'lastweek')
+  assert.equal(bucket(list, 1), 'previous')
   assert.equal(bucket(list, 3), 'active')
+})
+
+check('a finished week stops being Last Week once it is plainly not', () => {
+  /* "Last Week" had no sense of recency, so the most recent finished week was
+     whatever had last finished — ten months ago, on a list holding one old
+     event. */
+  const list = [draw(1, 900, '2026-06-14', 'completed')]
+  assert.equal(bucket(list, 1), 'previous')
+  const fresh = [draw(1, 900, '2026-09-13', 'completed')]
+  assert.equal(bucket(fresh, 1), 'lastweek')
 })
 
 // ── the shapes the data really takes ──────────────────────────────────────
@@ -168,4 +197,6 @@ check('a draw’s own status still wins where it is not completed', () => {
   assert.equal(bucket(list, 2), 'upcoming')
 })
 
-console.log(`\n  ${n} passed`)
+console.log(`\n  ${n} passed`
+  + (failures ? `, ${failures} FAILED` : ''))
+if (failures) process.exitCode = 1

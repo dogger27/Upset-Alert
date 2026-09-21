@@ -26,6 +26,14 @@ for (const n of NAMESPACES) {
   if (!theme[n]) { console.error(`theme.js exports no ${n}`); process.exit(1) }
 }
 
+/* ANCHORED TO THIS FILE, NOT THE SHELL'S CWD. `walk('.')` scanned whatever
+ * directory the runner happened to be in: from mobile/ that is right, but from
+ * the repo root it walks the WEB app too, where `R` is a local array of rounds
+ * and `R.length` reads as a missing token. It reported two every time and was
+ * therefore permanently red from the root — which is how a real failure hides,
+ * so the check now scans the mobile tree wherever it is invoked from. */
+const ROOT = new URL('.', import.meta.url).pathname
+
 function walk(dir, out = []) {
   for (const e of readdirSync(dir)) {
     if (e === 'node_modules' || e === '.expo' || e === 'dist' || e.startsWith('.')) continue
@@ -37,7 +45,7 @@ function walk(dir, out = []) {
 }
 
 const bad = []
-for (const file of walk('.')) {
+for (const file of walk(ROOT)) {
   const src = readFileSync(file, 'utf8')
   for (const ns of NAMESPACES) {
     // C.foo but not C.foo( and not a longer identifier ending in C
@@ -45,7 +53,7 @@ for (const file of walk('.')) {
     for (const m of src.matchAll(re)) {
       if (!known[ns].has(m[1])) {
         const line = src.slice(0, m.index).split('\n').length
-        bad.push(`${file}:${line}  ${ns}.${m[1]}`)
+        bad.push(`mobile/${file.slice(ROOT.length)}:${line}  ${ns}.${m[1]}`)
       }
     }
   }

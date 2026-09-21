@@ -1,5 +1,13 @@
 const ONE_DAY_MS = 86400000
 
+/* How long a finished week may wear the "Last Week" heading. Two weeks covers
+ * a fortnight-long Slam finishing as the next week's events start, and stops
+ * short of calling anything older by a name that plainly does not fit. */
+const LAST_WEEK_MAX_AGE_DAYS = 14
+
+const daysBetween = (fromDay, toDay) =>
+  (new Date(toDay + 'T00:00:00') - new Date(fromDay + 'T00:00:00')) / ONE_DAY_MS
+
 /* Today's date as YYYY-MM-DD in Pacific time (handles PST/PDT automatically).
  *
  * BOTH HALVES OF THIS ARE LOAD-BEARING, and the plain one-liner it replaced —
@@ -101,13 +109,38 @@ export function computeCohortInfo(draws) {
   }
 
   // ── the week, for "Last Week" alone ──────────────────────────────────────
-  // The most recent week in which nothing is still playing. A week holding an
-  // active draw is not last week, whatever its dates say.
+  // The most recent run of FINISHED draws, if it finished recently enough to
+  // be worth the name.
+  //
+  // TWO THINGS HERE WERE WRONG UNTIL THE SEASON REHEARSAL WALKED THEM
+  // (drawStatus.rehearsal.test.mjs, 2026-09-21):
+  //
+  //   IT USED TO EXCLUDE A WHOLE RUN THAT CONTAINED AN ACTIVE DRAW, on the
+  //   reasoning that a week still being played is nobody's last week. The
+  //   consequence was a draw moving BACKWARDS, every single week: 250s finish
+  //   on the Saturday and 500s on the Sunday, so on Saturday night the
+  //   finished 250 was in no Last Week and fell through to Previous — beside
+  //   January's events — and then reappeared under Last Week once the 500
+  //   finished. The rehearsal caught it on a Guadalajara-shaped pair: previous
+  //   on the 20th, lastweek on the 22nd. A draw that has left Active belongs
+  //   to the most recent finished week from that moment on, so the runs are
+  //   built from the finished draws themselves and an active draw simply is
+  //   not one of them.
+  //
+  //   AND IT HAD NO SENSE OF RECENCY, so "the most recent finished week" was
+  //   whatever had last finished even if that was ten months ago. On a list
+  //   holding one old event — a league page, a filtered view, or January
+  //   before anything else has been played — a ten-month-old tournament wore
+  //   the "Last Week" heading. That is what drawStatus.test.mjs's "two events
+  //   months apart" case had been asserting, correctly, and failing to get
+  //   since it was written.
   const today = todayPacific()
-  const finished = runs([...withDate].sort(byEnd)).filter(
-    w => w.every(t => t.status !== 'active') && w[w.length - 1].end_date < today)
-  const lastWeek = finished[finished.length - 1]
-  if (lastWeek) for (const t of lastWeek) result[t.id].isLastWeek = true
+  const done = withDate.filter(t => t.status !== 'active' && t.end_date < today)
+  const weeks = runs([...done].sort(byEnd))
+  const lastWeek = weeks[weeks.length - 1]
+  const recent = lastWeek && daysBetween(lastWeek[lastWeek.length - 1].end_date, today)
+    <= LAST_WEEK_MAX_AGE_DAYS
+  if (recent) for (const t of lastWeek) result[t.id].isLastWeek = true
 
   return result
 }
