@@ -1012,18 +1012,39 @@ function TournStamps({ stamps, name, small }) {
   )
 }
 
-function LineTags({ first, alt, when, round, tournament }) {
-  if (!when && !round && !tournament) return null
+/* THE CLOCK AND THE TOURNAMENT, on the card's own top border.
+   THE ROUND IS NOT HERE ANY MORE (owner, 2026-09-21): it sits in a pill at the
+   top right INSIDE the box, where it labels the match it belongs to instead of
+   floating on the rule between two of them. The two flexed sides stay — they
+   used to exist to centre the round between them, and now simply pin the clock
+   left and the tournament right. */
+function LineTags({ first, alt, when, tournament }) {
+  if (!when && !tournament) return null
   return (
     <View style={s.miniTagRow} pointerEvents="none">
       <View style={s.miniTagSide}>
         {when ? <LineTag first={first} alt={alt}>{when}</LineTag> : null}
       </View>
-      {round ? <LineTag first={first} alt={alt} textStyle={s.miniTagRound}>{round}</LineTag> : null}
       <View style={[s.miniTagSide, s.miniTagSideRight]}>
         {tournament ? (
           <LineTag first={first} alt={alt} textStyle={s.miniTagTourn}>{tournament}</LineTag>
         ) : null}
+      </View>
+    </View>
+  )
+}
+
+
+/* THE ROUND, AS A PILL AT THE BOX'S TOP RIGHT (owner, 2026-09-21). Quieter
+   than an entry chip — a round LABELS the match, where [Q] and [WC] say
+   something about a player — so it borrows the chip's geometry and takes the
+   neutral border and a muted ink rather than the qualifier's colour. */
+function RoundPill({ round }) {
+  if (!round) return null
+  return (
+    <View style={s.miniRoundRow} pointerEvents="none">
+      <View style={s.miniRoundPill}>
+        <Text style={s.miniRoundPillText} numberOfLines={1}>{round}</Text>
       </View>
     </View>
   )
@@ -1067,7 +1088,7 @@ function MiniRows({ list, tagsOf, children }) {
   const tags = list.length ? tagsOf(list[0]) : { when: '', round: '', tournament: null }
   return (
     <View style={s.miniWrap}>
-      <LineTags first when={tags.when} round={tags.round} tournament={tags.tournament} />
+      <LineTags first when={tags.when} tournament={tags.tournament} />
       <View style={[s.rows, s.rowsInWrap]}>{children}</View>
     </View>
   )
@@ -1103,7 +1124,8 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
           accessibilityLabel={tagged ? [when, round, matchLine(e).names, tournament].filter(Boolean).join(' ') : undefined}>
       {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
       {/* The first row's tags are drawn by MiniRows, over the card's edge. */}
-      {!first ? <LineTags alt={alt} when={when} round={round} tournament={tournament} /> : null}
+      {!first ? <LineTags alt={alt} when={when} tournament={tournament} /> : null}
+      <RoundPill round={round} />
       <View style={s.miniCard}>
         <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
       </View>
@@ -1443,8 +1465,10 @@ const s = StyleSheet.create({
   rows: { borderRadius: R.md, borderWidth: 2, borderColor: C.borderLit, backgroundColor: C.card, overflow: 'hidden', marginHorizontal: -(S.lg - S.sm) },
   row: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, minHeight: leading(34) },
   rowNext: { borderTopWidth: 1, borderTopColor: C.border },
-  // A touch tighter than the tag's full 8 below the line: the glyphs stop short of it (owner, 2026-09-17).
-  miniRow: { paddingHorizontal: 0, paddingTop: 6, paddingBottom: 5 },
+  /* The pill's band now provides the clearance under the border tags that this
+     padding used to, so it gives 4pt back — a row that grew by the pill's
+     height would otherwise cost the list about a match a screen. */
+  miniRow: { paddingHorizontal: 0, paddingTop: 2, paddingBottom: 5 },
   // The wrapper carries the card's side margin so the first row's tags can sit on its edge.
   /* EDGE TO EDGE (owner, 2026-09-18): the mid view's card is rows across the
      whole screen — the page's own padding taken back, no corners, no side
@@ -1453,7 +1477,20 @@ const s = StyleSheet.create({
   rowsInWrap: { marginHorizontal: 0, borderRadius: 0, borderLeftWidth: 0, borderRightWidth: 0 },
   // The cell: [group bar][card][H2H bar], the bars full height.
   // Room for a tab on either side: the tour bar, the tab, a hair.
-  miniCard: { paddingLeft: 8, paddingRight: 27 },
+  /* INDENTED (owner, 2026-09-21): the content used to start 8pt in, which put
+     the seed badge almost against the tour bar on the left edge. */
+  miniCard: { paddingLeft: 16, paddingRight: 27 },
+  /* The pill's own band, inside the box and above the card, so it can never
+     land on a name or on an entry chip — both of which live at the right of a
+     player's line. Right-aligned to the same inset the card keeps clear for
+     the side tab. */
+  miniRoundRow: { flexDirection: 'row', justifyContent: 'flex-end',
+                  paddingRight: 27, marginBottom: 1 },
+  miniRoundPill: {
+    height: leading(16), borderRadius: 3, borderWidth: 1, borderColor: C.borderOn,
+    paddingHorizontal: leading(5), alignItems: 'center', justifyContent: 'center',
+  },
+  miniRoundPillText: { fontFamily: 'Archivo_700Bold', fontSize: 11, color: C.muted },
   /* THE DRAW VIEW'S SIDE TABS, run top to bottom (owner, 2026-09-17): the
      bracket's chip — 24 wide, 1px green-500 on the card fill, radius 4 —
      stretched to the row's height, the word on its side, the icon upright. */
@@ -1474,9 +1511,6 @@ const s = StyleSheet.create({
   miniTagSide: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
   miniTagSideRight: { justifyContent: 'flex-end' },
   miniTag: { height: 16, paddingHorizontal: 4, justifyContent: 'center', flexShrink: 1 },
-  // The round is the same size as the clock and a step quieter — it labels
-  // the match rather than telling the reader when to be there.
-  miniTagRound: { fontFamily: 'Archivo_700Bold', color: C.faint },
   // Its cell is half the strip less the round, so the longest names — "Dubai
   // Tennis Championships" — shrink a little rather than cutting off.
   miniTagTourn: { flexShrink: 1 },
