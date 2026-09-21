@@ -1043,7 +1043,7 @@ function LineTags({ first, alt, when, tournament }) {
   return (
     <View style={s.miniTagRow} pointerEvents="none">
       <View style={s.miniTagSide}>
-        {when ? <LineTag first={first} alt={alt}>{when}</LineTag> : null}
+        {when ? <LineTag first={first} alt={alt} textStyle={s.miniTagWhen}>{when}</LineTag> : null}
       </View>
       <View style={[s.miniTagSide, s.miniTagSideRight]}>
         {tournament ? (
@@ -1564,13 +1564,25 @@ const s = StyleSheet.create({
   miniTagSide: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
   miniTagSideRight: { justifyContent: 'flex-end' },
   miniTag: { height: 16, paddingHorizontal: 4, justifyContent: 'center', flexShrink: 1 },
-  /* GOLD, and the SHORT name (owner, 2026-09-21). The border strip says two
-     different kinds of thing — when the match is, and which event it belongs
-     to — and in one muted grey they read as one run of furniture. The brand's
-     gold separates them without adding a third weight: it is already the
-     colour of a locked podium place, so it reads as "this is the event" and
-     not as a warning. Short names also stop the longest — "Dubai Tennis
-     Championships" — from shrinking to fit the half-strip they get. */
+  /* GOLD, BOTH ENDS OF THE STRIP (owner, 2026-09-21 — the tournament first,
+     then "Put the time in the same gold colour").
+
+     I had argued the other way when the tournament went gold: that the strip
+     says two different kinds of thing, when the match is and which event it
+     is, and that one colour for both read as a single run of furniture. The
+     owner's call is the better one, and the reason is what the strip sits ON:
+     the tags are the only ink on a rule that runs the width of the card, so
+     what they need to be told apart from is the RULE, not each other — their
+     two ends do that on their own. One gold pair reads as the card's caption;
+     a gold word beside a grey number read as one of them being an
+     afterthought.
+
+     Overridden here rather than in s.rowWhen, which the list view's own clock
+     column also uses and which is not on a border at all.
+
+     Short names also stop the longest — "Dubai Tennis Championships" — from
+     shrinking to fit the half-strip they get. */
+  miniTagWhen: { color: C.gold },
   miniTagTourn: { flexShrink: 1, color: C.gold },
   miniTagHalf: { position: 'absolute', left: 0, right: 0, height: 8 },
   // A clear rule between matches (owner, 2026-09-17): two lines of box score
