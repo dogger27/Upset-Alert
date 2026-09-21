@@ -355,6 +355,13 @@ export default function ScheduleScreen() {
   const venueMode = tzMode === 'venue'
   // The venue's zone for a row, from the day's tournament list.
   const venueTzOf = e => (day.data?.tournaments || []).find(t => t.id === e.tournament_id)?.venue_timezone || undefined
+  /* THE SHORT NAME FOR THE BORDER TAG (owner, 2026-09-21). The day payload
+     already carries one per tournament — the admin's, or a default taken off
+     the name, and never empty — so this needs nothing new from the server.
+     Falls back to the full name anyway: a tag with no name at all would be a
+     worse answer than a long one. */
+  const tournShortOf = e => (day.data?.tournaments || [])
+    .find(t => t.id === e.tournament_id)?.short_name || e.tournament_name
   /* The tier stamp for a group's heading. A row carries only a tournament id,
      so the artwork's two fields come from the day payload's tournaments —
      where the OOP link and the venue zone already come from. */
@@ -824,8 +831,8 @@ export default function ScheduleScreen() {
                 today's segments read as a flat stream (owner, 2026-09-20). */}
             {density === 'mid'
               ? (
-                <MiniRows list={list} tagsOf={e => miniTags(e, { past: grouped, tournament: !grouped && view !== 'court' && manyTournaments ? e.tournament_name : null, venueMode, venueTz: venueTzOf(e) })}>
-                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={grouped} tournament={!grouped && view !== 'court' && manyTournaments ? e.tournament_name : null} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} onH2H={openH2H} onPredictors={openPredictors} onMenu={openMenu} />)}
+                <MiniRows list={list} tagsOf={e => miniTags(e, { past: grouped, tournament: !grouped && view !== 'court' && manyTournaments ? tournShortOf(e) : null, venueMode, venueTz: venueTzOf(e) })}>
+                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={grouped} tournament={!grouped && view !== 'court' && manyTournaments ? tournShortOf(e) : null} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} onH2H={openH2H} onPredictors={openPredictors} onMenu={openMenu} />)}
                 </MiniRows>
               )
               : compact
@@ -1106,7 +1113,12 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
           onLongPress={menu || undefined} delayLongPress={320}
           accessibilityRole={openable || menu ? 'button' : undefined}
           accessibilityHint={menu ? 'Hold for head to head and predictions' : undefined}
-          accessibilityLabel={tagged ? [when, round, matchLine(e).names, tournament].filter(Boolean).join(' ') : undefined}>
+          /* The tag is shortened; the SPOKEN name is not. "SaoPaolo" is a tag
+             for a reader with 60pt of border to spend, not a name to read out
+             (owner's rule on the predictors sheet, applied here). */
+          accessibilityLabel={tagged ? [when, round, matchLine(e).names,
+                                        tournament ? e.tournament_name : null]
+            .filter(Boolean).join(' ') : undefined}>
       {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
       {/* The first row's tags are drawn by MiniRows, over the card's edge. */}
       {!first ? <LineTags alt={alt} when={when} tournament={tournament} /> : null}
@@ -1523,9 +1535,14 @@ const s = StyleSheet.create({
   miniTagSide: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
   miniTagSideRight: { justifyContent: 'flex-end' },
   miniTag: { height: 16, paddingHorizontal: 4, justifyContent: 'center', flexShrink: 1 },
-  // Its cell is half the strip less the round, so the longest names — "Dubai
-  // Tennis Championships" — shrink a little rather than cutting off.
-  miniTagTourn: { flexShrink: 1 },
+  /* GOLD, and the SHORT name (owner, 2026-09-21). The border strip says two
+     different kinds of thing — when the match is, and which event it belongs
+     to — and in one muted grey they read as one run of furniture. The brand's
+     gold separates them without adding a third weight: it is already the
+     colour of a locked podium place, so it reads as "this is the event" and
+     not as a warning. Short names also stop the longest — "Dubai Tennis
+     Championships" — from shrinking to fit the half-strip they get. */
+  miniTagTourn: { flexShrink: 1, color: C.gold },
   miniTagHalf: { position: 'absolute', left: 0, right: 0, height: 8 },
   // A clear rule between matches (owner, 2026-09-17): two lines of box score
   // per match need a firmer division than the list's hairline.
