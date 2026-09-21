@@ -810,8 +810,21 @@ export default function ScheduleScreen() {
                 eyebrow, through the measuring fitter: shrunk as far as it must,
                 never "…". Uppercased here so the measurement is of the string
                 that is drawn. */}
+            {/* ROOM FOR THE CLOCK ON THE CARD'S EDGE (owner, 2026-09-21: in
+                Court view, "add a bit more space between the court name and
+                the first match box, to accommodate for the time sitting in
+                the border"). Asked of the FIRST row through miniTags, not
+                guessed at from the view or the status: `when` is the thing
+                that needs the room, so the room appears exactly when it does
+                and nowhere else. A started match prints no clock and the head
+                stays flush, which is the "upcoming only" the owner asked
+                for. */}
             {court ? (
-              <View style={[s.courtHead, title && s.courtHeadUnderName]}>
+              <View style={[s.courtHead, title && s.courtHeadUnderName,
+                            !!(list.length && miniTags(list[0], {
+                              past: grouped, tournament: null, venueMode,
+                              venueTz: venueTzOf(list[0]),
+                            }).when) && s.courtHeadClock]}>
                 {/* ADMINS RENAME A COURT BY TAPPING IT (owner, 2026-09-17 for
                     the sheet, 2026-09-20 for the tap): the name it sets is
                     the court's everywhere the schedule is served, and the
@@ -1413,6 +1426,12 @@ const s = StyleSheet.create({
        against the round's 0 (owner, 2026-09-20). */
     marginTop: -S.xs, marginBottom: -S.sm,
   },
+  /* THE CLOCK NEEDS THE FLUSH JOIN GIVEN BACK (owner, 2026-09-21). A border
+     tag is drawn at top:-9 and is 16 tall, so 9pt of it stands ABOVE the
+     card's edge — into the -S.sm this head pulls the card up by, and straight
+     through the court name. -8 becomes +4: the tag's overhang takes 9 of the
+     12pt that buys, and 3 are left as air between the name and the time. */
+  courtHeadClock: { marginBottom: S.xs },
   /* UNDER A TOURNAMENT'S NAME the court is that name's second line, and the
      row above has already pulled 10pt up for it (tournHeadTight) — so this
      drops its own pull, or the two would stack to -14 and run the lines
