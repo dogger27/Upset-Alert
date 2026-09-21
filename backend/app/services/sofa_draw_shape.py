@@ -275,6 +275,22 @@ def _unordered(name: str) -> str:
     return " ".join(sorted(_fold(name).split()))
 
 
+_HYPHENS = "-‐‑‒–"
+
+
+def _joined(name: str) -> str:
+    """The order-insensitive form with every hyphen closed up.
+
+    A HYPHEN IS TWO SPELLINGS. 2026 Korea Open (draw 146): we hold the
+    wildcards "Park So-hyun" and "Ku Yeon-woo", Sofascore "Sohyun Park" and
+    "Yeonwoo Ku". `_fold` spaces the hyphen, so "So-hyun" is two words where
+    "Sohyun" is one and no key could meet — "2 in sofascore only; 2 in ours
+    only" every day. An EXTRA key, never a substitute: "Auger-Aliassime" is
+    two words in every source and must still meet its spaced form.
+    """
+    return _unordered(re.sub(f"[{_HYPHENS}]", "", name or ""))
+
+
 def compare_to_entries(shape: DrawShape, entries: list) -> dict:
     """Where the cup tree and our stored draw_entries differ.
 
@@ -282,16 +298,16 @@ def compare_to_entries(shape: DrawShape, entries: list) -> dict:
     Returns counts plus the specific disagreements, so a caller can log one
     line and a reader can chase any of them.
     """
-    # Three keys per entry, most trustworthy first: the name as we hold it,
+    # Four keys per entry, most trustworthy first: the name as we hold it,
     # the name SOFASCORE gave the resolver for this very entry (already stored
     # on the row, so this reuses matching that is proven rather than repeating
-    # it), and finally the order-insensitive form.
+    # it), the order-insensitive form, and that form with hyphens joined.
     ours: dict = {}
     for e in entries:
         if not (e.name or "").strip():
             continue
         for key in (_fold(e.name), _fold(getattr(e, "sofa_name", "") or ""),
-                    _unordered(e.name)):
+                    _unordered(e.name), _joined(e.name)):
             if key:
                 ours.setdefault(key, e)
     out = {"matched": 0, "position": [], "seed": [], "entry_type": [],
@@ -305,7 +321,7 @@ def compare_to_entries(shape: DrawShape, entries: list) -> dict:
         if not s.name:
             continue
         mine = None
-        for key in (_fold(s.name), _unordered(s.name)):
+        for key in (_fold(s.name), _unordered(s.name), _joined(s.name)):
             mine = ours.get(key)
             if mine is not None:
                 break

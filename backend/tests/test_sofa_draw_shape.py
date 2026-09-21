@@ -233,8 +233,8 @@ def test_the_entrys_own_sofa_name_is_used_when_present(shape):
     assert cmp["matched"] == 28, disagreement_summary(cmp)
 
 
-def test_one_entrant_is_matched_once_even_with_three_keys(shape):
-    """Each row answers to up to three keys; a matched row must not also show
+def test_one_entrant_is_matched_once_even_with_several_keys(shape):
+    """Each row answers to up to four keys; a matched row must not also show
     up as 'only in ours'."""
     ours = [E(e.name, e.bracket_position, e.seed, e.entry_type) for e in shape.entrants]
     cmp = compare_to_entries(shape, ours)

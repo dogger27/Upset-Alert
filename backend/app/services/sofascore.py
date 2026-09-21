@@ -637,6 +637,27 @@ def _toks(name: str) -> frozenset:
     return frozenset(_norm(name).split())
 
 
+_HYPHENS = "-\u2010\u2011\u2012\u2013"
+
+
+def _joined_toks(name: str) -> frozenset:
+    """The words with every hyphen closed up instead of spaced.
+
+    A HYPHEN IS TWO SPELLINGS. 2026 Korea Open (draw 146): our wildcards
+    "Park So-hyun" and "Ku Yeon-woo" are "Sohyun Park" and "Yeonwoo Ku" in
+    Sofascore's field. `_norm` spaces the hyphen, so {park, so, hyun} could
+    never equal {sohyun, park}, and both entries went unresolved — no live
+    score could reach their matches. Tried as well as `_toks`, never instead:
+    "Auger-Aliassime" is two words in every source.
+    """
+    return frozenset(_norm(re.sub(f"[{_HYPHENS}]", "", name or "")).split())
+
+
+def _spellings(name: str) -> set:
+    """Every token set a name may be written as: split and joined."""
+    return {_toks(name), _joined_toks(name)} - {frozenset()}
+
+
 def _surname(name: str) -> str:
     parts = _norm(name).split()
     return parts[-1] if parts else ""
@@ -732,11 +753,12 @@ def _search_terms(draw) -> list:
 
 
 class _Candidate:
-    __slots__ = ("toks", "surname", "initials", "team")
+    __slots__ = ("toks", "joined", "surname", "initials", "team")
 
     def __init__(self, team: dict):
         name = team.get("name") or ""
         self.toks = _toks(name)
+        self.joined = _joined_toks(name)
         self.surname = _surname(name)
         self.initials = _initials(name)
         self.team = team
@@ -757,8 +779,13 @@ def _match_one(name: str, nationality: Optional[str],
         return None, None
 
     sorted_ours = " ".join(sorted(ours))
+    joined = _joined_toks(name)
     attempts = (
         ("exact", [c for c in cands if c.toks == ours]),
+        # Strict, like "exact", so it is tried before every loose rule: the
+        # same words once each side's hyphens are closed up. Both sides, since
+        # the hyphen may be ours ("Park So-hyun") or theirs ("Ye-Xin Ma").
+        ("joined", [c for c in cands if c.joined == joined]),
         ("subset", [c for c in cands if ours < c.toks]),
         ("superset", [c for c in cands if len(c.toks) >= 2 and c.toks < ours]),
         ("fuzzy", [c for c in cands if SequenceMatcher(
@@ -1133,7 +1160,7 @@ async def _resolve_against_field(draw: Draw, entries: list) -> Optional[tuple]:
 
     Returns (uid, season_id, field) or None.
     """
-    ours = [(_toks(e.name), e) for e in entries if e.name]
+    ours = [(_spellings(e.name), e) for e in entries if e.name]
     if not ours:
         return None
 
@@ -1167,8 +1194,8 @@ async def _resolve_against_field(draw: Draw, entries: list) -> Optional[tuple]:
         # Overlap is scored on the NAMES, but the raw cuptree is what gets
         # handed back — the caller needs the unfilled slots to tell a
         # half-published bracket from a complete one.
-        theirs = {_toks(t.get("name") or "") for t in named}
-        overlap = sum(1 for ts, _ in ours if ts in theirs) / len(ours)
+        theirs = set().union(*(_spellings(t.get("name") or "") for t in named))
+        overlap = sum(1 for ts, _ in ours if ts & theirs) / len(ours)
         if best is None or overlap > best[0]:
             best = (overlap, cand["id"], season["id"], field)
 
