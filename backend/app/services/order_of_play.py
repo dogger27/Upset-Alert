@@ -339,6 +339,58 @@ def _venue_today(venue_tz: str | None) -> date:
     return date.today()
 
 
+async def _confirmed_start(draw, stored: date) -> date:
+    """The start date an alarm below may JUDGE on — asked of the event page.
+
+    ASK THE PAGE BEFORE ACCUSING IT. While `wiki_page_id is None` nothing has
+    ever read the singles infobox, so start_date is still exactly what
+    discovery seeded: the Monday of the tournament's week, snapped from a
+    rowspan cell that covers the whole week. For an extended-format event that
+    Monday is days early — 2026 Chengdu and Hangzhou both really start on the
+    Wednesday, moved around the Laver Cup — and "play started today" read off
+    it is simply false.
+
+    Both alarms below did exactly that at 00:12 on 21 September and reported
+    two tournaments as under way with no sheet, two days before either had put
+    a ball in play. _check_draw_health and sofa_resolver already ask the event
+    page for precisely this reason (commit 2df1fa3d); these two were the rest
+    of the same class, and the class is not "a date that has not been corrected
+    yet" but "a date nobody has confirmed, being used as evidence".
+
+    Same source, same cache, no write — and only ever called on the branch that
+    is about to accuse, so an ordinary pass over an ordinary draw costs nothing.
+    Falls back to the stored date whenever the page cannot be read or has no
+    page to read: an unreachable event page is not a reason to go quiet.
+    """
+    if draw.wiki_page_id is not None:
+        return stored                     # the infobox has been read; this IS the date
+    from app.services.scraper import confirm_start_date
+    try:
+        return await confirm_start_date(
+            draw.wiki_page_title, draw.year, draw.gender, stored) or stored
+    except Exception as exc:
+        logger.debug("Event-page start check failed for draw %s: %s", draw.id, exc)
+        return stored
+
+
+async def _stand_down(dedup_key: str, detail: dict, name: str, gender: str,
+                      stored: date, confirmed: date, what: str) -> None:
+    """Record an alarm declining to fire because the date it rested on was a guess.
+
+    Info, not silence. The check standing down is the interesting part, and the
+    reason it stood down is the only thing that would explain, months later, why
+    a tournament that "started" on Monday was never asked for a sheet.
+    """
+    await app_log(
+        "info", "order_of_play",
+        f"No {what} for '{name}' ({gender}) yet, and that is on schedule: the "
+        f"event page starts it {confirmed}, not the stored {stored}.",
+        {**detail, "stored_start_date": str(stored),
+         "event_page_start_date": str(confirmed)},
+        dedup_key=dedup_key, dedup_hours=24,
+    )
+
+
 async def _alert_missing_oop() -> None:
     """Say so when a tournament is under way and we still have no order of play.
 
@@ -369,6 +421,13 @@ async def _alert_missing_oop() -> None:
             continue                      # not started; nothing is wrong yet
         if end and today > end:
             continue                      # over, and it never had one — too late to matter
+        confirmed = await _confirmed_start(draw, start)
+        if confirmed > today:
+            await _stand_down(
+                f"oop_missing_not_due_{draw.id}", {"draw_id": draw.id},
+                tournament.name, draw.gender, start, confirmed, "order of play")
+            continue
+        start = confirmed
         why = ("no ATP tournament id on record"
                if not tournament.wta_live_scoring_id and not tournament.atp_tournament_id
                else "the published file never appeared")
@@ -878,17 +937,29 @@ async def _alert_missing_schedule() -> None:
     after today" was true of a day nobody had played yet.
     """
     async with AsyncSessionLocal() as db:
-        rows = (await db.execute(
-            select(Tournament.id, Tournament.name,
-                   func.min(Draw.start_date), func.max(Draw.end_date),
-                   func.max(Draw.venue_timezone))
-            .join(Draw, Draw.tournament_id == Tournament.id)
-            .where(Draw.status != "completed",
-                   Draw.start_date.isnot(None))
-            .group_by(Tournament.id))).all()
+        # The draws themselves, aggregated here rather than in SQL: the question
+        # is asked per tournament but answered per draw, because whether a start
+        # date may be believed is a fact about the individual draw's wiki page
+        # (see _confirmed_start). A tournament can hold one draw whose infobox
+        # has been read and one still carrying discovery's placeholder, and
+        # func.min() over the two cannot tell them apart.
+        by_tournament: dict[int, tuple[str, list]] = {}
+        for tournament, draw in (await db.execute(
+                select(Tournament, Draw)
+                .join(Draw, Draw.tournament_id == Tournament.id)
+                .where(Draw.status != "completed",
+                       Draw.start_date.isnot(None)))).all():
+            by_tournament.setdefault(tournament.id, (tournament.name, []))[1].append(draw)
 
-        for tid, name, start, end, venue_tz in rows:
+        accused = []
+        for tid, (name, draws) in by_tournament.items():
+            venue_tz = max((d.venue_timezone for d in draws if d.venue_timezone),
+                           default=None)
             today = _venue_today(venue_tz)
+            starts = [s for s in (_as_date(d.start_date) for d in draws) if s]
+            ends = [e for e in (_as_date(d.end_date) for d in draws) if e]
+            start = min(starts) if starts else None
+            end = max(ends) if ends else None
             # Under way, or starting tomorrow — the point by which a sheet
             # exists in the real world, so its absence here is ours.
             if start is None or start > today + timedelta(days=1):
@@ -901,12 +972,30 @@ async def _alert_missing_schedule() -> None:
                     ScheduleEntry.play_date >= today))).scalar_one()
             if have:
                 continue
-            await app_log(
-                "warning", "order_of_play",
-                f"No order of play stored for '{name}' — it runs {start} to {end} "
-                f"and there is nothing on or after {today}. The sheet is "
-                f"published by now, so this is a fetch or a parse failing "
-                f"quietly, not a tournament that has not posted one.",
-                {"tournament_id": tid, "start_date": str(start),
-                 "end_date": str(end)},
-                dedup_key=f"oop_missing_{tid}", dedup_hours=12)
+            accused.append((tid, name, draws, today, start, end))
+
+    # Out of the session before anything touches the network — confirming a
+    # start date is an HTTP round trip, and a read transaction left open across
+    # one is how a cheap check becomes a long one.
+    for tid, name, draws, today, start, end in accused:
+        # About to accuse — so confirm the date being accused on. Last, because
+        # by here every cheaper reason to stay quiet has been ruled out.
+        refined = [await _confirmed_start(draw, stored)
+                   for draw, stored in ((d, _as_date(d.start_date)) for d in draws)
+                   if stored]
+        confirmed = min(refined) if refined else start
+        if confirmed > today + timedelta(days=1):
+            await _stand_down(
+                f"oop_no_schedule_not_due_{tid}", {"tournament_id": tid},
+                name, draws[0].gender, start, confirmed, "order of play stored")
+            continue
+        start = confirmed
+        await app_log(
+            "warning", "order_of_play",
+            f"No order of play stored for '{name}' — it runs {start} to {end} "
+            f"and there is nothing on or after {today}. The sheet is "
+            f"published by now, so this is a fetch or a parse failing "
+            f"quietly, not a tournament that has not posted one.",
+            {"tournament_id": tid, "start_date": str(start),
+             "end_date": str(end)},
+            dedup_key=f"oop_missing_{tid}", dedup_hours=12)

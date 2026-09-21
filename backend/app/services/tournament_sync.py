@@ -223,6 +223,51 @@ async def _apply_update(
     # Nothing could then record the draw as finished, so it silently dropped out
     # of the week's digest and its predictors lost their draw history.
     shape_frozen = dates_frozen or existing.draw_released_direct_at is not None
+
+    # THE SEASON PAGE NAMES A WEEK, NOT A DAY.
+    #
+    # Its date cell is a rowspan covering every event in the week, so discovery
+    # snaps whatever it reads to the Monday (see discovery.add). The one fact it
+    # carries is therefore WHICH WEEK the event is in — the day of the week is
+    # an artefact of the snapping, not information.
+    #
+    # The event page's infobox carries the real first day, and
+    # _refresh_dates_from_event_page writes it here while a draw is still
+    # upcoming. 2026 Chengdu and Hangzhou both start on the WEDNESDAY, moved to
+    # work around the Laver Cup; both were seeded 21 September and corrected to
+    # the 23rd. Overwriting that with the Monday is not a correction, it is a
+    # loss — and because the correction and this sync are both daily jobs, the
+    # same correction was made and lost again every day from 16 to 20 September,
+    # leaving start_date permanently two days early with a closing_time derived
+    # from the date it no longer held.
+    #
+    # That is not cosmetic. A start_date in the past reads as "active" the
+    # moment the draw is released, which LOCKS PICKS — the release that should
+    # have opened Chengdu for picking would have closed it, two days early. And
+    # every health check that asks "has play started" believed it had: the
+    # order-of-play alarms reported both events as under way with no sheet, at
+    # 00:12 on 21 September, for tournaments that do not start until the 23rd.
+    #
+    # The clause above (`first_match_at is not None`) was written for exactly
+    # this and cannot reach it: an unreleased draw has never had a first ball
+    # observed, which is the whole period in which the event page is the only
+    # source there is.
+    #
+    # So the season page may only move a date to a DIFFERENT WEEK — that is real
+    # news, a rescheduled event. Inside the same week the stored date is at
+    # least as precise as the guess, and usually more.
+    same_week = (
+        discovered.start_date is not None
+        and existing.start_date is not None
+        and tournament_monday(existing.start_date) == tournament_monday(discovered.start_date)
+    )
+    eff_start = existing.start_date if same_week else discovered.start_date
+    # The end date travels with it: both are written in one breath by the event
+    # page, so keeping one and taking the other would mix two sources. Falls
+    # back to the season page's when nothing has been stored yet.
+    eff_end = (existing.end_date if same_week and existing.end_date
+               else discovered.end_date)
+
     fields = [
         ("wiki_page_title", discovered.wiki_page_title),
         ("name", discovered.name),
@@ -238,19 +283,22 @@ async def _apply_update(
         ]
     if not dates_frozen:
         fields += [
-            ("start_date", discovered.start_date),
-            ("week", tennis_week(discovered.start_date, existing.year) if discovered.start_date else None),
-            ("end_date", discovered.end_date),
+            ("start_date", eff_start),
+            ("week", tennis_week(eff_start, existing.year) if eff_start else None),
+            ("end_date", eff_end),
         ]
     for attr, val in fields:
         if val is not None and getattr(existing, attr) != val:
             setattr(existing, attr, val)
             changed = True
 
-    # Recalculate estimated draw release dates using category-specific history
-    if not dates_frozen and discovered.start_date and discovered.category:
+    # Recalculate estimated draw release dates using category-specific history.
+    # From the date we believe, not the one we just declined to store: a release
+    # estimate derived from the week-Monday for a Wednesday-start event is two
+    # days early, and release_deadline hangs off it.
+    if not dates_frozen and eff_start and discovered.category:
         direct, qual = await calculate_draw_release_dates(
-            discovered.start_date, discovered.category, discovered.gender, db=db
+            eff_start, discovered.category, discovered.gender, db=db
         )
         if direct and existing.draw_release_direct != direct:
             existing.draw_release_direct = direct
