@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { categoryShort, eventTour, tourLabel } from './category.js'
+import { categoryShort, eventTour, tierWord, tourLabel } from './category.js'
 
 /* ── eventTour ────────────────────────────────────────────────────────────
  * The Schedule screen's tournament pills are tinted by tour — blue ATP, pink
@@ -46,4 +46,32 @@ test('the tier word is the short one', () => {
 test('the tour label names the tour, never the gender', () => {
   assert.equal(tourLabel({ gender: 'M', category: 'ATP 1000' }), 'ATP 1000')
   assert.equal(tourLabel({ gender: 'F', category: 'WTA 250' }), 'WTA 250')
+})
+
+
+/* ── tierWord ─────────────────────────────────────────────────────────────
+ * The number the Schedule's pills print above the tournament name (owner,
+ * 2026-09-21).
+ */
+test('one tier, said once', () => {
+  assert.equal(tierWord(['ATP 250']), '250')
+  assert.equal(tierWord(['WTA 1000']), '1000')
+  assert.equal(tierWord(['Grand Slam']), 'GS')
+  // Both halves of a combined week at the same tier: still one number.
+  assert.equal(tierWord(['ATP 250', 'ATP 250']), '250')
+})
+
+test('a combined week whose halves differ keeps both', () => {
+  // Beijing: a WTA 1000 beside an ATP 500. "1000" alone would be a claim
+  // about the men's draw that is not true.
+  assert.equal(tierWord(['WTA 1000', 'ATP 500']), '1000/500')
+  assert.equal(tierWord(['ATP 500', 'WTA 1000']), '500/1000')
+})
+
+test('nothing known prints nothing, not a placeholder', () => {
+  // A dash above a name reads as a MISSING number; an empty line reads as a
+  // tournament whose tier we have not been told, which is the truth.
+  assert.equal(tierWord([]), '')
+  assert.equal(tierWord(null), '')
+  assert.equal(tierWord([null, '', undefined]), '')
 })

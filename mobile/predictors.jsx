@@ -366,7 +366,7 @@ const s = StyleSheet.create({
      whole answer rather than qualifying one column of it. */
   withheld: { ...T.small, color: C.muted, textAlign: 'center',
               paddingVertical: S.lg, paddingHorizontal: S.md,
-              lineHeight: leading(T.small.fontSize, 1.45) },
+              lineHeight: leading(T.small.fontSize * 1.45) },
   bucket: { marginBottom: S.xs },
   bucketHead: {
     flexDirection: 'row', alignItems: 'center', gap: 6,

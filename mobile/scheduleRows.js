@@ -82,6 +82,7 @@ export function tournamentsOf(draws) {
     const cur = by.get(d.tournament_id)
     if (cur) {
       if (!cur.genders.includes(d.gender)) cur.genders.push(d.gender)
+      if (d.category && !cur.categories.includes(d.category)) cur.categories.push(d.category)
     } else {
       by.set(d.tournament_id, {
         id: d.tournament_id,
@@ -91,6 +92,15 @@ export function tournamentsOf(draws) {
         // still here for the places with room, and for a spoken label.
         short: d.tournament_short_name || d.name,
         genders: [d.gender],
+        /* THE TIERS, RAW, for a control that shows one above the name
+           (owner, 2026-09-21). Distinct and in arrival order, so a combined
+           week whose halves differ — Beijing is a WTA 1000 beside an ATP 500 —
+           keeps both rather than letting one half's number speak for the
+           event. Kept as the CATEGORY and not the short word on purpose: this
+           module imports nothing, because its test loads it through a data:
+           URL that cannot resolve a relative specifier (see the header), and
+           the word for a tier belongs to category.js anyway. */
+        categories: d.category ? [d.category] : [],
       })
     }
   }

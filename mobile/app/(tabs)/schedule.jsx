@@ -39,11 +39,11 @@ import { SWIPE_PX, SWIPE_VX, swipeStep } from '../../swipeDay'
 import { beginSwipe, endSwipe, unlessSwiping } from '../../swipeGuard'
 import { dayLabels, relativeDayWord } from '../../dayLabels'
 import { rowInTournaments } from '../../scheduleRows'
-import { eventTour } from '../../category'
+import { eventTour, tierWord } from '../../category'
 import { MatchCard } from '../../scorecard'
 import { matchLine } from '../../matchLine'
 import { courtGroups } from '../../courtGroups'
-import { textWidth } from '../../measure'
+import { fitPillSize, textWidth } from '../../measure'
 import { bestLeftColumn } from '../../nameColumns'
 import { groupPastDay } from '../../pastGroups'
 import { stampsFor } from '../../logos'
@@ -293,6 +293,23 @@ export default function ScheduleScreen() {
   // recompute on every keystroke of state elsewhere. Memoised on the identity
   // of the fetched data instead.
   const all = useMemo(() => day.data?.entries || [], [day.data])
+  /* ONE LINE, ONE SIZE (owner, 2026-09-21). The pills used to wrap onto a
+     second row, which cost a row of the screen and moved the list down as the
+     week changed. They now share a text size chosen to make the row fit the
+     width it actually has — measured, not guessed, because RN cannot say
+     whether a string fits until it has drawn it (measure.js).
+
+     ONE size for all of them rather than each shrunk to its own box: a row
+     where "Korea" is set larger than "Hangzhou" reads as a mistake, and these
+     are a set of equals. */
+  const [pillRoom, setPillRoom] = useState(null)
+  const pillLabels = useMemo(
+    () => events.map(t => ({ name: t.short || t.name, tier: tierWord(t.categories) })),
+    [events])
+  const pillSize = useMemo(() => fitPillSize(pillLabels, {
+    avail: pillRoom, family: 'Archivo_700Bold', size: PILL_SIZE,
+    tierRatio: PILL_TIER_RATIO, chrome: PILL_CHROME, gap: PILL_GAP, min: 7,
+  }), [pillLabels, pillRoom])
   const toggleEvent = id => {
     const cur = new Set(eventSel ?? events.map(t => t.id))
     if (cur.has(id)) cur.delete(id)
@@ -618,7 +635,8 @@ export default function ScheduleScreen() {
             hidden entirely while the page is pinned to one event, where the
             boxes would name other tournaments and decide nothing. */}
         {pinnedEvent == null && events.length > 1 && (
-          <View style={s.events}>
+          <View style={s.events}
+                onLayout={e => setPillRoom(e.nativeEvent.layout.width)}>
             {events.map(t => {
               const on = !eventSel || eventSel.has(t.id)
               // GREYED WHEN IT HAS NOTHING ON THIS DAY (owner, 2026-09-17): the
@@ -632,6 +650,7 @@ export default function ScheduleScreen() {
                  the two is a gradient decision on a small pill and there is no
                  such token to borrow (theme.js TOUR.X). */
               const tint = TOUR_BAR[eventTour(t.genders)]
+              const tier = tierWord(t.categories)
               return (
                 <Pressable key={t.id} onPress={() => toggleEvent(t.id)}
                            style={[s.eventBox,
@@ -640,14 +659,32 @@ export default function ScheduleScreen() {
                                    !playing && s.eventIdle]}
                            accessibilityRole="button"
                            accessibilityState={{ selected: on }}
-                           accessibilityLabel={playing ? t.name : `${t.name}, no matches this day`}>
+                           accessibilityLabel={[t.name, tier, playing ? null : 'no matches this day']
+                             .filter(Boolean).join(', ')}>
+                  {/* THE TIER ABOVE THE NAME (owner, 2026-09-21), centred over
+                      it: "250" says what the week is worth, which is the
+                      second thing a reader wants after which tournament it
+                      is. Drawn only when we know it — an empty line would
+                      read as a number that failed to load. Quieter than the
+                      name and never the thing you read first. */}
+                  {tier ? (
+                    <Text style={[s.eventTier, on ? s.eventTierOn : { color: C.faint },
+                                  { fontSize: pillSize * PILL_TIER_RATIO,
+                                    lineHeight: leading(pillSize * PILL_TIER_RATIO * 1.2) }]}
+                          numberOfLines={1}>
+                      {tier}
+                    </Text>
+                  ) : null}
                   {/* THE PILL IS THE STATE (owner, 2026-09-20): lit when the
                       event is showing, quiet when it is not. A tick inside a
                       box said the same thing twice and cost 22pt of the row
                       that the names needed — which is also why these say the
                       SHORT name. The full name stays the spoken label, so
                       nothing is lost to a screen reader. */}
-                  <Text style={[s.eventName, on ? s.eventNameOn : { color: C.muted }]} numberOfLines={1}>
+                  <Text style={[s.eventName, on ? s.eventNameOn : { color: C.muted },
+                                { fontSize: pillSize,
+                                  lineHeight: leading(pillSize * 1.2) }]}
+                        numberOfLines={1}>
                     {t.short || t.name}
                   </Text>
                 </Pressable>
@@ -1271,6 +1308,17 @@ const TOURN_SMALL = eyebrowType({ size: 18, color: C.clayLight })
    outlived the ATP/WTA chips it was written for. */
 const TOUR_BAR = { ATP: '#2563eb', WTA: '#db2777' }
 
+/* THE TOURNAMENT PILLS' GEOMETRY, in one place. fitPillSize solves for a text
+   size using these numbers, and the stylesheet draws with them — so they are
+   constants rather than two copies that can drift by a point and overflow the
+   row the solver promised would fit.
+   PILL_CHROME is the horizontal padding AND the border, both sides. */
+const PILL_SIZE = 11          // the size a roomy row keeps; never exceeded
+const PILL_TIER_RATIO = 0.8   // the tier line, relative to the name
+const PILL_PAD = 14           // air either side of the text (owner, 2026-09-21)
+const PILL_GAP = 6
+const PILL_CHROME = PILL_PAD * 2 + 2
+
 const s = StyleSheet.create({
   /* FAR LESS AIR AROUND A COURT NAME (owner, 2026-09-17): the group's
      margin above it is given back and then some, and the gap beneath it is
@@ -1529,11 +1577,18 @@ const s = StyleSheet.create({
   tabOn: { backgroundColor: C.greenDeep, borderColor: C.greenLit },
   /* The tournament filter. A wrapping row, because two names can be longer
      than a phone and a horizontal scroller hides its own overflow. */
-  events: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  /* ONE LINE, NOT A WRAPPING BLOCK (owner, 2026-09-21): the size is solved
+     to make the row fit, so wrapping would only ever hide a solver bug. */
+  events: { flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'stretch', gap: PILL_GAP },
   eventBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    borderRadius: R.pill, borderWidth: 1, borderColor: C.border,
-    backgroundColor: C.card, paddingHorizontal: 10, paddingVertical: 5,
+    /* A COLUMN NOW: the tier sits above the name (owner, 2026-09-21). */
+    flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    /* ONLY JUST ROUNDED (owner, 2026-09-21). At R.pill these read as buttons
+       and, two lines tall, as lozenges; R.xs keeps a corner you notice only
+       if you look for it, and lets them read as labels. */
+    borderRadius: R.xs, borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.card,
+    paddingHorizontal: PILL_PAD, paddingVertical: 5,
     flexShrink: 1,
   },
   // Greyed when the tournament has nothing on the day. This line once sat
@@ -1544,7 +1599,14 @@ const s = StyleSheet.create({
   // meaning.
   eventBoxOn: { backgroundColor: C.green, borderColor: C.green },
   eventNameOn: { color: '#fff' },
-  eventName: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', flexShrink: 1 },
+  /* fontSize and lineHeight are set at render from the solved size, so they
+     are deliberately absent here — T.tiny's would silently win otherwise. */
+  eventName: { color: C.ink, fontFamily: 'Archivo_700Bold', textAlign: 'center', flexShrink: 1 },
+  // The tier, centred over the name and quieter than it: it says what the
+  // week is worth, which nobody reads before knowing which week it is.
+  eventTier: { fontFamily: 'Archivo_700Bold', color: C.muted, textAlign: 'center',
+               letterSpacing: 0.4, flexShrink: 1 },
+  eventTierOn: { color: '#ffffffcc' },
 
   // Rows breathe: the gap is what separates one match from the next, and at
   // S.xs the cards read as a single ruled block rather than a stack of cards.
