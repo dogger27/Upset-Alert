@@ -1288,8 +1288,7 @@ async def global_standings(tournament_id: int, db: AsyncSession = Depends(get_db
                          has_upset_pick=has_upset_map[s.user_id],
                          best_rank=ranges.get(s.user_id, (None, None))[0],
                          worst_rank=ranges.get(s.user_id, (None, None))[1],
-                         final_guess_aces=(guesses.get(s.user_id) or (None, None))[0],
-                         final_guess_minutes=(guesses.get(s.user_id) or (None, None))[1],
+                         **final_tiebreak.guess_fields(guesses.get(s.user_id)),
                          tie_sets_diff=s.tie_sets_diff,
                          tie_aces_diff=s.tie_aces_diff, tie_minutes_diff=s.tie_minutes_diff,
                          podium_locked=podium_locked(ranges.get(s.user_id)))

@@ -46,6 +46,17 @@ async def guesses_for(db, draw_id: int) -> dict[int, tuple]:
     return {g.user_id: (g.final_sets, g.final_aces, g.final_duration_min) for g in rows}
 
 
+def guess_fields(guess: Optional[tuple]) -> dict:
+    """A guesses_for tuple as the standings row's named fields.
+
+    By name, once: the standings rows read [0] as the aces and [1] as the
+    minutes — the layout from before the sets question — and so served the
+    sets guess as the aces and the aces guess as the minutes (2026-09-21)."""
+    g_sets, g_aces, g_min = guess or (None, None, None)
+    return {"final_guess_sets": g_sets, "final_guess_aces": g_aces,
+            "final_guess_minutes": g_min}
+
+
 _DEFAULTS: dict = {}
 
 

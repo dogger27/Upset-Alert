@@ -706,18 +706,24 @@ async def capture_final_stats() -> int:
                 home_ids = set(_event_player_ids(ev.get("homeTeam") or {}))
                 side = "home" if (winner and winner.sofa_player_id in home_ids) else "away"
                 stats = await stats_for(final.sofa_event_id, finished=True)
-                rows = (stats or {}).get("ALL") or []
+                # THE ROWS LIVE UNDER `periods`. stats_for returns
+                # {"periods": {"ALL": [...], "1ST": [...]}, "order", ...}; this
+                # read `stats["ALL"]`, which is never there, so every final
+                # ever captured — Guadalajara, SP Open, both US Opens — came
+                # back with no aces while Sofascore held them (2026-09-21).
+                rows = ((stats or {}).get("periods") or {}).get("ALL") or []
                 row = next((r for r in rows if r.get("label") == "Aces"), None)
                 if row is not None:
                     aces = int((row.get(side) or [0])[0] or 0)
 
             # ── WRITE WHAT IS KNOWN ──────────────────────────────────────────
             # This used to discard all three the moment one was missing, and
-            # the one that goes missing is the aces: Sofascore publishes no
-            # statistics at all for some events — the 2026 Guadalajara final
-            # returned zero rows — so a real, finished final recorded nothing,
-            # including the SETS, which need no network and were sitting in the
-            # stored score all along (2026-09-20).
+            # the one that went missing was the aces — so a real, finished
+            # final recorded nothing, including the SETS, which need no network
+            # and were sitting in the stored score all along (2026-09-20).
+            # (The aces were missing because of the misread above, not because
+            # Sofascore had none: the Guadalajara final's statistics carry nine
+            # rows under ALL. Keeping what is known is still right.)
             #
             # An actual left null is not a guess of zero: diffs_for returns no
             # gap on that key, so every bracket is level on it and the tie
@@ -747,7 +753,12 @@ async def capture_final_stats() -> int:
                 f"{aces} aces" if aces is not None else None,
                 f"{minutes} min" if minutes is not None else None,
             ]))
-            await app_log("info", "scoring",
+            # A final WITH a Sofascore event and still no aces is not an
+            # expected state — that is how the misread above went unseen across
+            # four finals, logged at info. Once per draw: this line runs only
+            # when a field is first written, not on every hourly retry.
+            unexpected = bool(final.sofa_event_id) and "final_winner_aces" in missing
+            await app_log("warning" if unexpected else "info", "scoring",
                           f"{draw.name}: final played — {said}"
                           + (f"; still no {', '.join(m.split('final_')[-1] for m in missing)}"
                              if missing else "; the tiebreak is now decided"),
