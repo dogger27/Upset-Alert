@@ -308,7 +308,7 @@ export default function ScheduleScreen() {
     [events])
   const pillSize = useMemo(() => fitPillSize(pillLabels, {
     avail: pillRoom, family: 'Archivo_700Bold', size: PILL_SIZE,
-    tierRatio: PILL_TIER_RATIO, chrome: PILL_CHROME, gap: PILL_GAP, min: 7,
+    tierRatio: PILL_TIER_RATIO, chrome: PILL_CHROME, gap: PILL_GAP, min: 6,
   }), [pillLabels, pillRoom])
   const toggleEvent = id => {
     const cur = new Set(eventSel ?? events.map(t => t.id))
@@ -671,7 +671,7 @@ export default function ScheduleScreen() {
                     <Text style={[s.eventTier, on ? s.eventTierOn : { color: C.faint },
                                   { fontSize: pillSize * PILL_TIER_RATIO,
                                     lineHeight: leading(pillSize * PILL_TIER_RATIO * 1.2) }]}
-                          numberOfLines={1}>
+                          numberOfLines={1} ellipsizeMode="clip">
                       {tier}
                     </Text>
                   ) : null}
@@ -684,7 +684,7 @@ export default function ScheduleScreen() {
                   <Text style={[s.eventName, on ? s.eventNameOn : { color: C.muted },
                                 { fontSize: pillSize,
                                   lineHeight: leading(pillSize * 1.2) }]}
-                        numberOfLines={1}>
+                        numberOfLines={1} ellipsizeMode="clip">
                     {t.short || t.name}
                   </Text>
                 </Pressable>
@@ -1313,11 +1313,15 @@ const TOUR_BAR = { ATP: '#2563eb', WTA: '#db2777' }
    constants rather than two copies that can drift by a point and overflow the
    row the solver promised would fit.
    PILL_CHROME is the horizontal padding AND the border, both sides. */
-const PILL_SIZE = 11          // the size a roomy row keeps; never exceeded
+const PILL_SIZE = 13          // the size a roomy row keeps; never exceeded
 const PILL_TIER_RATIO = 0.8   // the tier line, relative to the name
-const PILL_PAD = 14           // air either side of the text (owner, 2026-09-21)
+/* NO AIR EITHER SIDE (owner, 2026-09-21: "show text edge to edge of each box -
+   no margin"). It was 14, which spent 150pt of a 358pt row on padding and
+   forced the names down until they truncated. The box is now exactly as wide
+   as the wider of its two lines. */
+const PILL_PAD = 0
 const PILL_GAP = 6
-const PILL_CHROME = PILL_PAD * 2 + 2
+const PILL_CHROME = PILL_PAD * 2 + 2   // + the 1pt border either side
 
 const s = StyleSheet.create({
   /* FAR LESS AIR AROUND A COURT NAME (owner, 2026-09-17): the group's
@@ -1589,6 +1593,11 @@ const s = StyleSheet.create({
     borderRadius: R.xs, borderWidth: 1, borderColor: C.border,
     backgroundColor: C.card,
     paddingHorizontal: PILL_PAD, paddingVertical: 5,
+    /* flexShrink STAYS, as the last guard against a row wider than the phone:
+       the solver is what keeps the text whole, and if it is ever wrong it is
+       better to squeeze the boxes than to push the last one off the screen.
+       The Texts clip rather than ellipsize, so a squeeze can never print "…"
+       (feedback_name_shortening_ladder — this project does not print it). */
     flexShrink: 1,
   },
   // Greyed when the tournament has nothing on the day. This line once sat
@@ -1604,8 +1613,12 @@ const s = StyleSheet.create({
   eventName: { color: C.ink, fontFamily: 'Archivo_700Bold', textAlign: 'center', flexShrink: 1 },
   // The tier, centred over the name and quieter than it: it says what the
   // week is worth, which nobody reads before knowing which week it is.
+  /* NO letterSpacing. It was 0.4, which adds a trailing gap after the last
+     digit that fitPillSize does not model — about a point per pill, which is
+     exactly the slack the solver keeps for kerning. Spending it twice is how
+     the row overflows again. */
   eventTier: { fontFamily: 'Archivo_700Bold', color: C.muted, textAlign: 'center',
-               letterSpacing: 0.4, flexShrink: 1 },
+               flexShrink: 1 },
   eventTierOn: { color: '#ffffffcc' },
 
   // Rows breathe: the gap is what separates one match from the next, and at

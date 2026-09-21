@@ -43,7 +43,7 @@ ok('five pills shrink to fit a phone', five < 11 && five > 7, `(${five.toFixed(2
 
 // Having actually fitted is the whole point, so check the arithmetic closes.
 const widthAt = (pills, size, o = FIT) => pills.reduce((sum, p) => sum + Math.max(
-  textWidth(p.name, o.family, size), textWidth(p.tier, o.family, size * 0.8),
+  textWidth(p.name, o.family, size), textWidth(p.tier, o.family, size * (o.tierRatio ?? 0.8)),
 ) + o.chrome, 0) + o.gap * (pills.length - 1)
 ok('the fitted row really fits', widthAt(PILLS, five) <= 360 + 1e-6,
    `(${widthAt(PILLS, five).toFixed(1)} <= 360)`)
@@ -71,5 +71,40 @@ ok('null pills, no change', fit(null, 360) === 11)
 ok('no width, no change', fitPillSize(PILLS, { ...FIT, avail: 0 }) === 11)
 ok('empty labels do not divide by zero',
    Number.isFinite(fit([{ name: '', tier: '' }], 360)))
+
+
+/* THE REGRESSION (owner, 2026-09-21: "What a FAIL!"). Solving for the row to
+   come out EXACTLY the available width truncated every name: the advance
+   tables carry no kerning, and a Text about to run out of room reserves space
+   for the ellipsis it is going to draw. An exact fit is therefore a slight
+   overflow, flex absorbs it by squeezing every box, and the reader sees
+   "Cheng…". The fitted row must come out STRICTLY NARROWER than the space it
+   was given. */
+// 360pt is wide enough that the solve BINDS without hitting the floor, which
+// is where the slack has to show up.
+const tight = fit(PILLS, 360)
+const tightWidth = widthAt(PILLS, tight)
+ok('a fitted row leaves room for kerning', tightWidth < 360,
+   `(${tightWidth.toFixed(1)} < 360, ${(360 - tightWidth).toFixed(1)}pt spare)`)
+ok('the slack is about a point per pill',
+   360 - tightWidth >= PILLS.length && 360 - tightWidth < PILLS.length * 3,
+   `(${(360 - tightWidth).toFixed(1)}pt for ${PILLS.length} pills)`)
+
+/* AT THE FLOOR IT MAY STILL OVERFLOW, and that is the right answer: there is
+   no size below the floor to shrink to. The screen absorbs it by letting the
+   boxes squeeze, and the Texts are set to CLIP rather than ellipsize, so even
+   this case cannot print "…" (feedback_name_shortening_ladder). */
+ok('a floored row is allowed to overflow rather than vanish',
+   fit(PILLS, 120) === 7 && widthAt(PILLS, 7) > 120)
+
+// Edge to edge: with the padding gone the owner's own five pills no longer
+// need to shrink at all, which is the point of taking it away.
+const EDGE = { ...FIT, size: 13, chrome: 2, min: 6 }
+const edgeSize = fitPillSize(PILLS, { ...EDGE, avail: 358 })
+ok('edge to edge, the real row keeps its full size', edgeSize === 13,
+   `(${edgeSize.toFixed(1)}pt)`)
+const edgeWidth = widthAt(PILLS, edgeSize, EDGE)
+ok('and still fits with room to spare', edgeWidth < 358,
+   `(${edgeWidth.toFixed(0)}pt of 358)`)
 
 console.log(fail ? `\n${fail} failed` : '\n  all passed'); process.exit(fail ? 1 : 0)

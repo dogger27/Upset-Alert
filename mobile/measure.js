@@ -67,12 +67,24 @@ export function textWidth(text, family, fontSize) {
  * which is the mistake adjustsFontSizeToFit makes in the other direction.
  *
  * `chrome` is one pill's horizontal padding AND border, both sides, in points.
+ *
+ * SLACK, AND WHY IT IS NOT OPTIONAL. The first version solved for the row to
+ * come out EXACTLY the available width, and every name truncated (owner,
+ * 2026-09-21: "What a FAIL!"). Two points of arithmetic were missing. The
+ * tables at the top of this file carry advance widths and no KERNING, which
+ * the header admits and leaves "covered by the caller's margin" — there was no
+ * margin to cover it. And a Text that runs out of room reserves space for the
+ * ellipsis it is about to draw, so being a hair too wide costs a hair PLUS an
+ * ellipsis. An exact fit is therefore always a slight overflow, flex shrinks
+ * every box to absorb it, and the reader sees "Cheng…". FitText leaves a point
+ * for the same reason; a row of pills needs one per pill.
  */
 export function fitPillSize(pills, { avail, family, size, tierRatio = 0.8,
-                                     chrome = 0, gap = 0, min = 7 } = {}) {
+                                     chrome = 0, gap = 0, min = 7,
+                                     slack = 1 } = {}) {
   const n = pills?.length || 0
   if (!n || !avail || !(size > 0)) return size
-  const fixed = n * chrome + gap * (n - 1)
+  const fixed = n * (chrome + slack) + gap * (n - 1)
   const unit = pills.reduce((sum, p) => sum + Math.max(
     textWidth(p?.name, family, 1),
     textWidth(p?.tier, family, tierRatio),
