@@ -46,6 +46,7 @@ from sqlalchemy import select
 
 from app.models.tournament import Draw, Tournament
 from app.services.discovery import DiscoveredTournament
+from app.services.tournament_sync import fold
 from app.services.wta_feed import HEADERS, TIMEOUT
 
 logger = logging.getLogger(__name__)
@@ -155,25 +156,21 @@ def to_discovered(item: dict) -> Optional[DiscoveredTournament]:
     )
 
 
-def _fold(v: str) -> str:
-    import unicodedata
-    n = unicodedata.normalize("NFKD", v or "")
-    return " ".join("".join(c for c in n if not unicodedata.combining(c)).casefold().split())
-
-
 async def _draw_by_city(db, d: DiscoveredTournament, year: int) -> Optional[Draw]:
-    """The one women's draw in this city that week, when the name did not match.
+    """The one women's draw in this city that week, whatever its level.
 
-    "UniCredit Iasi Open" did not match our "Iași Open" by name, and four WTA
-    250s shared its week, so the date fallback found four candidates and
-    declined. The tour's city ("IASI") against ours ("Iași") is the tie-break,
-    with diacritics folded. Exactly one, or nothing.
+    find_existing_match only looks inside the level the list states, and folds
+    diacritics itself — "UniCredit Iasi Open" in "IASI" now finds our "Iași
+    Open" there. This is what is left: the tour and we disagreeing on the
+    level, where the right draw is not among the candidates at all. Passed
+    as find_existing_match's fallback, so a tie this breaks is never reported
+    as ambiguous. Exactly one, or nothing.
     """
     if not d.city or not d.start_date:
         return None
     rows = (await db.execute(select(Draw).where(
         Draw.gender == "F", Draw.year == year, Draw.start_date.isnot(None)))).scalars().all()
-    hits = [r for r in rows if r.city and _fold(r.city) == _fold(d.city)
+    hits = [r for r in rows if r.city and fold(r.city) == fold(d.city)
             and abs((r.start_date - d.start_date).days) <= 7]
     return hits[0] if len(hits) == 1 else None
 
@@ -235,7 +232,7 @@ async def sync_wta_season(db, year: int, *, today: Optional[date] = None,
         report["seen"] += 1
         existing = await _draw_for(db, d.wta_id, year)
         if existing is None:
-            existing = await find_existing_match(db, d, year) or await _draw_by_city(db, d, year)
+            existing = await find_existing_match(db, d, year, fallback=_draw_by_city)
             if existing is not None and existing.tournament_id:
                 row = await db.get(Tournament, existing.tournament_id)
                 if row is not None and not row.wta_live_scoring_id:
