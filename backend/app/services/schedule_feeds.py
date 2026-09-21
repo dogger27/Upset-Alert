@@ -274,6 +274,36 @@ async def _stored_slots(db, tournament_id: int, day: date) -> list[tuple]:
     return list(slots.values())
 
 
+def rounds_by_pair(matches) -> dict:
+    """{frozenset of the two sides' surnames: round label} for the rows that
+    state one.
+
+    Keyed on the PAIR OF SURNAMES because that is the only thing the feeds and
+    a tour's PDF reliably agree on — the same reason `_surname` exists. Within
+    one tournament and one day a pair is unique, and a row whose pair is not
+    matched is simply left alone.
+
+    A pair that appears twice with DIFFERENT rounds is dropped rather than
+    guessed at: two rows for the same two players on one day means something
+    upstream is wrong, and a confident wrong round is worse than a blank one.
+    """
+    out: dict = {}
+    clashed = set()
+    for m in matches or []:
+        label = (getattr(m, "round", None) or "").strip()
+        a = {_surname(x) for x in (getattr(m, "side_a", None) or []) if _surname(x)}
+        b = {_surname(x) for x in (getattr(m, "side_b", None) or []) if _surname(x)}
+        if not label or not a or not b:
+            continue
+        key = frozenset(a | b)
+        if key in out and out[key] != label:
+            clashed.add(key)
+        out[key] = label
+    for key in clashed:
+        out.pop(key, None)
+    return out
+
+
 async def build_day_document(db, tournament, draws, day: date, season_year: int,
                              venue_tz: Optional[str]) -> Optional[dict]:
     """One day's schedule from the feeds: {url, bytes, parser, count, atp, wta,
@@ -364,7 +394,17 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
         return None
     reason = declined(meta)
     if reason:
-        return {"declined": reason, "count": len(matches), "sources": sources}
+        # THE ROUNDS SURVIVE THE DECLINE. A day is declined for want of COURTS
+        # and ordering, which is all the PDF is better at — the feed still knew
+        # which round every match was, and the ATP's sheet very often does not
+        # print one at all. Chengdu's 22 September qualifying arrived as eight
+        # rows with no court, so the day went to a PDF whose entire round
+        # column is absent, and every row rendered with a blank where "Q1"
+        # belongs while Hangzhou (whose feed was not declined) showed Q1
+        # (owner, 2026-09-21). Handing the rounds back lets the sheet keep the
+        # day and still say what it cannot read.
+        return {"declined": reason, "count": len(matches), "sources": sources,
+                "rounds": rounds_by_pair(matches)}
     return {"url": f"feeds://{'+'.join(sources)}/{day.isoformat()}", "bytes": doc, "parser": parser,
             "count": len(matches), "atp": sum(1 for m in matches if m.tour == "ATP"),
             "wta": sum(1 for m in matches if m.tour == "WTA"), "sources": sources}
