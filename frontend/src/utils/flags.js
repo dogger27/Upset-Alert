@@ -145,3 +145,21 @@ export function splitPlayerName(raw) {
     nat,
   }
 }
+
+/**
+ * The mark written after a name: its seeding, and how the player ENTERED.
+ *
+ * A seed sent as a field beats the sheet's digits (a resolved name comes from
+ * the bracket and has no brackets to parse), but the field is only a NUMBER.
+ * Letting it replace the whole printed mark threw away everything else the
+ * sheet said: Korea Open 2026-09-22 printed "[WC] [1] Jelena OSTAPENKO LAT"
+ * and the card read "OSTAPENKO [1]" (Fernandez's "[WC] [6]" went the same way
+ * the day before). So every printed tag that is not a number survives, and
+ * the field supplies the number.
+ */
+export function seedMark(printed, seedField) {
+  if (seedField == null) return printed || null
+  const tags = (printed || '').match(/\[[^\]]*\]/g) || []
+  const words = tags.filter(t => !/^\[\s*\d+\s*\]$/.test(t))
+  return [...words, `[${seedField}]`].join(' ')
+}
