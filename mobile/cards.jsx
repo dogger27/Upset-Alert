@@ -881,6 +881,9 @@ const u = StyleSheet.create({
      qualifier's green is saying. */
   roundChip: { borderColor: C.borderOn },
   roundChipText: { color: C.muted },
+  // Held open, not drawn: the bottom player's line reserves the round's column
+  // so both lines' entry chips share one right edge.
+  roundChipGhost: { opacity: 0 },
   // A three-letter code at the size that keeps its pill as wide as a WC's.
   badgeTextWide: { fontSize: 9.5 },
 })
@@ -969,11 +972,28 @@ export function EntryChip({ entryType }) {
  * it on a round label would say that twice and claim it about the match. Grey
  * keeps the round a label: the neutral border and a muted ink, no fill.
  */
-export function RoundChip({ round }) {
+/* `ghost` RESERVES THE COLUMN WITHOUT DRAWING IN IT (owner, 2026-09-21: "The
+ * player identifier ("Q", in this case) should be vertically aligned against
+ * the ... imaginary round box, and vertically aligned with other
+ * identifiers").
+ *
+ * A round belongs to the match, so it is drawn once, on the top player's line.
+ * That left the BOTTOM player's line with nothing in that column, so its entry
+ * chip slid right into the space and the two lines' chips stopped sharing an
+ * edge — a [Q] under an [R32] rather than under the [WC] above it.
+ *
+ * The second line therefore draws the same chip at opacity 0. Not a spacer of
+ * some measured width: the same component with the same label, so the column
+ * is exactly the round's own width whether the label is "R32" or "F", and no
+ * arithmetic can fall out of step with it. It is hidden from screen readers,
+ * which would otherwise read the round out twice per match.
+ */
+export function RoundChip({ round, ghost = false }) {
   if (!round) return null
   const label = String(round)
   return (
-    <View style={[u.entryChip, u.roundChip]}>
+    <View style={[u.entryChip, u.roundChip, ghost && u.roundChipGhost]}
+          accessibilityElementsHidden={ghost} importantForAccessibility={ghost ? 'no-hide-descendants' : 'auto'}>
       <Text style={[u.badgeText, label.length > 2 && u.badgeTextWide, u.roundChipText]}
             numberOfLines={1}>
         {label}
