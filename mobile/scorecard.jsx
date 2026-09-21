@@ -15,7 +15,7 @@
  */
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { EntryChip, FlagSlot, PlayerName, PosBadge } from './cards'
+import { EntryChip, FlagSlot, PlayerName, PosBadge, RoundChip } from './cards'
 import { Bump } from './fx'
 import { useFlashOnChange } from './scoreFx'
 import { leading } from './fontScale.js'
@@ -45,7 +45,7 @@ function ServeMark({ size = 14 }) {
 /* The server's mark sits just left of the server's score, in every view
    (owner, 2026-09-17). The slot is held on both rows, so the names and
    the sets stay in line. */
-export function MatchCard({ e, scale = 1, badges = true }) {
+export function MatchCard({ e, scale = 1, badges = true, round = null }) {
   const live = isLive(e)
   const stopped = isSuspended(e) || e.status === 'postponed' || e.status === 'to_be_completed'
   const lp = e.live_point ?? null
@@ -127,6 +127,13 @@ export function MatchCard({ e, scale = 1, badges = true }) {
                 size when necessary": it is already the rule, it just has to be
                 given the real width (owner, 2026-09-14). */}
             <EntryChip entryType={sideEntryType(e.players, side)} />
+            {/* THE ROUND, ON THE TOP PLAYER'S LINE AND NOWHERE ELSE (owner,
+                2026-09-21). Here rather than beside the card so it is laid
+                out by the same row as the entry chip to its left: identical
+                formatting and exact alignment, by construction. Callers that
+                pass no round — every screen but the schedule's compact list —
+                render nothing and are untouched. */}
+            {idx === 0 && <RoundChip round={round} />}
             {end && <Text style={s.end}>{end}</Text>}
             {winner != null && (
               <Text style={[s.mark, scale < 1 && { fontSize: Math.round(13 * scale), lineHeight: leading(Math.round(16 * scale)) }, { color: winner === idx ? C.greenLit : C.lossMark }]}>
