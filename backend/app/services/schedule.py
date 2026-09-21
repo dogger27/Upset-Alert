@@ -1608,6 +1608,56 @@ async def _fill_tbd_rounds(db, tournament_id: int, play_date: date,
                 e.draw_id = parents[0].draw_id
 
 
+async def fill_rounds_from_feed(db, tournament_id: int, play_date: date,
+                                rounds: dict) -> int:
+    """Give a round to the rows of a PDF day that has none, from the feed that
+    declined the day. Returns how many it named.
+
+    WHY THIS IS NOT THE OTHER BACKFILL. `resolve_pending_rounds` derives a
+    round from the BRACKET, and is gated to stage='main' for a reason recorded
+    at length there: qualifying has no rows in `matches`, and letting a
+    qualifying slot match a main-draw fixture pinned three of Guadalajara's Q2
+    rows to somebody else's R32. This one derives nothing — the feed STATED the
+    round for these exact two players — so it is safe precisely where that one
+    is not.
+
+    Two rules keep it honest:
+      * only a row whose label is NULL is touched, so a source that stated a
+        round always wins over this;
+      * the match is on the PAIR of surnames, both sides, within one tournament
+        and one day — never one player, which is how a Q2 row found an R32.
+    """
+    if not rounds:
+        return 0
+    rows = (await db.execute(
+        select(ScheduleEntry).where(
+            ScheduleEntry.tournament_id == tournament_id,
+            ScheduleEntry.play_date == play_date,
+            ScheduleEntry.round_label.is_(None),
+        ))).scalars().all()
+    if not rows:
+        return 0
+    from app.services.schedule_feeds import _surname
+    players: dict = {}
+    for pl in (await db.execute(
+        select(ScheduleEntryPlayer).where(
+            ScheduleEntryPlayer.schedule_entry_id.in_([r.id for r in rows])))).scalars().all():
+        players.setdefault(pl.schedule_entry_id, []).append(pl)
+    named = 0
+    for e in rows:
+        names = {_surname(pl.raw_name) for pl in players.get(e.id, [])
+                 if _surname(pl.raw_name)}
+        label = rounds.get(frozenset(names)) if names else None
+        if label:
+            e.round_label = label
+            named += 1
+    # with_write_retry hands out a fresh session and does NOT commit — every
+    # caller of it commits its own work (see db_retry).
+    if named:
+        await db.commit()
+    return named
+
+
 async def _renumber_courts(db, tournament_id: int, play_date: date) -> None:
     """Give every slot on a court a distinct position, in running order.
 

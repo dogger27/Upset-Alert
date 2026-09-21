@@ -691,6 +691,7 @@ async def refresh_order_of_play() -> int:
             # on a court), and then the log says so.
             feed_days: dict = {}
             declined_days: dict = {}
+            declined_rounds: dict = {}
             unfed_days: dict = {}
             if tournament.name not in _SLAM_FEEDS:
                 for day_ in (today - timedelta(days=1), today,
@@ -704,6 +705,10 @@ async def refresh_order_of_play() -> int:
                                     describe_exception(exc))
                     if fd and fd.get("declined"):
                         declined_days[day_] = fd["declined"]
+                        # The rounds it knew anyway, kept apart so the
+                        # note's contract does not change (its own test
+                        # passes a bare reason string).
+                        declined_rounds[day_] = fd.get("rounds") or {}
                     elif fd and fd.get("unfed"):
                         unfed_days[day_] = fd["unfed"]
                     elif fd:
@@ -846,9 +851,31 @@ async def refresh_order_of_play() -> int:
                             venue_tz=next((d.venue_timezone for d in draws
                                            if d.venue_timezone), None))
 
+                    # THE ROUND THE SHEET DOES NOT PRINT, from the feed that
+                    # declined the day. The ATP's order of play often carries
+                    # no round column at all — Chengdu's 22 September
+                    # qualifying had none, so every row showed a blank where
+                    # Q1 belongs while Hangzhou, whose feed was not declined,
+                    # showed Q1 (owner, 2026-09-21). The feed was declined for
+                    # want of COURTS, which is the half the sheet is better at;
+                    # it still knew every round. Fills NULLs only, so anything
+                    # the sheet did state keeps standing.
+                    feed_rounds = declined_rounds.get(pdf_date) or {}
+
+                    async def _rounds(sdb):
+                        return await schedule_svc.fill_rounds_from_feed(
+                            sdb, tournament.id, pdf_date, feed_rounds)
+
                     async with schedule_svc.day_write_lock:   # see schedule.day_write_lock
                         ingested = await with_write_retry(_ingest, what=f"oop ingest {tournament.id}")
                         await with_write_retry(_estimates, what=f"oop estimates {tournament.id}")
+                        if feed_rounds:
+                            named = await with_write_retry(
+                                _rounds, what=f"oop rounds {tournament.id}")
+                            if named:
+                                logger.info("%s %s: named %d round(s) from the "
+                                            "feed the sheet did not print",
+                                            tournament.name, pdf_date, named)
                     if not (ingested or {}).get("skipped"):
                         level, msg, key = _pdf_fallback_note(
                             tournament, pdf_date, declined_days, unfed_days)
