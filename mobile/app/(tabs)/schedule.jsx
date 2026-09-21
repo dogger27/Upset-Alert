@@ -1114,7 +1114,13 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
           the top player's line, after that player's entry chip, so the two
           chips are laid out by one row and cannot drift apart (owner,
           2026-09-21). */}
-      <View style={s.miniCard}>
+      {/* THE INDENT IS THE CLOCK'S, so it is spent only where there is a clock
+          (owner, 2026-09-21: "Only so the indenting on upcoming / scheduled
+          matches! NOT completed matches"). `when` is already blank the moment
+          a match starts — see miniTags — so a completed or live row keeps the
+          left edge it always had and gives the 62pt back to its names, which
+          are the rows most likely to be carrying a score as well. */}
+      <View style={[s.miniCard, when && s.miniCardWaiting]}>
         <MatchCard e={e} scale={0.8} round={round}
                    badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
       </View>
@@ -1483,11 +1489,12 @@ const s = StyleSheet.create({
   rowsInWrap: { marginHorizontal: 0, borderRadius: 0, borderLeftWidth: 0, borderRightWidth: 0 },
   // The cell: [group bar][card][H2H bar], the bars full height.
   // Room for a tab on either side: the tour bar, the tab, a hair.
-  /* INDENTED PAST THE CLOCK (owner, 2026-09-21). It was 8, which put the seed
-     badge almost against the tour bar; then 16, which still sat it directly
-     under the time on the border. Both player rows now start clear of the
-     clock's column — see MINI_CLOCK_COL for the arithmetic. */
-  miniCard: { paddingLeft: MINI_CLOCK_COL, paddingRight: 27 },
+  miniCard: { paddingLeft: 8, paddingRight: 27 },
+  /* INDENTED PAST THE CLOCK, on a match still waiting for one (owner,
+     2026-09-21). 8 put the seed badge almost against the tour bar; 16 still
+     sat it directly under the time on the border. Both player rows now start
+     clear of the clock's column — see MINI_CLOCK_COL for the arithmetic. */
+  miniCardWaiting: { paddingLeft: MINI_CLOCK_COL },
   /* THE DRAW VIEW'S SIDE TABS, run top to bottom (owner, 2026-09-17): the
      bracket's chip — 24 wide, 1px green-500 on the card fill, radius 4 —
      stretched to the row's height, the word on its side, the icon upright. */
