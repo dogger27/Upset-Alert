@@ -1842,18 +1842,88 @@ async def toggle_unlock_selections(
 # Internal scrape helper
 # ---------------------------------------------------------------------------
 
-async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = False) -> None:
+async def bootstrap_from_sofascore(tournament: Draw, db: AsyncSession) -> dict:
+    """Build a draw's shape from Sofascore when Wikipedia has no article.
+
+    THE CASE THIS IS FOR, and the only one. Hangzhou and Chengdu started in two
+    days on 2026-09-21 with no mainspace Wikipedia article, no entries and no
+    Sofascore identity — a draw the site could not show at all. Wikipedia has
+    been the sole author of draw SHAPE, and the standing direction is to
+    eliminate it where that can be done reliably.
+
+    SCOPED TO A DRAW WITH NO ENTRIES, deliberately and permanently. Once a
+    draw has a field, Wikipedia (or whatever wrote it) owns it and the normal
+    pipeline keeps it current; re-shaping a live draw from a cup tree would put
+    two writers on one bracket and risk clearing results the way
+    feedback_scraper_clears_espn_winner records. So this bootstraps and then
+    gets out of the way.
+
+    Identity comes from `resolve_without_field`, which needs the tour, the
+    bracket geometry and the dates to agree AND to be the only candidate that
+    fits — it returns None rather than guess. The shape is then handed to
+    `_do_scrape`, so the write is the same write Wikipedia gets.
+    """
+    from app.services.sofa_draw_shape import shape_to_parsed
+    from app.services.sofascore import resolve_without_field
+    from app.services.system_log import app_log
+
+    report: dict = {"draw_id": tournament.id, "bootstrapped": False}
+
+    existing = (await db.execute(
+        select(func.count()).select_from(DrawEntry).where(
+            DrawEntry.draw_id == tournament.id))).scalar() or 0
+    if existing:
+        report["error"] = f"draw already has {existing} entries — not ours to rebuild"
+        return report
+
+    found = await resolve_without_field(tournament)
+    if found is None:
+        report["error"] = "no Sofascore tournament could be identified without a field"
+        return report
+
+    uid, season_id, shape = found
+    parsed = shape_to_parsed(shape)
+    await _do_scrape(tournament, db, parsed=parsed)
+    # Identity is worth keeping: the next pass reads the field directly.
+    tournament.sofa_tournament_id = uid
+    tournament.sofa_season_id = season_id
+
+    report.update(bootstrapped=True, uid=uid, season_id=season_id,
+                  bracket_size=shape.bracket_size,
+                  entrants=shape.entrant_count, byes=len(shape.byes))
+    await app_log(
+        "info", "sofascore",
+        f"Built {tournament.year} {tournament.name} ({tournament.gender}) from "
+        f"Sofascore: {shape.entrant_count} entrants in a {shape.bracket_size} "
+        f"bracket, {len(shape.byes)} bye(s) — no Wikipedia article was needed",
+        report)
+    return report
+
+
+async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = False,
+                     parsed=None) -> None:
+    """Write a draw from a ParsedDraw, fetching one from Wikipedia if not given.
+
+    `parsed` exists so a shape from ANOTHER SOURCE can use this exact writer
+    rather than a parallel one. Everything below — the upsert, the bye and
+    match handling, the draw-release stamp and its premature-revert, ranking
+    assignment, qualifier detection, the pick repair — is decisions that took a
+    long time to get right, and a second copy of them would drift. See
+    services/sofa_draw_shape.shape_to_parsed, which builds a ParsedDraw from a
+    Sofascore cup tree and hands it here.
+    """
     from datetime import date
     import logging
     logger = logging.getLogger(__name__)
 
-    parsed = await scrape_tournament(
-        tournament.wiki_page_title,
-        year=tournament.year,
-        gender=tournament.gender,
-        page_id=tournament.wiki_page_id,
-        force_refresh=force_refresh,
-    )
+    if parsed is None:
+        parsed = await scrape_tournament(
+            tournament.wiki_page_title,
+            year=tournament.year,
+            gender=tournament.gender,
+            page_id=tournament.wiki_page_id,
+            force_refresh=force_refresh,
+        )
     if parsed.wiki_page_id and parsed.wiki_page_id != tournament.wiki_page_id:
         # Either first-time resolution (was None) or a correction from the scraper's
         # wrong-page retry (stored ID pointed to e.g. the general event page).

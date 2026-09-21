@@ -134,6 +134,36 @@ def main_tree(payload: dict) -> Optional[dict]:
     return None
 
 
+def main_draw_start(payload: dict):
+    """The main draw's first scheduled day, from the cup tree itself.
+
+    WHY NOT `first_main_draw_start`. That reads /events/next/0, which by
+    definition only knows about events still to come — so it 404s for a
+    tournament that has already been played. Identity has to work for both: a
+    finished draw is exactly what you verify a new rule against, and a future
+    one is what you need it for. The cup tree's own blocks carry
+    `seriesStartDateTimestamp`, so the date comes free with the payload that
+    is already in hand, past or future.
+
+    Returns a date, or None when no block carries a timestamp (which is the
+    ordinary state for a bracket published before it is scheduled).
+    """
+    from datetime import datetime, timezone
+
+    tree = main_tree(payload)
+    if not tree:
+        return None
+    rounds = tree.get("rounds") or []
+    if not rounds:
+        return None
+    stamps = [b.get("seriesStartDateTimestamp")
+              for b in (rounds[0].get("blocks") or [])
+              if b.get("seriesStartDateTimestamp")]
+    if not stamps:
+        return None
+    return datetime.fromtimestamp(min(stamps), tz=timezone.utc).date()
+
+
 def draw_shape(payload: dict) -> Optional[DrawShape]:
     """Every shape fact the cup tree states. None when there is no main tree.
 
@@ -286,3 +316,89 @@ def disagreement_summary(cmp: dict) -> Optional[str]:
     if cmp["only_ours"]:
         bits.append(f"{len(cmp['only_ours'])} in ours only")
     return "; ".join(bits) or None
+
+
+# ── the adapter: a Sofascore shape, in the form the existing writer eats ───
+
+def shape_to_parsed(shape: DrawShape):
+    """A DrawShape as a scraper.ParsedDraw, so the PROVEN writer does the work.
+
+    THIS IS THE WHOLE POINT OF THE ADAPTER. `routers/tournaments._do_scrape`
+    already knows how to turn a ParsedDraw into draw_entries and matches — it
+    upserts rather than deletes, stamps the draw release, assigns rankings,
+    detects qualifiers and repairs picks. Writing a second path to do that from
+    a cup tree would mean a second set of those decisions to keep in step, and
+    the first one is battle-tested. So Sofascore becomes an alternative SOURCE
+    for the same structure, not a parallel system.
+
+    THE BRACKET CONVENTION, read off production rather than assumed
+    (draws 122 and 142, 2026-09-21):
+
+      round 1      one match per block, match_number = block order
+      a bye        is_bye, player2 None, and the occupant IS the winner —
+                   they advance, and that is how later rounds inherit them
+      round r > 1  match n joins the winners of round r-1 matches 2n-1 and 2n,
+                   so a bye occupant lands pre-placed on the correct SIDE
+                   (p1 from the odd feeder, p2 from the even one) and every
+                   other slot stays empty until a result arrives
+
+    NO RESULTS ARE CARRIED, deliberately. The cup tree holds scores and
+    winners, but this returns the SHAPE only: a draw whose matches arrive with
+    no winners cannot clear a winner the result pipeline has already written —
+    the hazard recorded in feedback_scraper_clears_espn_winner. Bye winners are
+    the one exception, and they are structural rather than a result.
+    """
+    from app.services.scraper import MatchResult, ParsedDraw, PlayerEntry
+
+    players = [
+        PlayerEntry(bracket_position=e.bracket_position, name=e.name,
+                    nationality=None, seed=e.seed, entry_type=e.entry_type)
+        for e in shape.entrants
+    ]
+    byes = set(shape.byes)
+    occupied = {e.bracket_position for e in shape.entrants}
+
+    matches: list = []
+    # Round 1: one match per pair of slots, in slot order.
+    winners_by_match: dict = {}
+    for n in range(1, shape.bracket_size // 2 + 1):
+        lo, hi = n * 2 - 1, n * 2
+        a = lo if lo in occupied else None
+        b = hi if hi in occupied else None
+        is_bye = (lo in byes) or (hi in byes)
+        if is_bye:
+            # The occupant plays nobody and advances.
+            who = a if a is not None else b
+            matches.append(MatchResult(
+                round_number=1, match_number=n, player1_position=who,
+                player2_position=None, winner_position=who, is_bye=True))
+            winners_by_match[n] = who
+        else:
+            matches.append(MatchResult(
+                round_number=1, match_number=n, player1_position=a,
+                player2_position=b, winner_position=None, is_bye=False))
+
+    # Later rounds: skeletons, carrying only the advancers already known.
+    prev = winners_by_match
+    count = shape.bracket_size // 2
+    for rnd in range(2, shape.num_rounds + 1):
+        count //= 2
+        nxt: dict = {}
+        for n in range(1, count + 1):
+            matches.append(MatchResult(
+                round_number=rnd, match_number=n,
+                player1_position=prev.get(n * 2 - 1),
+                player2_position=prev.get(n * 2),
+                winner_position=None, is_bye=False))
+        prev = nxt          # nothing is decided beyond a first-round bye
+
+    named = [p for p in players if (p.name or "").strip()]
+    return ParsedDraw(
+        draw_size=shape.bracket_size,
+        num_rounds=shape.num_rounds,
+        players=players,
+        matches=matches,
+        has_direct_draw=bool(named),
+        has_qualifiers=any(p.entry_type == "Q" for p in players),
+        has_final_winner=False,
+    )

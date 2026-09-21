@@ -192,6 +192,13 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                     # the release that should open a Masters 1000 would close it.
                     # See fetch_event_dates; 2026 Cincinnati was the live case.
                     await _refresh_dates_from_event_page(t_id)
+                    # WIKIPEDIA HAS NO ARTICLE — ASK SOFASCORE FOR THE SHAPE.
+                    # Runs after the dates are corrected on purpose: identity
+                    # is confirmed partly BY the dates, so a placeholder
+                    # start_date would have it decline a tournament it should
+                    # accept. Declines unless the tour, the bracket geometry
+                    # and the dates all agree and only one candidate fits.
+                    await _try_sofascore_bootstrap(t_id)
                 else:
                     logger.warning("Resolved wiki page %s vanished for %s: %s",
                                    t_page_id, t_wiki, exc)
@@ -222,6 +229,76 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                                "wiki_title": t_wiki, "error": err,
                                "traceback": tb},
                               dedup_key=f"refresh_fail_{t_id}_{type(exc).__name__}", dedup_hours=1.0)
+
+
+# How often one draw may ask Sofascore to identify it. Four attempts a day is
+# plenty for a backstop — Wikipedia's Draft: namespace is the primary route and
+# costs nothing — and it turns ~200 requests a day per article-less draw into a
+# handful, most of which the response cache answers without any traffic at all.
+BOOTSTRAP_RETRY_SECONDS = 6 * 3600.0
+
+
+async def _try_sofascore_bootstrap(draw_id: int) -> None:
+    """Build a draw's shape from Sofascore when Wikipedia has no article.
+
+    THE CASE: Hangzhou and Chengdu, 2026-09-21, two days from play with no
+    mainspace article and therefore no entries, no identity and nothing to
+    show. Wikipedia has been the sole author of draw SHAPE and the standing
+    direction is to remove it wherever that can be done reliably.
+
+    Quiet by design. A draw with no article is the ORDINARY state for the whole
+    polling window, so a decline is a debug line, not a fault — the same
+    reasoning as the WikiPageNotFound handler this is called from. Only a
+    success is worth an app_log, and bootstrap_from_sofascore writes that one.
+    """
+    from app.routers.tournaments import bootstrap_from_sofascore
+    from app.services import settings as st
+
+    key = f"sofa_bootstrap_at_{draw_id}"
+    try:
+        async with AsyncSessionLocal() as db:
+            draw = await db.get(Draw, draw_id)
+            if draw is None:
+                return
+            # NOT GETTING BLOCKED COMES FIRST (owner, 2026-09-21). This is
+            # reached from a branch that fires every 30 MINUTES for the whole
+            # polling window, so without a floor one article-less draw would
+            # cost ~200 Sofascore requests a day to answer a question whose
+            # answer changes once. The stamp lives in app_settings rather than
+            # in memory because deploy.sh recreates this container every couple
+            # of minutes — an in-process marker would be empty nearly every
+            # time it was read, the same way app_log's dedup cache is.
+            last = await st.get_setting(db, key)
+            if last:
+                try:
+                    since = (datetime.now(timezone.utc)
+                             - datetime.fromisoformat(last)).total_seconds()
+                except ValueError:
+                    since = None
+                if since is not None and since < BOOTSTRAP_RETRY_SECONDS:
+                    logger.debug(
+                        "Skipping Sofascore bootstrap for draw %s: tried %dm ago",
+                        draw_id, int(since // 60))
+                    return
+            await st.set_setting(db, key, datetime.now(timezone.utc).isoformat())
+            await db.commit()
+
+            report = await bootstrap_from_sofascore(draw, db)
+            if report.get("bootstrapped"):
+                await db.commit()
+                logger.info(
+                    "Built draw %s from Sofascore with no Wikipedia article: "
+                    "%d entrants, %d bye(s) in a %d bracket",
+                    draw_id, report["entrants"], report["byes"],
+                    report["bracket_size"])
+            else:
+                await db.rollback()
+                logger.debug("No Sofascore bootstrap for draw %s: %s",
+                             draw_id, report.get("error"))
+    except Exception as exc:
+        # Never let a bootstrap attempt break the refresh loop; the draw simply
+        # stays unbuilt until the next pass or until Wikipedia publishes.
+        logger.warning("Sofascore bootstrap failed for draw %s: %s", draw_id, exc)
 
 
 async def _refresh_dates_from_event_page(draw_id: int) -> None:

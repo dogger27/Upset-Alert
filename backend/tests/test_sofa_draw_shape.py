@@ -241,3 +241,88 @@ def test_one_entrant_is_matched_once_even_with_three_keys(shape):
     assert cmp["matched"] == 28
     assert cmp["only_ours"] == []
     assert cmp["only_sofascore"] == []
+
+
+# ── the adapter, against the bracket Wikipedia actually built ─────────────
+# Ground truth read off production draws 122 and 142 on 2026-09-21: 16 round-1
+# matches with byes at match 1, 5, 12 and 16 (slots 1, 9, 23, 31), and round 2
+# carrying those four occupants pre-placed on the side their feeder dictates —
+# p1 for an odd feeder, p2 for an even one.
+
+WIKI_R1 = [(1, True, 1, None), (2, False, 3, 4), (3, False, 5, 6), (4, False, 7, 8),
+           (5, True, 9, None), (6, False, 11, 12), (7, False, 13, 14),
+           (8, False, 15, 16), (9, False, 17, 18), (10, False, 19, 20),
+           (11, False, 21, 22), (12, True, 23, None), (13, False, 25, 26),
+           (14, False, 27, 28), (15, False, 29, 30), (16, True, 31, None)]
+WIKI_R2 = [(1, 1, None), (2, None, None), (3, 9, None), (4, None, None),
+           (5, None, None), (6, None, 23), (7, None, None), (8, None, 31)]
+
+
+@pytest.fixture(scope="module")
+def parsed(shape):
+    from app.services.sofa_draw_shape import shape_to_parsed
+    return shape_to_parsed(shape)
+
+
+def test_the_adapter_reproduces_the_geometry(parsed):
+    assert parsed.draw_size == 32
+    assert parsed.num_rounds == 5
+    assert len(parsed.players) == 28
+
+
+def test_the_match_count_per_round_matches_production(parsed):
+    from collections import Counter
+    per = Counter(m.round_number for m in parsed.matches)
+    assert dict(per) == {1: 16, 2: 8, 3: 4, 4: 2, 5: 1}
+    assert len(parsed.matches) == 31
+
+
+def test_round_one_is_identical_to_the_wikipedia_built_bracket(parsed):
+    got = [(m.match_number, m.is_bye, m.player1_position, m.player2_position)
+           for m in parsed.matches if m.round_number == 1]
+    assert got == WIKI_R1
+
+
+def test_a_bye_advances_its_occupant(parsed):
+    byes = [m for m in parsed.matches if m.is_bye]
+    assert len(byes) == 4
+    for m in byes:
+        assert m.player2_position is None
+        assert m.winner_position == m.player1_position
+
+
+def test_round_two_inherits_the_byes_on_the_correct_side(parsed):
+    """The side matters: match n joins the winners of n*2-1 and n*2, so the bye
+    from an EVEN feeder lands as p2. Production has 23 and 31 as p2."""
+    got = [(m.match_number, m.player1_position, m.player2_position)
+           for m in parsed.matches if m.round_number == 2]
+    assert got == WIKI_R2
+
+
+def test_nothing_beyond_round_two_is_pre_decided(parsed):
+    for m in parsed.matches:
+        if m.round_number >= 3:
+            assert m.player1_position is None and m.player2_position is None
+
+
+def test_no_result_is_ever_carried_across(parsed):
+    """The cup tree holds winners; the adapter must not, or a shape refresh
+    would clear a winner the result pipeline already wrote."""
+    for m in parsed.matches:
+        if not m.is_bye:
+            assert m.winner_position is None
+    assert parsed.has_final_winner is False
+
+
+def test_the_flags_the_writer_gates_on(parsed):
+    assert parsed.has_direct_draw is True      # named entrants present
+    assert parsed.has_qualifiers is True       # Guadalajara had four Q slots
+
+
+def test_seeds_and_entry_types_survive_the_adapter(parsed):
+    assert sorted(p.seed for p in parsed.players if p.seed) == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert sorted({p.entry_type for p in parsed.players if p.entry_type}) == ["Alt", "Q", "WC"]
+
+
+def test_every_player_keeps_its_slot(parsed):
+    assert sorted(p.bracket_position for p in parsed.players) == WIKI_POSITIONS

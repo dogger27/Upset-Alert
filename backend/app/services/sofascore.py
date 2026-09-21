@@ -308,6 +308,97 @@ def _fetch(path: str, rotate: bool = False) -> tuple:
     return 200, r.json()
 
 
+# ── the response cache ────────────────────────────────────────────────────
+# NOT GETTING BLOCKED IS THE FIRST REQUIREMENT (owner, 2026-09-21), and the
+# identity path is where this project would most easily earn a block: it runs
+# from the WikiPageNotFound branch of _refresh_active_tournaments, which fires
+# EVERY 30 MINUTES for every draw with no article, for the whole polling
+# window. Un-cached, one such draw costs about four requests a pass — roughly
+# 200 a day, for an answer that changes at most once.
+#
+# So the identity endpoints read through a disk cache with a TTL, and a 404 is
+# cached too: "Sofascore has not published this bracket" is an answer worth
+# remembering, and it is the answer we get most often. Live scores are NEVER
+# cached — _get stays the uncached path and the callers that need current data
+# keep using it.
+#
+# On disk rather than in memory because deploy.sh recreates this container
+# every couple of minutes on a busy afternoon; an in-process cache would be
+# empty almost every time it was asked, which is the same failure recorded for
+# app_log's dedup cache.
+# UNDER /data, WHICH IS A HOST BIND MOUNT. /tmp is the container's writable
+# layer, and deploy.sh runs `up` on every backend push — which discards that
+# layer, so a cache there would be cold again within minutes and the whole
+# point of it lost. This is the same trap that silently rolled the database
+# back for days (see CLAUDE.md on WAL files in a single-file mount): what has
+# to survive a recreate must live on the mount.
+_SOFA_CACHE_DIR = os.environ.get("SOFA_CACHE_DIR", "/data/sofa-cache")
+# A tournament list and its seasons barely move; a cup tree moves once, when
+# the draw is published. The 404 TTL is the shortest because it is the one
+# standing between us and noticing a release.
+CACHE_TTL_SEARCH = 86400.0
+CACHE_TTL_SEASONS = 86400.0
+CACHE_TTL_CUPTREE = 10800.0
+CACHE_TTL_NOT_FOUND = 3600.0
+
+
+def _cache_file(path: str) -> str:
+    import hashlib
+    return f"{_SOFA_CACHE_DIR}/{hashlib.sha1(path.encode()).hexdigest()}.json"
+
+
+def cache_stats() -> dict:
+    """What the cache is holding — for the CLI and for answering "is it used?"."""
+    import glob
+    files = glob.glob(f"{_SOFA_CACHE_DIR}/*.json")
+    return {"dir": _SOFA_CACHE_DIR, "entries": len(files)}
+
+
+async def _get_cached(path: str, ttl: float) -> dict:
+    """One paced request, or the last answer if it is still fresh.
+
+    Raises SofascoreNotFound from a CACHED 404 as readily as from a live one,
+    so a caller cannot tell the difference and none of them needs to.
+    """
+    import json as _json
+    import time as _time
+
+    # A cache is an optimisation and must never be able to fail a request:
+    # a directory that cannot be created means no caching, not no data.
+    try:
+        os.makedirs(_SOFA_CACHE_DIR, exist_ok=True)
+    except OSError:
+        return await _get(path)
+    f = _cache_file(path)
+    try:
+        age = _time.time() - os.path.getmtime(f)
+        with open(f, "r", encoding="utf-8") as fh:
+            held = _json.load(fh)
+        limit = CACHE_TTL_NOT_FOUND if held.get("__notfound__") else ttl
+        if age < limit:
+            if held.get("__notfound__"):
+                raise SofascoreNotFound(f"404 on {path} (cached {int(age)}s ago)")
+            return held["payload"]
+    except (OSError, ValueError, KeyError):
+        pass          # no usable entry; fall through and ask
+
+    try:
+        payload = await _get(path)
+    except SofascoreNotFound:
+        try:
+            with open(f, "w", encoding="utf-8") as fh:
+                _json.dump({"__notfound__": True}, fh)
+        except OSError:
+            pass
+        raise
+    try:
+        with open(f, "w", encoding="utf-8") as fh:
+            _json.dump({"payload": payload}, fh)
+    except OSError:
+        pass          # a cache that cannot be written is not a failure
+    return payload
+
+
 async def _get(path: str) -> dict:
     """
     One paced request. Raises SofascoreBlocked on 403 and while the breaker is
@@ -765,7 +856,10 @@ async def _candidate_tournaments(draw: Draw) -> list:
         return []
     found: dict = {}
     for term in _search_terms(draw):
-        payload = await _get(f"/search/unique-tournaments?q={quote(term)}")
+        # Cached: the tournament list is the least volatile thing here, and
+        # this is the request the identity path repeats most.
+        payload = await _get_cached(f"/search/unique-tournaments?q={quote(term)}",
+                                    CACHE_TTL_SEARCH)
         for entity in (r.get("entity", r) for r in payload.get("results", [])):
             if _is_singles_tour_event(entity, want) and entity.get("id"):
                 found.setdefault(entity["id"], entity)
@@ -781,7 +875,8 @@ async def _season_for(uid: int, year: int) -> Optional[dict]:
     through the name fallback instead — which works, but only because Sofascore
     happens to repeat the year inside the season name.
     """
-    seasons = (await _get(f"/unique-tournament/{uid}/seasons")).get("seasons", [])
+    seasons = (await _get_cached(f"/unique-tournament/{uid}/seasons",
+                                 CACHE_TTL_SEASONS)).get("seasons", [])
     y = str(year)
     return (next((s for s in seasons if str(s.get("year") or "") == y), None)
             or next((s for s in seasons if y in str(s.get("name") or "")), None))
@@ -847,12 +942,145 @@ async def _cuptree_of(uid: int, season_id: int) -> dict:
     i.e. everything Wikipedia was sole author of (see sofa_draw_shape.py). A
     caller that wants both gets both from one request.
     """
-    return await _get(f"/unique-tournament/{uid}/season/{season_id}/cuptrees")
+    return await _get_cached(
+        f"/unique-tournament/{uid}/season/{season_id}/cuptrees", CACHE_TTL_CUPTREE)
 
 
 async def _field_of(uid: int, season_id: int) -> list:
     payload = await _cuptree_of(uid, season_id)
     return _main_draw_teams(payload.get("cupTrees", []))
+
+
+# How far the main draw's first match may sit from our stored start_date and
+# still be the same event. Our date can be a discovery placeholder (the Monday
+# of the tournament's week) and an extended-format event starts days later, so
+# this has to be loose — but it is the check that separates two events sharing
+# a city's name in one year, and those were 25 to 307 days apart (see
+# services/events.py), so a week is loose enough and nowhere near enough to
+# join them.
+IDENTITY_DATE_SLACK_DAYS = 7
+
+
+def _next_power_of_two(n: int) -> int:
+    """The bracket a field of n plays in: 28 -> 32, 96 -> 128, 32 -> 32."""
+    if n <= 1:
+        return max(n, 1)
+    return 1 << (n - 1).bit_length()
+
+
+def _geometry_agrees(draw_size: int, bracket_size: int) -> bool:
+    """Whether a cup tree's bracket could be this draw's.
+
+    Compares BRACKETS, not entrant counts, because `draws.draw_size` is
+    recorded both ways in practice — discovery reads the entrant count off the
+    main article (28) while a scrape normalises it to the bracket
+    (notifications.py:859, "that column holds the bracket size"). Rounding both
+    to the next power of two makes 28 and 32 the same answer, and still
+    separates a 250 from a 1000.
+    """
+    if not draw_size or not bracket_size:
+        return False
+    return _next_power_of_two(draw_size) == bracket_size
+
+
+async def resolve_without_field(draw: Draw) -> Optional[tuple]:
+    """Identify a tournament for a draw that has NO entries to match against.
+
+    THE GAP THIS CLOSES. `_resolve_against_field` verifies a candidate by
+    comparing its published field to OUR draw_entries, which is what makes its
+    looser name rules safe — and which a draw with no entries cannot do. That
+    is why Hangzhou sat with `sofa_tournament_id` NULL on 2026-09-21 while its
+    shape was published: no field, no identity, no shape, no draw. Chicken and
+    egg.
+
+    WHAT REPLACES THE FIELD AS EVIDENCE. Three facts that do not depend on
+    knowing who is in the draw, and all three must hold:
+
+      the TOUR      `_is_singles_tour_event` already requires the candidate's
+                    category to match the draw's gender
+      the BRACKET   the cup tree's bracket size must be the one a field of our
+                    draw_size plays in — a 32 for a 28, a 128 for a 96
+      the DATES     the main draw's first match must fall within
+                    IDENTITY_DATE_SLACK_DAYS of our start_date
+
+    AND THE ANSWER MUST BE UNIQUE. If two candidates satisfy all three this
+    returns None and says so, because the whole point of the field check was
+    that a name is not an identity — "ATP Hong Kong" is two different
+    tournaments ten months apart, and picking the first is how January's event
+    turned up under ACTIVE in September. NULL IS NOT A DECISION applies here
+    exactly as it does to a player: an unresolved draw is reported, never
+    guessed at.
+
+    Returns (uid, season_id, shape) or None. Makes no writes.
+    """
+    from app.services.sofa_draw_shape import draw_shape, main_draw_start
+
+    if not draw.draw_size or not draw.start_date:
+        return None                      # nothing to corroborate against
+
+    candidates = await _candidate_tournaments(draw)
+    if not candidates:
+        return None
+
+    passed: list = []
+    for cand in candidates:
+        uid = cand["id"]
+        season = await _season_for(uid, draw.year)
+        if not season:
+            continue
+        try:
+            payload = await _cuptree_of(uid, season["id"])
+        except SofascoreNotFound:
+            # No cup tree yet is the ordinary state until a day or two out.
+            continue
+        shape = draw_shape(payload)
+        if not shape or not shape.entrant_count:
+            continue
+        if not _geometry_agrees(draw.draw_size, shape.bracket_size):
+            continue
+        if field_is_unnamed(_main_draw_teams(payload.get("cupTrees", []))):
+            # The bracket exists but is a row of placeholders (R16P1, R16P2 …).
+            # It corroborates nothing about WHICH event this is.
+            continue
+        # The cup tree's own block timestamps first: free, and they work for a
+        # tournament already played as well as one still to come. /events/next
+        # only knows the future and 404s on a finished event — which is how
+        # this check first failed, against Guadalajara.
+        start = main_draw_start(payload)
+        if start is None:
+            try:
+                start = await first_main_draw_start(uid, season["id"])
+            except SofascoreNotFound:
+                start = None
+        if start is None:
+            continue
+        if abs((start - draw.start_date).days) > IDENTITY_DATE_SLACK_DAYS:
+            continue
+        passed.append((uid, season["id"], shape, cand, start))
+
+    if len(passed) == 1:
+        uid, season_id, shape, cand, start = passed[0]
+        logger.info(
+            "Resolved %s %s (%s) without a field: uid %s season %s — "
+            "%s, bracket %d, %d entrants, starts %s against our %s",
+            draw.year, draw.name, draw.gender, uid, season_id,
+            cand.get("name"), shape.bracket_size, shape.entrant_count,
+            start, draw.start_date)
+        return uid, season_id, shape
+
+    if len(passed) > 1:
+        await app_log(
+            "warning", "sofascore",
+            f"Refusing to identify {draw.year} {draw.name} ({draw.gender}) "
+            f"without a field: {len(passed)} candidates satisfy tour, bracket "
+            f"and dates — " + ", ".join(
+                f"{c.get('name')} (uid {u}, starts {s})"
+                for u, _, _, c, s in passed[:4]),
+            {"draw_id": draw.id,
+             "candidates": [{"uid": u, "name": c.get("name"), "start": str(s)}
+                            for u, _, _, c, s in passed]},
+            dedup_key=f"ambiguous_identity_{draw.id}", dedup_hours=24)
+    return None
 
 
 async def _resolve_against_field(draw: Draw, entries: list) -> Optional[tuple]:
