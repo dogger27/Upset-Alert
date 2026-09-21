@@ -96,6 +96,7 @@ class ShapeEntrant:
     nationality: Optional[str] = None      # IOC code, when the source states it
     te_slug: Optional[str] = None          # Tennis Explorer slug, when the source states it
     ranking: Optional[int] = None          # entry ranking, when the source states it
+    placeholder: bool = False              # a slot name (R16P1, Qualifier), not a person
 
 
 @dataclass
@@ -173,8 +174,12 @@ def draw_shape(payload: dict) -> Optional[DrawShape]:
     A cup tree Sofascore has created but not filled is a row of placeholder
     names (R16P1, R16P2, …) — see sofascore.py's note — and yields entrants
     whose names are those placeholders. Callers must judge that; this function
-    reports what the payload says rather than deciding it is unusable.
+    reports what the payload says rather than deciding it is unusable, and
+    marks each such entrant `placeholder` with sofascore's own test so the
+    judging is done once.
     """
+    from app.services.sofascore import _is_placeholder
+
     tree = main_tree(payload)
     if not tree:
         return None
@@ -202,7 +207,8 @@ def draw_shape(payload: dict) -> Optional[DrawShape]:
                 name=(team.get("name") or "").strip(),
                 sofa_player_id=team.get("id"),
                 sofa_slug=team.get("slug"),
-                seed=seed, entry_type=entry))
+                seed=seed, entry_type=entry,
+                placeholder=_is_placeholder(team)))
         # A BYE IS THE ABSENCE OF A MATCH, and Sofascore says so outright:
         # one participant and no match to play in this round. The bye is the
         # side of the pair nobody occupies.
@@ -297,6 +303,17 @@ def compare_to_entries(shape: DrawShape, entries: list) -> dict:
     `entries` is our DrawEntry rows (name, bracket_position, seed, entry_type).
     Returns counts plus the specific disagreements, so a caller can log one
     line and a reader can chase any of them.
+
+    A SLOT ONE SIDE HAS NOT FILLED YET IS NOT A DISAGREEMENT. The cup tree
+    fills incrementally (see bracket_is_complete): Hangzhou and Chengdu, draws
+    122 and 145 on 2026-09-21, read 20 entrants and 4 byes in a 32 bracket
+    against our 24 named entries and 4 blank qualifier slots, and every pass
+    warned "4 in ours only" — four players Sofascore had simply not slotted
+    yet, all of them agreeing with it on everything it did state. So an entry
+    of ours at a slot the tree leaves empty (or holds with a placeholder) is
+    `pending_sofascore`, and a tree entrant at a slot we hold blank — a
+    qualifier the tree names first — is `pending_ours`. Both resolve on their
+    own. What is still reported is where BOTH sides state the slot and differ.
     """
     # Four keys per entry, most trustworthy first: the name as we hold it,
     # the name SOFASCORE gave the resolver for this very entry (already stored
@@ -312,13 +329,20 @@ def compare_to_entries(shape: DrawShape, entries: list) -> dict:
                 ours.setdefault(key, e)
     out = {"matched": 0, "position": [], "seed": [], "entry_type": [],
            "only_sofascore": [], "only_ours": [],
+           "pending_sofascore": [], "pending_ours": [],
            "byes_sofascore": list(shape.byes), "byes_ours": []}
 
+    slots = set(range(1, shape.bracket_size + 1))
     taken = {e.bracket_position for e in entries}
-    out["byes_ours"] = sorted(set(range(1, shape.bracket_size + 1)) - taken)
+    out["byes_ours"] = sorted(slots - taken)
+    blank_ours = {e.bracket_position for e in entries if not (e.name or "").strip()}
+    # The slots the tree states anything about: a named entrant or a bye.
+    stated = {s.bracket_position for s in shape.entrants
+              if s.name and not s.placeholder} | set(shape.byes)
+    out["unfilled_sofascore"] = sorted(slots - stated)
 
     for s in shape.entrants:
-        if not s.name:
+        if not s.name or s.placeholder:
             continue
         mine = None
         for key in (_fold(s.name), _unordered(s.name), _joined(s.name)):
@@ -330,7 +354,8 @@ def compare_to_entries(shape: DrawShape, entries: list) -> dict:
             for k in [k for k, v in ours.items() if v is mine]:
                 del ours[k]
         if mine is None:
-            out["only_sofascore"].append((s.bracket_position, s.name))
+            side = "pending_ours" if s.bracket_position in blank_ours else "only_sofascore"
+            out[side].append((s.bracket_position, s.name))
             continue
         out["matched"] += 1
         # What Sofascore states that we do not yet hold: a seed or an entry
@@ -345,7 +370,10 @@ def compare_to_entries(shape: DrawShape, entries: list) -> dict:
             out["seed"].append((s.name, mine.seed, s.seed))
         if s.entry_type and mine.entry_type and mine.entry_type != s.entry_type:
             out["entry_type"].append((s.name, mine.entry_type, s.entry_type))
-    out["only_ours"] = sorted({e.name for e in ours.values()})
+    unfilled = set(out["unfilled_sofascore"])
+    left = {id(e): e for e in ours.values()}.values()
+    out["only_ours"] = sorted({e.name for e in left if e.bracket_position not in unfilled})
+    out["pending_sofascore"] = sorted({e.name for e in left if e.bracket_position in unfilled})
     return out
 
 
@@ -361,7 +389,11 @@ def disagreement_summary(cmp: dict) -> Optional[str]:
     if cmp["entry_type"]:
         bits.append(f"{len(cmp['entry_type'])} entry type(s): " + ", ".join(
             f"{n} ours {a} vs sofa {b}" for n, a, b in cmp["entry_type"][:4]))
-    if cmp["byes_sofascore"] != cmp["byes_ours"]:
+    # A bye of ours at a slot the tree has not filled is a slot it has not
+    # stated yet, not a bye it denies.
+    unfilled = set(cmp.get("unfilled_sofascore") or ())
+    byes_ours = [b for b in cmp["byes_ours"] if b not in unfilled]
+    if cmp["byes_sofascore"] != byes_ours:
         bits.append(f"byes ours {cmp['byes_ours']} vs sofa {cmp['byes_sofascore']}")
     if cmp["only_sofascore"]:
         bits.append(f"{len(cmp['only_sofascore'])} in sofascore only")

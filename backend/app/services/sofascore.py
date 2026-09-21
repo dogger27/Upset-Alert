@@ -1366,14 +1366,20 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
                          "position": cmp["position"][:10], "seed": cmp["seed"][:10],
                          "entry_type": cmp["entry_type"][:10],
                          "byes_ours": cmp["byes_ours"],
-                         "byes_sofascore": cmp["byes_sofascore"]},
+                         "byes_sofascore": cmp["byes_sofascore"],
+                         "unfilled_sofascore": cmp["unfilled_sofascore"]},
                         dedup_key=f"shape_disagree_{draw.id}", dedup_hours=24)
                 else:
+                    # A tree still filling in agrees on everything it states;
+                    # the slots it has not stated yet are said here, at info,
+                    # because they fill on their own (compare_to_entries).
                     logger.info(
                         "Draw shape agrees with Wikipedia for %s %s (%s): "
-                        "%d entrant(s), byes %s",
+                        "%d entrant(s), byes %s; not yet filled — %d slot(s) "
+                        "on Sofascore, %d of ours",
                         draw.year, draw.name, draw.gender,
-                        cmp["matched"], cmp["byes_sofascore"])
+                        cmp["matched"], cmp["byes_sofascore"],
+                        len(cmp["unfilled_sofascore"]), len(cmp["pending_ours"]))
         except Exception as exc:      # a comparison must never break resolution
             logger.warning("Draw shape comparison failed for draw %s: %s",
                            draw.id, exc)
