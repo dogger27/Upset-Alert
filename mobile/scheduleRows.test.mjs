@@ -15,7 +15,7 @@ import assert from 'node:assert/strict'
    .js directly makes node reparse it and warn. scheduleRows imports nothing,
    so a data: URL resolves it completely. */
 const src = readFileSync(new URL('./scheduleRows.js', import.meta.url), 'utf8')
-const { drawsByTournament, rowInTournaments, sameDrawSet, tournamentsOf } =
+const { drawsByTournament, holdSelection, rowInTournaments, sameDrawSet, tournamentsOf } =
   await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'))
 
 let n = 0
@@ -95,3 +95,47 @@ check('sameDrawSet compares membership, not identity', () => {
 })
 
 console.log(`\n  ${n} passed`)
+
+
+/* ── A LONG HOLD: ISOLATE, AND UNDO ITSELF ───────────────────────────────
+ *
+ * A hold shows only the tournament held (owner, 2026-09-21). Holding the one
+ * that is already alone shows everything again — "Long holding on a draw when
+ * only one draw is selected should select ALL draws" — so the gesture is its
+ * own undo and nobody has to tap four pills back on.
+ *
+ * `null` is the store's word for every tournament, both in and out.
+ */
+const held = (sel, id) => holdSelection(sel === null ? null : new Set(sel), id)
+const ids = (r) => (r === null ? 'ALL' : [...r].sort())
+
+// From everything, a hold isolates.
+assert.equal(ids(held(null, 3)).join(), '3')
+// From several, a hold isolates.
+assert.equal(ids(held([1, 2, 3], 2)).join(), '2')
+// From the lone one — THE NEW CASE — a hold shows everything.
+assert.equal(ids(held([2], 2)), 'ALL')
+
+/* Holding a DIFFERENT pill still isolates it, even while one draw is the only
+   one showing. The other reading — any hold means "all" once one draw is
+   alone — would make the second isolate unreachable by the gesture that
+   performs it. */
+assert.equal(ids(held([2], 5)).join(), '5')
+
+// Two selected is not one, whichever is held.
+assert.equal(ids(held([2, 5], 2)).join(), '2')
+assert.equal(ids(held([2, 5], 5)).join(), '5')
+
+// An empty selection is the store's other spelling of "everything", and a hold
+// off it isolates like any other.
+assert.equal(ids(held([], 4)).join(), '4')
+
+// It never mutates what it was given: the store compares by reference and a
+// selection edited in place would be re-published as an equal object.
+{
+  const before = new Set([2])
+  const out = holdSelection(before, 5)
+  assert.equal([...before].join(), '2')
+  assert.equal([...out].join(), '5')
+  assert.notEqual(out, before)
+}

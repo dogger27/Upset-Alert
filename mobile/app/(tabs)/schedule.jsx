@@ -38,7 +38,7 @@ import { DayStrip } from '../../DayStrip'
 import { SWIPE_PX, SWIPE_VX, swipeStep } from '../../swipeDay'
 import { beginSwipe, endSwipe, unlessSwiping } from '../../swipeGuard'
 import { dayLabels, relativeDayWord } from '../../dayLabels'
-import { rowInTournaments } from '../../scheduleRows'
+import { holdSelection, rowInTournaments } from '../../scheduleRows'
 import { eventTour, tierWord } from '../../category'
 import { MatchCard } from '../../scorecard'
 import { matchLine } from '../../matchLine'
@@ -667,16 +667,21 @@ export default function ScheduleScreen() {
               const tint = TOUR_BAR[eventTour(t.genders)]
               const tier = tierWord(t.categories)
               return (
-                /* TAP TOGGLES, HOLD ISOLATES (owner, 2026-09-21). Getting
-                   down to one tournament used to mean tapping every other
-                   pill off — five taps on a five-event day, and one of them
-                   easy to miss. A hold says "only this" in one gesture. 320ms
-                   matches the schedule rows' own hold, so the app asks for a
-                   long press at one speed. */
+                /* TAP TOGGLES, HOLD ISOLATES — AND HOLDING THE LONE ONE SHOWS
+                   EVERYTHING (owner, 2026-09-21). Getting down to one
+                   tournament used to mean tapping every other pill off: five
+                   taps on a five-event day, one of them easy to miss. A hold
+                   says "only this" in one gesture, and holding that same pill
+                   again says "all of them", so the gesture is its own undo.
+                   The rule is scheduleRows.holdSelection, on its own suite.
+                   320ms matches the schedule rows' own hold, so the app asks
+                   for a long press at one speed. */
                 <Pressable key={t.id} onPress={() => toggleEvent(t.id)}
-                           onLongPress={() => setScheduleTournaments(new Set([t.id]))}
+                           onLongPress={() => setScheduleTournaments(holdSelection(eventSel, t.id))}
                            delayLongPress={320}
-                           accessibilityHint="Hold to show only this tournament"
+                           accessibilityHint={on && eventSel?.size === 1
+                             ? 'Hold to show every tournament'
+                             : 'Hold to show only this tournament'}
                            style={[s.eventBox,
                                    on && (tint ? { backgroundColor: tint, borderColor: tint }
                                                : s.eventBoxOn),

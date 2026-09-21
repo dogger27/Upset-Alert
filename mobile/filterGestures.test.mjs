@@ -28,17 +28,27 @@ const STORE = read('./scheduleFilter.js')
    asks for a long press at two and the slower one reads as a dead control. */
 const DELAY = 320
 
-test('holding a Schedule pill selects that tournament ALONE', () => {
-  assert.match(PILLS, /onLongPress=\{\(\) => setScheduleTournaments\(new Set\(\[t\.id\]\)\)\}/,
-    'the pill must REPLACE the selection with one id, not toggle it')
-  // A toggle would leave the others on; this is the distinguishing assertion.
-  assert.doesNotMatch(
-    PILLS, /onLongPress=\{\(\) => toggleEvent/,
-    'a hold that toggles is the tap it was meant to replace')
+test('both lists decide a hold with the SAME rule', () => {
+  /* The rule is scheduleRows.holdSelection — isolate, or show everything when
+     the held one is already alone — and it is tested on its own in
+     scheduleRows.test.mjs. What matters here is that neither list reimplements
+     it: two copies of "what a hold means" is how the pills and the sheet come
+     to disagree, which is the thing that makes a gesture untrustworthy. */
+  assert.match(PILLS, /onLongPress=\{\(\) => setScheduleTournaments\(holdSelection\(/)
+  assert.match(SHEET, /onLongPress=\{\(\) => setDraft\(holdSelection\(/)
+  for (const [what, src] of [['pills', PILLS], ['sheet', SHEET]])
+    assert.doesNotMatch(src, /onLongPress=\{\(\) => \w+\(new Set\(\[t\.id\]\)\)\}/,
+      `${what} builds its own one-id set instead of asking holdSelection`)
+  // A hold that toggles is the tap it was meant to replace.
+  assert.doesNotMatch(PILLS, /onLongPress=\{\(\) => toggleEvent/)
 })
 
-test('holding a row in the chooser sheet does the same', () => {
-  assert.match(SHEET, /onLongPress=\{\(\) => setDraft\(new Set\(\[t\.id\]\)\)\}/)
+test('the sheet TICKS every row for “all”, rather than clearing them', () => {
+  /* holdSelection answers null for everything, which is the store's word and
+     wrong for a sheet that shows its answer as checkboxes — clearing them all
+     to mean "everything" is the one thing its own Clear button already warns
+     is confusing. */
+  assert.match(SHEET, /\?\?\s*new Set\(choosable\.map\(/)
 })
 
 test('both hold at the same speed as the rest of the app', () => {
@@ -59,9 +69,13 @@ test('“only this” can never collapse into “everything”', () => {
     'the store no longer keeps a non-empty set as given')
 })
 
-test('the gesture is announced, not just available', () => {
-  // A hold with no hint is invisible to anyone using a screen reader, and
-  // near-invisible to everyone else.
-  assert.match(PILLS, /accessibilityHint="Hold to show only this tournament"/)
-  assert.match(SHEET, /accessibilityHint="Hold to choose only this tournament"/)
+test('the hint says what the hold will actually do', () => {
+  /* A hold with no hint is invisible to anyone using a screen reader, and
+     near-invisible to everyone else. Now that the gesture has two outcomes the
+     hint has to follow it, or it tells half the users the wrong one. */
+  for (const [what, src, verb] of [['pills', PILLS, 'show'], ['sheet', SHEET, 'choose']]) {
+    assert.match(src, new RegExp(`Hold to ${verb} only this tournament`), what)
+    assert.match(src, new RegExp(`Hold to ${verb} every tournament`), what)
+    assert.match(src, /size === 1/, `${what} hint does not branch on the lone selection`)
+  }
 })
