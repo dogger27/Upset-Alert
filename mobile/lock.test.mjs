@@ -120,3 +120,36 @@ test('the note says when the picks arrive, not merely that they are gone', () =>
   assert.match(othersPicksNote({ status: 'open', pick_lock_mode: 'r1_progressive' }),
                /every first-round match has started/)
 })
+
+/* ── THE SAME WRONG ASSUMPTION, ON THE STANDINGS ─────────────────────────
+ *
+ * othersPicksNote's own docstring said "Null once the draw is active or
+ * finished", and that is not the rule the server follows. Under match-by-match
+ * locking a draw goes ACTIVE at the first ball but picks stay withheld until
+ * every first-round match has started — a day or two later. In that window the
+ * standings dropped the explanation while the server was still withholding
+ * the columns, so the reader saw missing picks and no reason for it. Same root
+ * cause as the predictors sheet: the client re-derived visibility from status
+ * instead of reading the answer the server sends.
+ *
+ * So the server's own `predictions_hidden` decides when it is known, and the
+ * status guess is only the fallback for a payload that does not carry it.
+ */
+test('the server’s flag outranks the status guess', () => {
+  const prog = { status: 'active', pick_lock_mode: 'r1_progressive' }
+  // THE BUG: active, and the server says it is still withholding.
+  assert.match(othersPicksNote(prog, true), /every first-round match has started/)
+  // Active and genuinely open now: no note, nothing to wait for.
+  assert.equal(othersPicksNote(prog, false), null)
+  // A completed draw is never withheld, whatever it is asked.
+  assert.equal(othersPicksNote({ status: 'completed' }, false), null)
+})
+
+test('a payload without the flag still behaves as it always did', () => {
+  // Older clients and the screens that read the tournaments LIST pass nothing.
+  assert.equal(othersPicksNote({ status: 'active', pick_lock_mode: 'r1_progressive' }), null)
+  assert.equal(othersPicksNote({ status: 'completed' }), null)
+  assert.match(othersPicksNote({ status: 'open', pick_lock_mode: 'r1_progressive' }),
+               /every first-round match has started/)
+  assert.equal(othersPicksNote(null, true), null)   // no draw, nothing to say
+})
