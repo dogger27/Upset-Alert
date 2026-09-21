@@ -1308,6 +1308,26 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
             if shape and shape.entrant_count:
                 cmp = compare_to_entries(shape, all_rows)
                 report["shape_matched"] = cmp["matched"]
+                # FILL WHAT WE LACK AND SOFASCORE STATES. Tennis Explorer does
+                # not always print seeds two days out (Chengdu had none the
+                # afternoon Hangzhou had all eight) and a Wikipedia draft can
+                # miss an entry type; the cup tree's teamSeed carries both
+                # once its events exist. Only ever fills a NULL — a seed we
+                # hold is never overwritten here; disagreement is logged above.
+                filled = 0
+                for mine, seed, entry_type in cmp.get("fillable", []):
+                    if seed is not None and mine.seed is None:
+                        mine.seed, filled = seed, filled + 1
+                    if entry_type and not mine.entry_type:
+                        mine.entry_type, filled = entry_type, filled + 1
+                if filled:
+                    await db.commit()
+                    report["shape_filled"] = filled
+                    await app_log(
+                        "info", "sofascore",
+                        f"Filled {filled} seed/entry-type value(s) for {draw.year} "
+                        f"{draw.name} ({draw.gender}) from the cup tree",
+                        {"draw_id": draw.id, "filled": filled})
                 why = disagreement_summary(cmp)
                 report["shape_disagreement"] = why
                 if why:

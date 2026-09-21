@@ -37,9 +37,12 @@ over Wikipedia (which is a volunteer's page). It produces the same DrawShape
 the Sofascore path does, so it rides the same `shape_to_parsed` adapter into
 the same `_do_scrape` writer.
 """
+import hashlib
 import json
 import logging
 import math
+import os
+import time
 from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -56,6 +59,30 @@ _ENTRY = {"Q": "Q", "WC": "WC", "LL": "LL", "PR": "PR", "SE": "SE",
           "ALT": "Alt", "A": "Alt", "NG": "NG"}
 
 
+CACHE_DIR = os.environ.get("WTA_CACHE_DIR", "/data/wta-cache")
+CACHE_TTL = 3600.0
+
+
+def _cached_json(url: str) -> dict:
+    """One request an hour per URL; the refresh loop asks every thirty minutes."""
+    f = f"{CACHE_DIR}/{hashlib.sha1(url.encode()).hexdigest()}.json"
+    try:
+        if time.time() - os.path.getmtime(f) < CACHE_TTL:
+            with open(f, "r", encoding="utf-8") as fh:
+                return json.load(fh)
+    except (OSError, ValueError):
+        pass
+    with urlopen(Request(url, headers=HEADERS), timeout=TIMEOUT) as r:
+        payload = json.loads(r.read())
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(f, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+    except OSError:
+        pass
+    return payload
+
+
 def fetch_draw(event_id: int, year: int) -> Optional[dict]:
     """The published draw document, or None when the tour has not published it.
 
@@ -63,8 +90,7 @@ def fetch_draw(event_id: int, year: int) -> Optional[dict]:
     Network trouble raises, so a caller can tell "not yet" from "could not ask".
     """
     url = f"{BASE}/{event_id}/{year}/draw"
-    with urlopen(Request(url, headers=HEADERS), timeout=TIMEOUT) as r:
-        payload = json.loads(r.read())
+    payload = _cached_json(url)
     info = payload.get("drawInfo")
     if not info:
         return None

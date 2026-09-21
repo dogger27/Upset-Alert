@@ -306,6 +306,7 @@ async def _migrate(conn):
         # behaviour.
         "ALTER TABLE draws ADD COLUMN bracket_first_seen_at DATE",
         "ALTER TABLE draws ADD COLUMN bracket_first_seen_days_before INTEGER",
+        "ALTER TABLE draws ADD COLUMN shape_source VARCHAR",
         # Draw-release emails became a weekly digest covering every draw released
         # that week, which makes a per-tier opt-in meaningless — it could only
         # filter rows out of a mail the user receives either way. Collapse the

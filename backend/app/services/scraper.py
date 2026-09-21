@@ -105,6 +105,14 @@ class ParsedDraw:
     country: Optional[str] = None
     wiki_page_id: Optional[int] = None
     resolved_title: Optional[str] = None  # set when title fallback succeeded
+    # Whether this source speaks to the tournament's DATES at all. Wikipedia
+    # does (the infobox), and a None start_date there means the parse failed —
+    # which the writer answers by snapping the stored date to a Monday. A shape
+    # source (the WTA sheet, Tennis Explorer, a cup tree) carries no dates, and
+    # its None must leave the dates alone: snapping Hangzhou's Wednesday start
+    # to the Monday was refused by the released-draw guard, but it was refused
+    # with a warning every refresh.
+    carries_dates: bool = True
 
 
 # ---------------------------------------------------------------------------

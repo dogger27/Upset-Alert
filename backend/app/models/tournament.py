@@ -307,6 +307,11 @@ class Draw(Base):
         Integer, ForeignKey("draw_category_variants.id"), nullable=True
     )
     status: Mapped[str] = mapped_column(String, default="upcoming")
+    # WHO AUTHORS THIS DRAW'S SHAPE: 'wta_official', 'tennisexplorer', 'sofascore',
+    # or NULL/'wikipedia' for the scrape that owned everything before 2026-09-21.
+    # One writer per draw is what keeps two sources from ping-ponging a name's
+    # spelling every half hour; the refresh loop consults this before scraping.
+    shape_source: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # Which locking rule this draw uses — and, once it is over, USED. Stamped
     # from the site-wide default rather than read through to it, so a finished
     # tournament keeps reporting the rules it was actually played under when the

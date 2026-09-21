@@ -146,9 +146,23 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                     continue  # deleted between the sweep and now
                 prev_status = t.status
 
-                await _do_scrape(t, db, force_refresh=force_refresh)
-                await db.commit()
-                logger.info("Refreshed %s %s (%s)", t.year, t_name, t.gender)
+                # THE TOUR'S OWN SHEET, OR TENNIS EXPLORER, BEFORE WIKIPEDIA.
+                # refresh_shape rewrites the draw from the best non-Wikipedia
+                # source when that source has a complete bracket that agrees
+                # with the field; when it does, the Wikipedia scrape below is
+                # skipped and Wikipedia is what it should be — the fallback.
+                from app.routers.tournaments import refresh_shape
+                shaped = await refresh_shape(t, db)
+                if shaped.get("refreshed"):
+                    await db.commit()
+                    logger.info("Refreshed %s %s (%s) from %s", t.year, t_name,
+                                t.gender, shaped["source"])
+                else:
+                    await db.rollback()
+                    t = await db.get(Draw, t_id)
+                    await _do_scrape(t, db, force_refresh=force_refresh)
+                    await db.commit()
+                    logger.info("Refreshed %s %s (%s)", t.year, t_name, t.gender)
 
                 # Prefetch H2H and DOB for any new matchups/players (uses own sessions)
                 from app.services.h2h import prefetch_h2h_for_draw

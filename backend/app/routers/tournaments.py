@@ -1842,6 +1842,223 @@ async def toggle_unlock_selections(
 # Internal scrape helper
 # ---------------------------------------------------------------------------
 
+def _keep_known(round_number: int, incoming, existing) -> bool:
+    """Whether a match's player slot may be overwritten with `incoming`.
+
+    Round 1: always — it is structural and every source states it in full.
+    Later rounds: only when the source names somebody, or nobody is there yet.
+    A None from a shape-only source must never erase a player a result placed.
+    """
+    return round_number == 1 or incoming is not None or existing is None
+
+
+def _agreement(shape, entries) -> float:
+    """How much of a draw already in the database a shape agrees with, 0..1.
+
+    Judged on NAMED slots only, as the same person (draw_changes.same_person —
+    diacritics, hyphens and given/surname order all count as the same), over
+    the slots both sides name. A source that identified the wrong tournament
+    scores near zero; a source that respells everyone scores one.
+    """
+    from app.services.draw_changes import same_person
+
+    ours = {e.bracket_position: (e.name or "").strip() for e in entries if (e.name or "").strip()}
+    theirs = {e.bracket_position: e.name for e in shape.entrants if (e.name or "").strip()}
+    both = [p for p in theirs if p in ours]
+    if not both:
+        return 0.0
+    return sum(1 for p in both if same_person(ours[p], theirs[p])) / len(both)
+
+
+# The floor a shape must clear before it may REWRITE a draw that already has a
+# field. Below it, the source has almost certainly found a different
+# tournament, and the draw keeps its current author.
+REFRESH_AGREEMENT_FLOOR = 0.9
+
+
+async def _shape_from_sources(tournament: Draw, db: AsyncSession, report: dict,
+                              allow_sofascore_identity: bool = True):
+    """The best complete shape any source has for this draw, or (None, None, {}).
+
+    Order of trust: the WTA's own sheet for a women's draw; Tennis Explorer
+    for either tour; Sofascore last — the cup tree of an already-resolved draw
+    from the cache, or a fresh identity lookup when the caller allows it.
+    Returns (shape, source_name, identity_fields_to_store).
+    """
+    import logging
+
+    from app.services.sofa_draw_shape import bracket_is_complete
+    logger = logging.getLogger(__name__)
+
+    if (tournament.gender or "").upper() == "F":
+        from app.services import wta_draw
+        row = await db.get(Tournament, tournament.tournament_id) if tournament.tournament_id else None
+        event_id = wta_draw.event_id_for(tournament, row)
+        if event_id:
+            report["tried"].append("wta_official")
+            try:
+                got = wta_draw.fetch_shape(int(event_id), int(tournament.year))
+            except Exception as exc:
+                logger.warning("WTA draw fetch failed for draw %s: %s", tournament.id, exc)
+                got = None
+            if got and bracket_is_complete(got):
+                return got, "wta_official", {}
+            if got:
+                report["wta_official"] = "incomplete"
+
+    from app.services import te_draw
+    report["tried"].append("tennisexplorer")
+    try:
+        got = await te_draw.fetch_shape(tournament)
+    except Exception as exc:
+        logger.warning("TE draw fetch failed for draw %s: %s", tournament.id, exc)
+        got = None
+    if got and bracket_is_complete(got):
+        # TE prints SURNAMES and no flags. The slug is the identity, and the
+        # TE player index this project already keeps turns it back into the
+        # full name and the IOC code — locally, no request.
+        from app.models.rankings import TePlayer
+        from app.services.rankings import COUNTRY_TO_IOC
+        slugs = [e.te_slug for e in got.entrants if e.te_slug]
+        if slugs:
+            rows = (await db.execute(select(TePlayer).where(
+                TePlayer.te_slug.in_(slugs)))).scalars().all()
+            by_slug = {r.te_slug: r for r in rows}
+            nats = 0
+            for e in got.entrants:
+                r = by_slug.get(e.te_slug) if e.te_slug else None
+                if r is None:
+                    continue
+                full = (r.name_display or f"{r.first_name or ''} {r.last_name or ''}").strip()
+                if full:
+                    e.name = full
+                ioc = COUNTRY_TO_IOC.get((r.nationality or "").strip().lower())
+                if ioc and not e.nationality:
+                    e.nationality, nats = ioc, nats + 1
+            report["te_names_resolved"] = f"{len(by_slug)}/{len(slugs)}"
+            report["te_nationalities"] = nats
+        return got, "tennisexplorer", {}
+    if got:
+        report["tennisexplorer"] = "incomplete"
+
+    report["tried"].append("sofascore")
+    from app.services import sofascore
+    from app.services.sofa_draw_shape import draw_shape
+    if tournament.sofa_tournament_id and tournament.sofa_season_id:
+        try:
+            payload = await sofascore._cuptree_of(tournament.sofa_tournament_id,
+                                                  tournament.sofa_season_id)
+            got = draw_shape(payload)
+        except Exception as exc:
+            logger.debug("cup tree unavailable for draw %s: %s", tournament.id, exc)
+            got = None
+        if got and bracket_is_complete(got):
+            return got, "sofascore", {}
+        if got:
+            report["sofascore"] = (f"incomplete: {got.entrant_count} entrants + "
+                                   f"{len(got.byes)} byes in a {got.bracket_size} bracket")
+    elif allow_sofascore_identity:
+        found = await sofascore.resolve_without_field(tournament)
+        if found is not None:
+            uid, season_id, got = found
+            ids = {"sofa_tournament_id": uid, "sofa_season_id": season_id}
+            if bracket_is_complete(got):
+                return got, "sofascore", ids
+            report["sofascore"] = (f"incomplete: {got.entrant_count} entrants + "
+                                   f"{len(got.byes)} byes in a {got.bracket_size} bracket")
+    return None, None, {}
+
+
+async def refresh_shape(tournament: Draw, db: AsyncSession) -> dict:
+    """Keep a draw's shape current from the best non-Wikipedia source.
+
+    THE OTHER HALF OF GETTING RID OF WIKIPEDIA. bootstrap_draw builds a draw
+    that has nothing; this keeps one current that does — the qualifier slots
+    filled when qualifying ends, a withdrawal replaced by a lucky loser, a seed
+    printed late — and it runs BEFORE the Wikipedia scrape in the refresh loop,
+    which is skipped when this succeeds. Wikipedia becomes the fallback.
+
+    Three things make rewriting a live draw safe rather than reckless:
+
+      the writer's guards   a later-round player or a winner is never cleared
+                            by a source that does not know it (_keep_known,
+                            and the winner guard that already existed)
+      the agreement floor   a shape may only take over a draw it agrees with
+                            on >= 90% of the slots both name, judged as the
+                            same person — the guard against Tennis Explorer
+                            having matched the wrong city
+      spelling is kept      where the source names the same person we already
+                            hold, our spelling stays. No churn, no phantom
+                            "replaced" notices, one author per draw
+
+    Never touches a completed draw. Returns a report; the caller commits.
+    """
+    from app.services.draw_changes import same_person
+    from app.services.sofa_draw_shape import shape_to_parsed
+    from app.services.system_log import app_log
+
+    report: dict = {"draw_id": tournament.id, "refreshed": False, "tried": []}
+    if tournament.status == "completed":
+        report["error"] = "completed draws are not refreshed"
+        return report
+    entries = (await db.execute(select(DrawEntry).where(
+        DrawEntry.draw_id == tournament.id))).scalars().all()
+    if not entries:
+        report["error"] = "no entries — that is a bootstrap, not a refresh"
+        return report
+
+    shape, source, ids = await _shape_from_sources(
+        tournament, db, report, allow_sofascore_identity=False)
+    if shape is None:
+        report["error"] = "no source has a complete bracket"
+        return report
+
+    agreement = _agreement(shape, entries)
+    report["agreement"] = round(agreement, 3)
+    if agreement < REFRESH_AGREEMENT_FLOOR:
+        report["error"] = (f"{source} disagrees with the draw on "
+                           f"{round((1 - agreement) * 100)}% of named slots — not taking over")
+        await app_log(
+            "warning", "draws",
+            f"{source} bracket for {tournament.year} {tournament.name} "
+            f"({tournament.gender}) agrees with only {round(agreement * 100)}% of "
+            f"the field — draw keeps its current author",
+            report, dedup_key=f"shape_disagree_{source}_{tournament.id}", dedup_hours=24)
+        return report
+
+    # Keep our spelling for anyone the source merely respells.
+    ours = {e.bracket_position: e for e in entries}
+    for e in shape.entrants:
+        mine = ours.get(e.bracket_position)
+        if mine and (mine.name or "").strip() and e.name and same_person(mine.name, e.name):
+            e.name = mine.name
+        if mine and mine.nationality and not e.nationality:
+            e.nationality = mine.nationality
+        if mine and mine.seed and not e.seed:
+            e.seed = mine.seed                 # a seed TE has not printed yet
+
+    await _do_scrape(tournament, db, parsed=shape_to_parsed(shape))
+    slugs = {e.bracket_position: e.te_slug for e in shape.entrants if e.te_slug}
+    if slugs:
+        for e in entries:
+            if not e.te_slug and slugs.get(e.bracket_position):
+                e.te_slug = slugs[e.bracket_position]
+    for k, v in ids.items():
+        setattr(tournament, k, v)
+    changed = tournament.shape_source != source
+    tournament.shape_source = source
+    report.update(refreshed=True, source=source, entrants=shape.entrant_count,
+                  byes=len(shape.byes))
+    if changed:
+        await app_log(
+            "info", "draws",
+            f"{tournament.year} {tournament.name} ({tournament.gender}) is now "
+            f"authored by {source} ({shape.entrant_count} entrants, "
+            f"{round(agreement * 100)}% agreement with the field it replaces)",
+            report)
+    return report
+
+
 async def bootstrap_draw(tournament: Draw, db: AsyncSession) -> dict:
     """Build a draw's shape from the best source that has it, when we have none.
 
@@ -1874,11 +2091,8 @@ async def bootstrap_draw(tournament: Draw, db: AsyncSession) -> dict:
     The shape goes through shape_to_parsed into _do_scrape, so the write is
     the same write Wikipedia gets.
     """
-    import logging
-
-    from app.services.sofa_draw_shape import bracket_is_complete, shape_to_parsed
+    from app.services.sofa_draw_shape import shape_to_parsed
     from app.services.system_log import app_log
-    logger = logging.getLogger(__name__)
 
     report: dict = {"draw_id": tournament.id, "bootstrapped": False, "tried": []}
 
@@ -1889,79 +2103,7 @@ async def bootstrap_draw(tournament: Draw, db: AsyncSession) -> dict:
         report["error"] = f"draw already has {existing} entries — not ours to rebuild"
         return report
 
-    shape, source, ids = None, None, {}
-
-    # 1. The tour's own sheet, for a women's draw.
-    if (tournament.gender or "").upper() == "F":
-        from app.services import wta_draw
-        row = await db.get(Tournament, tournament.tournament_id) if tournament.tournament_id else None
-        event_id = wta_draw.event_id_for(tournament, row)
-        if event_id:
-            report["tried"].append("wta_official")
-            try:
-                got = wta_draw.fetch_shape(int(event_id), int(tournament.year))
-            except Exception as exc:
-                logger.warning("WTA draw fetch failed for draw %s: %s", tournament.id, exc)
-                got = None
-            if got and bracket_is_complete(got):
-                shape, source = got, "wta_official"
-            elif got:
-                report["wta_official"] = "incomplete"
-
-    # 2. Tennis Explorer, either tour.
-    if shape is None:
-        from app.services import te_draw
-        report["tried"].append("tennisexplorer")
-        try:
-            got = await te_draw.fetch_shape(tournament)
-        except Exception as exc:
-            logger.warning("TE draw fetch failed for draw %s: %s", tournament.id, exc)
-            got = None
-        if got and bracket_is_complete(got):
-            # TE prints SURNAMES. The slug is the identity, and the TE player
-            # index this project already keeps (5,800+ slugs, from the
-            # rankings scrape) turns it back into the full name the rest of
-            # the pipeline resolves on — locally, no request. 8 of 8 on the
-            # first draw measured. A slug the index lacks keeps its surname.
-            from app.models.rankings import TePlayer
-            from app.services.rankings import COUNTRY_TO_IOC
-            slugs = [e.te_slug for e in got.entrants if e.te_slug]
-            if slugs:
-                rows = (await db.execute(select(TePlayer).where(
-                    TePlayer.te_slug.in_(slugs)))).scalars().all()
-                by_slug = {r.te_slug: r for r in rows}
-                nats = 0
-                for e in got.entrants:
-                    r = by_slug.get(e.te_slug) if e.te_slug else None
-                    if r is None:
-                        continue
-                    full = (r.name_display or f"{r.first_name or ''} {r.last_name or ''}").strip()
-                    if full:
-                        e.name = full
-                    # The index stores an English country name; entries store
-                    # the IOC code, through the same map assign_rankings uses.
-                    ioc = COUNTRY_TO_IOC.get((r.nationality or "").strip().lower())
-                    if ioc and not e.nationality:
-                        e.nationality, nats = ioc, nats + 1
-                report["te_names_resolved"] = f"{len(by_slug)}/{len(slugs)}"
-                report["te_nationalities"] = nats
-            shape, source = got, "tennisexplorer"
-        elif got:
-            report["tennisexplorer"] = "incomplete"
-
-    # 3. Sofascore, last: identity is dearer and the tree fills late.
-    if shape is None:
-        from app.services.sofascore import resolve_without_field
-        report["tried"].append("sofascore")
-        found = await resolve_without_field(tournament)
-        if found is not None:
-            uid, season_id, got = found
-            ids = {"sofa_tournament_id": uid, "sofa_season_id": season_id}
-            if bracket_is_complete(got):
-                shape, source = got, "sofascore"
-            else:
-                report["sofascore"] = (f"incomplete: {got.entrant_count} entrants + "
-                                       f"{len(got.byes)} byes in a {got.bracket_size} bracket")
+    shape, source, ids = await _shape_from_sources(tournament, db, report)
 
     if shape is None:
         report["error"] = "no source has a complete bracket for this draw yet"
@@ -1982,6 +2124,7 @@ async def bootstrap_draw(tournament: Draw, db: AsyncSession) -> dict:
                 e.te_slug = slugs[e.bracket_position]
     for k, v in ids.items():
         setattr(tournament, k, v)
+    tournament.shape_source = source
 
     report.update(bootstrapped=True, source=source, bracket_size=shape.bracket_size,
                   entrants=shape.entrant_count, byes=len(shape.byes), **ids)
@@ -2117,7 +2260,7 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
     # schedule pages can include qualifying days which shift the date by 1-2 days.
     # Skip date updates once the tournament is active/completed: qualifying can
     # start a day before the Wikipedia-reported date, and Wikipedia lags real play.
-    if tournament.status not in ("active", "completed"):
+    if tournament.status not in ("active", "completed") and getattr(parsed, "carries_dates", True):
         # A RELEASED DRAW'S START DATE NEVER MOVES BACKWARDS. Moving it earlier
         # is the one date change that can close a draw people are picking:
         # Draw.computed_status calls any draw whose start has passed "active",
@@ -2605,8 +2748,16 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         seen_match_keys.add(key)
         if key in existing_matches:
             match = existing_matches[key]
-            match.player1_id = p1_id
-            match.player2_id = p2_id
+            # A LATER-ROUND SLOT IS NEVER CLEARED BY A SOURCE THAT DOES NOT KNOW
+            # IT. Round 1 is structural and the source always states it; from
+            # round 2 on a player is there because a result put him there, and
+            # a shape-only source (the WTA sheet, Tennis Explorer, a cup tree
+            # read for shape) carries no results — so its None means "unknown",
+            # not "nobody". Same principle as the winner guard below.
+            if _keep_known(mr.round_number, p1_id, match.player1_id):
+                match.player1_id = p1_id
+            if _keep_known(mr.round_number, p2_id, match.player2_id):
+                match.player2_id = p2_id
             match.is_bye = mr.is_bye
             # SOFASCORE IS THE SOURCE OF RECORD FOR RESULTS; Wikipedia is the
             # fallback for a match it has none for. Until 2026-09-04 this block

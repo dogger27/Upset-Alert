@@ -317,11 +317,17 @@ def compare_to_entries(shape: DrawShape, entries: list) -> dict:
             out["only_sofascore"].append((s.bracket_position, s.name))
             continue
         out["matched"] += 1
+        # What Sofascore states that we do not yet hold: a seed or an entry
+        # type. Offered to the caller, never written here.
+        if (s.seed is not None and mine.seed is None) or (s.entry_type and not mine.entry_type):
+            out.setdefault("fillable", []).append((mine, s.seed, s.entry_type))
         if mine.bracket_position != s.bracket_position:
             out["position"].append((s.name, mine.bracket_position, s.bracket_position))
-        if s.seed is not None and mine.seed != s.seed:
+        # A DISAGREEMENT IS TWO VALUES THAT DIFFER. A value we lack and the
+        # source states is a fill (above), not a conflict.
+        if s.seed is not None and mine.seed is not None and mine.seed != s.seed:
             out["seed"].append((s.name, mine.seed, s.seed))
-        if s.entry_type and (mine.entry_type or None) != s.entry_type:
+        if s.entry_type and mine.entry_type and mine.entry_type != s.entry_type:
             out["entry_type"].append((s.name, mine.entry_type, s.entry_type))
     out["only_ours"] = sorted({e.name for e in ours.values()})
     return out
@@ -431,4 +437,5 @@ def shape_to_parsed(shape: DrawShape):
         has_direct_draw=bool(named),
         has_qualifiers=any(p.entry_type == "Q" for p in players),
         has_final_winner=False,
+        carries_dates=False,        # shape only: the writer leaves dates alone
     )
