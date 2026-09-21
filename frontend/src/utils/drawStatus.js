@@ -35,33 +35,56 @@ function todayPacific() {
  * and they need two different groupings. Returns
  * { [id]: { cohortMaxDate, cohortHasActive, isLastWeek } }.
  *
- * THE EVENT decides whether a finished draw keeps showing as Active. A
- * combined tournament is two draws under one name, and a men's final does
- * not retire the event while the women's is still on court — that is the
- * whole point of the rule, and an event is exactly the set of draws sharing
- * a tournament_id.
+ * THE EVENT, AND THE WEEK IT IS PLAYED IN, decide whether a finished draw
+ * keeps showing as Active. Both halves are load-bearing, and each was tried
+ * alone first:
  *
- * It used to be a DATE CLUSTER: any two draws whose end dates were within a
- * day of each other moved as one. That welded unrelated tournaments
- * together, and the failure was visible — 2026 Guadalajara finished on the
- * 19th and went on reading "Active" for two days because SP Open, a
- * different event in a different country, ended on the 20th (owner,
- * 2026-09-21: "Is it waiting for SP Open to finish so they can move
- * together?"). It also made the bucket depend on a date that can be wrong:
- * SP Open's own end date was stale by a rain delay at the time.
+ *   DATES ALONE welded unrelated tournaments together. 2026 Guadalajara
+ *   finished on the 19th and went on reading "Active" for two days because
+ *   SP Open — a different event, a different country — ended on the 20th
+ *   (owner, 2026-09-21).
  *
- * THE WEEK still decides which finished cohort is "Last Week", and there the
- * date proximity is right: that section is a week's worth of tournaments,
- * not one event. So the clustering survives for exactly that, and for
- * nothing else.
+ *   A tournament_id ALONE trusts that a tournament row is one week of play,
+ *   and four of them are not: an ATP and a WTA event sharing a city's name
+ *   are one row here even when they are months apart. Hong Kong's ATP 250
+ *   was played in January and its WTA 250 is in November, so the January
+ *   event inherited a cohort running to November and reappeared under
+ *   ACTIVE in September, ten months after its final (owner, 2026-09-21).
+ *
+ * So a cohort is draws that share a tournament_id AND are played together —
+ * the intersection, narrower than either rule was. A combined event's two
+ * draws qualify: same row, same week, and a men's final does not retire the
+ * event while the women's is on court, which is what the rule is for.
+ *
+ * THE WEEK, separately, decides which finished cohort is "Last Week", and
+ * there date proximity across events is right: that section is a week's
+ * worth of tournaments, not one event.
  */
 export function computeCohortInfo(draws) {
   const withDate = (draws || []).filter(t => t.end_date)
   if (!withDate.length) return {}
 
-  // ── the event ────────────────────────────────────────────────────────────
+  /* Split a list, sorted by end_date, wherever consecutive draws are more
+     than a day apart. Used twice below, on two different groupings. */
+  const runs = (sorted) => {
+    const out = []
+    let start = 0
+    for (let i = 1; i <= sorted.length; i++) {
+      const isLast = i === sorted.length
+      const gap = isLast ? Infinity
+        : new Date(sorted[i].end_date + 'T00:00:00') - new Date(sorted[i - 1].end_date + 'T00:00:00')
+      if (isLast || gap > ONE_DAY_MS) {
+        out.push(sorted.slice(start, i))
+        start = i
+      }
+    }
+    return out
+  }
+  const byEnd = (a, b) => a.end_date.localeCompare(b.end_date)
+
+  // ── the event, as played ─────────────────────────────────────────────────
   // A draw with no tournament_id is its own event; nothing else can be said
-  // about it, and pretending otherwise is how the date cluster went wrong.
+  // about it.
   const events = new Map()
   for (const t of withDate) {
     const key = t.tournament_id != null ? `t${t.tournament_id}` : `d${t.id}`
@@ -70,30 +93,18 @@ export function computeCohortInfo(draws) {
   }
   const result = {}
   for (const members of events.values()) {
-    const cohortMaxDate = members.reduce(
-      (mx, t) => (t.end_date > mx ? t.end_date : mx), members[0].end_date)
-    const cohortHasActive = members.some(t => t.status === 'active')
-    for (const t of members) result[t.id] = { cohortMaxDate, cohortHasActive, isLastWeek: false }
-  }
-
-  // ── the week, for "Last Week" alone ──────────────────────────────────────
-  const sorted = [...withDate].sort((a, b) => a.end_date.localeCompare(b.end_date))
-  const weeks = []
-  let clusterStart = 0
-  for (let i = 1; i <= sorted.length; i++) {
-    const isLast = i === sorted.length
-    const gap = isLast ? Infinity
-      : new Date(sorted[i].end_date + 'T00:00:00') - new Date(sorted[i - 1].end_date + 'T00:00:00')
-    if (isLast || gap > ONE_DAY_MS) {
-      weeks.push(sorted.slice(clusterStart, i))
-      clusterStart = i
+    for (const cohort of runs([...members].sort(byEnd))) {
+      const cohortMaxDate = cohort[cohort.length - 1].end_date
+      const cohortHasActive = cohort.some(t => t.status === 'active')
+      for (const t of cohort) result[t.id] = { cohortMaxDate, cohortHasActive, isLastWeek: false }
     }
   }
 
+  // ── the week, for "Last Week" alone ──────────────────────────────────────
   // The most recent week in which nothing is still playing. A week holding an
   // active draw is not last week, whatever its dates say.
   const today = todayPacific()
-  const finished = weeks.filter(
+  const finished = runs([...withDate].sort(byEnd)).filter(
     w => w.every(t => t.status !== 'active') && w[w.length - 1].end_date < today)
   const lastWeek = finished[finished.length - 1]
   if (lastWeek) for (const t of lastWeek) result[t.id].isLastWeek = true

@@ -87,6 +87,29 @@ check('nor does one ending the same day', () => {
   assert.notEqual(bucket(list, 142), 'active')
 })
 
+check('one tournament row, two events months apart, do NOT move together', () => {
+  /* Four tournament rows conflate an ATP and a WTA event that share a city's
+     name but are played weeks or months apart. Hong Kong's ATP 250 was played
+     in January and its WTA 250 is in November, under one row — and grouping by
+     that row alone put the January event under ACTIVE in September, ten months
+     after its final (owner, 2026-09-21: "WTF is going on???"). */
+  const list = [
+    draw(3, 41, '2026-01-11', 'completed'),     // ATP, played in January
+    draw(155, 41, '2026-11-08', 'upcoming'),    // WTA, still to come
+  ]
+  assert.equal(bucket(list, 3), 'previous')
+  assert.equal(bucket(list, 155), 'upcoming')
+})
+
+check('the same row IS one cohort when it is one week of play', () => {
+  // The case the rule exists for, which the narrowing must not break.
+  const list = [
+    draw(1, 41, '2026-09-20', 'completed'),
+    draw(2, 41, '2026-09-21', 'active'),
+  ]
+  assert.equal(bucket(list, 1), 'active')
+})
+
 // ── Last Week is still a WEEK, not one event ──────────────────────────────
 
 check('a week of finished events lands in Last Week together', () => {
