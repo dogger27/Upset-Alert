@@ -72,9 +72,25 @@ export function lockLabel(t, now = Date.now()) {
    in the admin panel) picks stay editable through round one, so a visible
    bracket is a bracket to copy: the server withholds it until EVERY
    first-round match has started — an hour that depends on the tennis and
-   cannot be named in advance. Null once the draw is active or finished. */
-export function othersPicksNote(t) {
-  if (!t || t.status === 'active' || t.status === 'completed') return null
+   cannot be named in advance.
+
+   `hidden` IS THE SERVER'S OWN predictions_hidden, AND IT DECIDES. This
+   function used to answer null for any active draw, on the assumption that a
+   draw going active makes picks visible. It does not: under match-by-match
+   locking a draw goes active at the first ball and picks stay withheld until
+   every first-round match has started, a day or two later. For that window the
+   standings said nothing at all while the server was still withholding the
+   columns — the same root cause as the predictors sheet reading "No one."
+   (owner, 2026-09-21). Pass the flag wherever the payload carries it; the
+   status guess below remains for the screens that read the tournaments LIST,
+   which does not. */
+export function othersPicksNote(t, hidden = null) {
+  if (!t) return null
+  if (hidden === true) return t.pick_lock_mode === 'r1_progressive'
+    ? 'Members’ picks open once every first-round match has started.'
+    : 'Members’ picks open after pick selection closes.'
+  if (hidden === false) return null
+  if (t.status === 'active' || t.status === 'completed') return null
   if (t.pick_lock_mode === 'r1_progressive') {
     return 'Members’ picks open once every first-round match has started.'
   }

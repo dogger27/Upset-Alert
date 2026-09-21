@@ -88,6 +88,7 @@ export default function GlobalStandings() {
      the same enumeration — its own flag, because the model can be off
      for a draw whose range is perfectly computable. */
   const oddsAvail = !!standings.data?.odds_available
+  const picksNote = othersPicksNote(t, standings.data?.predictions_hidden ?? null)
   const oddsNote = standings.data?.odds_attribution
   const chancesSampled = view.chancesSampled
   /* TOP 3 NEEDS A WIDER PHONE. Five numbers plus a username is more
@@ -160,7 +161,12 @@ export default function GlobalStandings() {
           </Card>
         )}
         {/* The site's sidebar toast, as a line: why a row does not open yet. */}
-        {entries.length > 0 && othersPicksNote(t) ? <Muted>{othersPicksNote(t)}</Muted> : null}
+        {/* The server's own predictions_hidden, not a guess from the draw's
+            status: under match-by-match locking a draw goes active at the
+            first ball and picks stay withheld until every first-round match
+            has started, and this line used to vanish for that whole window
+            (see lock.js::othersPicksNote). */}
+        {entries.length > 0 && picksNote ? <Muted>{picksNote}</Muted> : null}
         {entries.length > 0 && (
           <ScrollView style={s.scroller} contentContainerStyle={s.scrollerBody} showsVerticalScrollIndicator={false}
                       refreshControl={<RefreshControl refreshing={pulling} onRefresh={pull} tintColor={C.muted} colors={[C.clay]} />}>
