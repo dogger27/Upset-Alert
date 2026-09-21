@@ -4,7 +4,7 @@
 // through. Each case is a name a real sheet printed and this function once
 // got wrong.
 import assert from 'node:assert/strict'
-import { nationalityIso2, splitPlayerName } from './flags.js'
+import { nationalityIso2, seedMark, splitPlayerName } from './flags.js'
 
 let failed = 0
 function check(label, fn) {
@@ -52,6 +52,24 @@ check('Singapore under either code (WTA Singapore Open, 2026-09-19)', () => {
   assert.deepEqual([r.last, r.nat], ['DESVIGNES', 'SGP'])
   assert.equal(nationalityIso2('SGP'), 'SG')
   assert.equal(nationalityIso2('SIN'), 'SG')
+})
+
+/* Korea Open 2026-09-22 (doc 383): the sheet printed "[WC] [1] Jelena
+   OSTAPENKO LAT", the API sent seed 1, and the card read "OSTAPENKO [1]" — the
+   field's number replaced the whole printed mark and the wild card went with it. */
+check('a seed from the field keeps the sheet\'s entry tag', () => {
+  const printed = splitPlayerName('[WC] [1] Jelena OSTAPENKO LAT').seed
+  assert.equal(seedMark(printed, 1), '[WC] [1]')
+  assert.equal(seedMark('[1] [WC]', 1), '[WC] [1]')
+})
+check('the field\'s number wins over the sheet\'s', () => {
+  assert.equal(seedMark('[17]', 15), '[15]')
+  assert.equal(seedMark(null, 4), '[4]')
+})
+check('no field: the printed mark as it stands', () => {
+  assert.equal(seedMark('[Q]', null), '[Q]')
+  assert.equal(seedMark('[WC] [2]', undefined), '[WC] [2]')
+  assert.equal(seedMark(null, null), null)
 })
 
 if (failed) { console.log(`\n${failed} failed`); process.exit(1) }
