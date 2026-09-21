@@ -1426,12 +1426,17 @@ const s = StyleSheet.create({
        against the round's 0 (owner, 2026-09-20). */
     marginTop: -S.xs, marginBottom: -S.sm,
   },
-  /* THE CLOCK NEEDS THE FLUSH JOIN GIVEN BACK (owner, 2026-09-21). A border
-     tag is drawn at top:-9 and is 16 tall, so 9pt of it stands ABOVE the
-     card's edge — into the -S.sm this head pulls the card up by, and straight
-     through the court name. -8 becomes +4: the tag's overhang takes 9 of the
-     12pt that buys, and 3 are left as air between the name and the time. */
-  courtHeadClock: { marginBottom: S.xs },
+  /* A LITTLE ROOM FOR THE CLOCK, not a gap (owner, 2026-09-21: "You made the
+     space to big. I said just a little bit"). A border tag is drawn at top:-9
+     and is 16 tall, so 9pt of it stands above the card's edge, into the -S.sm
+     this head pulls the card up by. Clearing all 9 of that — -8 to +4 — was
+     the first try and read as a hole.
+
+     ONE S.xs STEP instead: -8 to -4. The tag no longer sits on the court
+     name, it sits in the slack under it — the name is uppercase through an
+     eyebrow face, so the descender space below its caps is empty and is
+     exactly what the tag's last few points can use. */
+  courtHeadClock: { marginBottom: -S.xs },
   /* UNDER A TOURNAMENT'S NAME the court is that name's second line, and the
      row above has already pulled 10pt up for it (tournHeadTight) — so this
      drops its own pull, or the two would stack to -14 and run the lines
