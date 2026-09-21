@@ -941,6 +941,36 @@ export function EntryChip({ entryType }) {
 }
 
 
+/* THE ROUND, AS A CHIP IDENTICAL TO THE ENTRY CHIP BESIDE IT (owner,
+ * 2026-09-21: "The round pill should be formatted the exact same as the player
+ * identifier pill, to its left. It's currently not aligned and just
+ * different").
+ *
+ * It was a lookalike of its own in schedule.jsx — same height and radius, but
+ * an 11pt label where a three-character entry chip drops to 9.5, a neutral
+ * border instead of the qualifier's, and, because it was a SIBLING of the
+ * card rather than a child of the player's line, top-aligned where the entry
+ * chip centres. Three ways to be nearly right.
+ *
+ * So it is the same markup, reading the same tokens, and it is rendered INSIDE
+ * the first player's line — which is what makes the alignment exact rather
+ * than matched by eye: the two chips are laid out by one row, on one set of
+ * rules, and nothing keeps them in step because nothing can fall out of step.
+ */
+export function RoundChip({ round }) {
+  if (!round) return null
+  const label = String(round)
+  return (
+    <View style={[u.entryChip, { backgroundColor: BADGE.qual.bg, borderColor: BADGE.qual.line }]}>
+      <Text style={[u.badgeText, label.length > 2 && u.badgeTextWide, { color: BADGE.qual.fg }]}
+            numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  )
+}
+
+
 /* ATP or WTA, as a badge.
  *
  * NOT COSMETIC. A combined event puts two draws called exactly "US Open" in the

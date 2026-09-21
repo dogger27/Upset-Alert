@@ -1035,19 +1035,6 @@ function LineTags({ first, alt, when, tournament }) {
 }
 
 
-/* THE ROUND, AS A PILL ON THE TOP PLAYER'S OWN LINE (owner, 2026-09-21).
-   Quieter than an entry chip — a round LABELS the match, where [Q] and [WC]
-   say something about a player — so it borrows the chip's geometry and takes
-   the neutral border and a muted ink rather than the qualifier's colour. */
-function RoundPill({ round }) {
-  if (!round) return null
-  return (
-    <View style={s.miniRoundPill} pointerEvents="none">
-      <Text style={s.miniRoundPillText} numberOfLines={1}>{round}</Text>
-    </View>
-  )
-}
-
 /* The H2H pair a row can open — singles, both players known to Tennis
    Explorer — in the shape the H2H sheet takes. */
 function h2hPairOf(e) {
@@ -1123,19 +1110,13 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
       {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
       {/* The first row's tags are drawn by MiniRows, over the card's edge. */}
       {!first ? <LineTags alt={alt} when={when} tournament={tournament} /> : null}
-      {/* THE CARD AND THE ROUND, SIDE BY SIDE, TOP-ALIGNED (owner,
-          2026-09-21). A row rather than an absolute pill, and that choice is
-          what does the work: the card takes the width the pill leaves, so the
-          entry chips inside it — [WC], [Q] — right-align against the pill's
-          left edge on their own, with no width to measure and nothing to keep
-          in step when the label is "R32" one week and "F" the next.
-          flex-start puts the pill's top on the top player's line; both are
-          leading(16) tall, so they read as one row. */}
-      <View style={[s.miniBody, round && s.miniBodyRound]}>
-        <View style={[s.miniCard, round && s.miniCardRound]}>
-          <MatchCard e={e} scale={0.8} badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
-        </View>
-        <RoundPill round={round} />
+      {/* THE ROUND TRAVELS WITH THE CARD, not beside it: MatchCard puts it on
+          the top player's line, after that player's entry chip, so the two
+          chips are laid out by one row and cannot drift apart (owner,
+          2026-09-21). */}
+      <View style={s.miniCard}>
+        <MatchCard e={e} scale={0.8} round={round}
+                   badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
       </View>
     </Wrap>
   )
@@ -1358,6 +1339,22 @@ const TOUR_BAR = { ATP: '#2563eb', WTA: '#db2777' }
    constants rather than two copies that can drift by a point and overflow the
    row the solver promised would fit.
    PILL_CHROME is the horizontal padding AND the border, both sides. */
+/* THE CLOCK'S OWN COLUMN on the mini view's border strip (owner, 2026-09-21:
+   "Both player rows need to be indented so the times are on the far left on
+   their own"). The clock STAYS on the top border — the owner's call when asked
+   — and both player rows indent past it, so it stands alone at the left
+   instead of sitting directly over the first seed badge.
+
+   MEASURED, not eyeballed: the strip starts at left:10, a LineTag pads 4
+   either side, and s.rowWhen is Archivo 500 at 11pt, where "11:30 PM" is
+   47.0pt and "12:00 AM" 47.6pt — so an ordinary clock ends at 65.6pt and 70
+   leaves a 4pt gap after it. The ladder's long form ("NB 3:30 PM", 77.4pt)
+   overruns that by 7, which costs nothing visible: a tag is drawn at top:-9
+   and is 16 tall, so it straddles the border inside the row's 6pt of top
+   padding and never reaches the player lines. Sizing every row for that rare
+   phrase would take 10pt of name width from all of them. */
+const MINI_CLOCK_COL = 70
+
 const PILL_SIZE = 13          // the size a roomy row keeps; never exceeded
 const PILL_TIER_RATIO = 0.8   // the tier line, relative to the name
 /* NO AIR EITHER SIDE (owner, 2026-09-21: "show text edge to edge of each box -
@@ -1486,21 +1483,11 @@ const s = StyleSheet.create({
   rowsInWrap: { marginHorizontal: 0, borderRadius: 0, borderLeftWidth: 0, borderRightWidth: 0 },
   // The cell: [group bar][card][H2H bar], the bars full height.
   // Room for a tab on either side: the tour bar, the tab, a hair.
-  /* INDENTED (owner, 2026-09-21): the content used to start 8pt in, which put
-     the seed badge almost against the tour bar on the left edge. */
-  miniCard: { flex: 1, minWidth: 0, paddingLeft: 16, paddingRight: 27 },
-  /* With a round beside it the card gives up the side-tab reserve to the row,
-     and keeps only the MARGIN the owner asked for between an entry chip and
-     the round pill. Without a round the card keeps the 27 itself, so a past
-     day's rows are exactly where they were. */
-  miniCardRound: { paddingRight: 8 },
-  miniBody: { flexDirection: 'row', alignItems: 'flex-start' },
-  miniBodyRound: { paddingRight: 27 },
-  miniRoundPill: {
-    height: leading(16), borderRadius: 3, borderWidth: 1, borderColor: C.borderOn,
-    paddingHorizontal: leading(5), alignItems: 'center', justifyContent: 'center',
-  },
-  miniRoundPillText: { fontFamily: 'Archivo_700Bold', fontSize: 11, color: C.muted },
+  /* INDENTED PAST THE CLOCK (owner, 2026-09-21). It was 8, which put the seed
+     badge almost against the tour bar; then 16, which still sat it directly
+     under the time on the border. Both player rows now start clear of the
+     clock's column — see MINI_CLOCK_COL for the arithmetic. */
+  miniCard: { paddingLeft: MINI_CLOCK_COL, paddingRight: 27 },
   /* THE DRAW VIEW'S SIDE TABS, run top to bottom (owner, 2026-09-17): the
      bracket's chip — 24 wide, 1px green-500 on the card fill, radius 4 —
      stretched to the row's height, the word on its side, the icon upright. */
