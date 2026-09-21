@@ -19,8 +19,9 @@ After every sync a deduplication pass runs and logs warnings for any remaining
 
 import logging
 import math
+import unicodedata
 from datetime import date, timedelta
-from typing import Optional
+from typing import Awaitable, Callable, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -96,18 +97,71 @@ async def _resolve_variant_id(
     return default.id if default else None
 
 
+def fold(text: Optional[str]) -> str:
+    """Casefolded, accents stripped, whitespace collapsed — "Iași" == "IASI".
+
+    Two sources spell one place two ways: our draws carry Wikipedia's "Iași",
+    the WTA's season list says "IASI". Every name and city comparison below
+    goes through this, or the same tournament reads as two.
+    """
+    n = unicodedata.normalize("NFKD", text or "")
+    return " ".join("".join(c for c in n if not unicodedata.combining(c)).casefold().split())
+
+
 def _name_overlap(a: str, b: str) -> bool:
-    """True if one name contains the other (case-insensitive)."""
-    a, b = a.lower(), b.lower()
-    return a in b or b in a
+    """True if one name contains the other (case- and accent-insensitive)."""
+    a, b = fold(a), fold(b)
+    return bool(a and b) and (a in b or b in a)
+
+
+def _same_city(a: Optional[str], b: Optional[str]) -> bool:
+    return bool(a and b) and fold(a) == fold(b)
+
+
+Matcher = Callable[[AsyncSession, DiscoveredTournament, int], Awaitable[Optional[Draw]]]
 
 
 async def find_existing_match(
     db: AsyncSession,
     discovered: DiscoveredTournament,
     year: int,
+    *,
+    fallback: Optional[Matcher] = None,
 ) -> Optional[Draw]:
-    """Return the best existing DB record for *discovered*, or None."""
+    """Return the best existing DB record for *discovered*, or None.
+
+    *fallback* is a further matcher the caller trusts (the WTA list's
+    any-category city tie-break), tried whenever the rules here find nothing.
+    Ambiguity is reported only once it has had its chance: a tie the caller
+    resolves is not ambiguous. The WTA sync used to call the fallback AFTER
+    this returned, so "UniCredit Iasi Open" was reported as ambiguous and then
+    matched to our Iași Open a line later (2026-09-21).
+    """
+    found, ambiguous = await _match(db, discovered, year)
+    if found is None and fallback is not None:
+        found = await fallback(db, discovered, year)
+    if found is None and ambiguous:
+        logger.warning(
+            "Ambiguous match for %s %s (%s %s) — %d candidates, skipping upsert",
+            year, discovered.name, discovered.gender, discovered.category, ambiguous,
+        )
+        from app.services.system_log import app_log
+        await app_log(
+            "warning", "discovery",
+            f"Ambiguous tournament match — '{discovered.name}' {year} skipped",
+            {"name": discovered.name, "year": year, "gender": discovered.gender,
+             "category": discovered.category, "candidates": ambiguous},
+            dedup_key=f"ambiguous_{year}_{discovered.name}", dedup_hours=24,
+        )
+    return found
+
+
+async def _match(
+    db: AsyncSession,
+    discovered: DiscoveredTournament,
+    year: int,
+) -> tuple[Optional[Draw], int]:
+    """(the matching record or None, how many candidates were left tied)."""
 
     # 1. Exact wiki_page_title
     res = await db.execute(
@@ -115,7 +169,7 @@ async def find_existing_match(
     )
     exact = res.scalar_one_or_none()
     if exact:
-        return exact
+        return exact, 0
 
     # 1b. The stored title may use a different suffix variant than the
     #     discovered one ("– Women's singles" vs "– Singles", either way
@@ -133,10 +187,10 @@ async def find_existing_match(
     )
     alt = res.scalars().first()
     if alt:
-        return alt
+        return alt, 0
 
     if not discovered.start_date:
-        return None
+        return None, 0
 
     # 2. Same year / gender / category + date within 7 days
     date_str = discovered.start_date.isoformat()
@@ -155,47 +209,31 @@ async def find_existing_match(
     candidates = res.scalars().all()
 
     if not candidates:
-        return None
+        return None, 0
 
     if len(candidates) == 1:
         # For 1000s and Grand Slams, a single date-match is definitive
         cat_row = await db.get(DrawCategory, discovered.category)
         if cat_row and cat_row.one_per_slot:
-            return candidates[0]
+            return candidates[0], 0
         # For 500s and 250s, require city or name agreement as a sanity check
         c = candidates[0]
-        if discovered.city and c.city and discovered.city.lower() == c.city.lower():
-            return c
+        if _same_city(discovered.city, c.city):
+            return c, 0
         if _name_overlap(discovered.name, c.name):
-            return c
-        return None
+            return c, 0
+        return None, 0
 
     # Multiple candidates (ATP/WTA 250, multiple per week)
-    if discovered.city:
-        city_matches = [
-            c for c in candidates
-            if c.city and c.city.lower() == discovered.city.lower()
-        ]
-        if len(city_matches) == 1:
-            return city_matches[0]
+    city_matches = [c for c in candidates if _same_city(discovered.city, c.city)]
+    if len(city_matches) == 1:
+        return city_matches[0], 0
 
     name_matches = [c for c in candidates if _name_overlap(discovered.name, c.name)]
     if len(name_matches) == 1:
-        return name_matches[0]
+        return name_matches[0], 0
 
-    logger.warning(
-        "Ambiguous match for %s %s (%s %s) — %d candidates, skipping upsert",
-        year, discovered.name, discovered.gender, discovered.category, len(candidates),
-    )
-    from app.services.system_log import app_log
-    await app_log(
-        "warning", "discovery",
-        f"Ambiguous tournament match — '{discovered.name}' {year} skipped",
-        {"name": discovered.name, "year": year, "gender": discovered.gender,
-         "category": discovered.category, "candidates": len(candidates)},
-        dedup_key=f"ambiguous_{year}_{discovered.name}", dedup_hours=24,
-    )
-    return None
+    return None, len(candidates)
 
 
 async def _apply_update(
@@ -529,22 +567,21 @@ async def _find_duplicates(db: AsyncSession, year: int) -> list:
     )
     results.extend(res.all())
 
-    # Strategy 3: same gender + category + start_date + city, any tier.
+    # Strategy 3: same gender + category + start_date + city, any tier. The
+    # city is folded in Python, not lowered in SQL: "Iasi" and "Iași" are one
+    # city, and SQLite's lower() leaves the accent in place.
     res = await db.execute(
-        select(
-            Draw.category,
-            Draw.gender,
-            Draw.start_date,
-            func.count().label("n"),
-        )
+        select(Draw.category, Draw.gender, Draw.start_date, Draw.city)
         .where(
             Draw.year == year,
             Draw.start_date.isnot(None),
             Draw.city.isnot(None),
         )
-        .group_by(Draw.gender, Draw.category, Draw.start_date, func.lower(Draw.city))
-        .having(func.count() > 1)
     )
-    results.extend(res.all())
+    same_city: dict = {}
+    for category, gender, start, city in res.all():
+        key = (category, gender, start, fold(city))
+        same_city[key] = same_city.get(key, 0) + 1
+    results.extend((k[0], k[1], k[2], n) for k, n in same_city.items() if n > 1)
 
     return results
