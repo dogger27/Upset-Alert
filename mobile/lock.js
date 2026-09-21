@@ -85,3 +85,34 @@ export function othersPicksNote(t) {
   })
   return `Members’ picks open after pick selection closes${when ? `: ${when}` : ''}.`
 }
+
+
+/* WHY A MATCH CAN HAVE NO PREDICTORS AND STILL HAVE BEEN PREDICTED.
+ *
+ * The predictors endpoint answers empty columns in two situations that mean
+ * opposite things: nobody picked this match, or everybody did and the server
+ * is still withholding it. It distinguishes them itself with `hidden`, and
+ * the sheet did not look — so a completed first-round match at Singapore read
+ * "Right (0) — No one." while six people had picked it, one of them
+ * correctly (owner, 2026-09-21).
+ *
+ * `hidden` can only mean match-by-match locking on an unfinished draw:
+ * services/locking.predictions_visible() returns true at once for a completed
+ * draw and for every other lock mode, so one sentence covers every case that
+ * reaches here. It is deliberately the SAME rule othersPicksNote states on
+ * the standings, worded for a sheet about one match.
+ */
+export const HIDDEN_PICKS_NOTE =
+  'Picks are hidden while they can still change. '
+  + 'They open once every first-round match has started.'
+
+
+/* The sentence to show INSTEAD OF the two columns, or null to show them.
+ *
+ * Returns null for a payload that has not arrived: nothing loaded is not an
+ * answer, and the caller is already drawing a spinner for it.
+ */
+export function predictorsMessage(d) {
+  if (!d) return null
+  return d.hidden ? HIDDEN_PICKS_NOTE : null
+}

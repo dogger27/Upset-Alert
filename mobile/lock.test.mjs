@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { lockLabel, othersPicksNote } from './lock.js'
+import { HIDDEN_PICKS_NOTE, lockLabel, othersPicksNote, predictorsMessage } from './lock.js'
 
 test('others’ picks: the mode decides the wait, and an active draw has none', () => {
   assert.equal(othersPicksNote({ status: 'active', pick_lock_mode: 'r1_progressive' }), null)
@@ -77,4 +77,46 @@ test('nothing to say, rather than something wrong', () => {
   assert.equal(lockLabel(null), null)
   assert.equal(lockLabel({ pick_lock_mode: 'draw_start' }), null)
   assert.equal(lockLabel({ closing_time: 'not a date' }), null)
+})
+
+/* ── EMPTY COLUMNS ARE NOT "NOBODY" ──────────────────────────────────────
+ *
+ * The "Who got it right?" sheet read Right (0) "No one." / Wrong (0) "No one."
+ * on a COMPLETED first-round match at Singapore (owner, 2026-09-21, with a
+ * screenshot). Six people had picked it — one right, five wrong.
+ *
+ * The server was correct and said so: under match-by-match locking it
+ * withholds everyone's picks until every first-round match has STARTED, and
+ * it answers `{correct: [], incorrect: [], hidden: true}`. Verified in
+ * production against that very match. The sheet had no branch for `hidden`,
+ * so it fell through to the empty-list wording and asserted the opposite of
+ * the truth.
+ *
+ * `hidden` implies match-by-match locking and an unfinished draw, always:
+ * predictions_visible() returns true immediately for a completed draw and for
+ * every other lock mode, so nothing else can reach this state. That is what
+ * lets one sentence explain it.
+ */
+test('a withheld answer is told apart from an empty one', () => {
+  assert.equal(predictorsMessage({ correct: [], incorrect: [], hidden: true }),
+               HIDDEN_PICKS_NOTE)
+  // Genuinely nobody: the columns speak for themselves, no note.
+  assert.equal(predictorsMessage({ correct: [], incorrect: [] }), null)
+  assert.equal(predictorsMessage({ correct: [], incorrect: [], hidden: false }), null)
+  // Somebody, and still withheld — the case that made this a lie rather than
+  // a blank: the note wins, and the caller must not render the columns.
+  assert.equal(predictorsMessage({ correct: [{ id: 1 }], incorrect: [], hidden: true }),
+               HIDDEN_PICKS_NOTE)
+  // Nothing loaded yet is not an answer at all.
+  assert.equal(predictorsMessage(null), null)
+  assert.equal(predictorsMessage(undefined), null)
+})
+
+test('the note says when the picks arrive, not merely that they are gone', () => {
+  // A reader who is told "hidden" and not "until when" has been told nothing
+  // they can act on. It is the same rule othersPicksNote states on the
+  // standings, so the two must not drift into two different explanations.
+  assert.match(HIDDEN_PICKS_NOTE, /every first-round match has started/)
+  assert.match(othersPicksNote({ status: 'open', pick_lock_mode: 'r1_progressive' }),
+               /every first-round match has started/)
 })
