@@ -219,11 +219,42 @@ def test_wikipedias_season_sync_no_longer_moves_dates_the_tour_owns():
     asyncio.run(go())
 
 
-def test_a_team_event_with_no_singles_draw_is_not_a_draw():
+def test_a_team_event_is_not_a_draw_whatever_its_size_says():
     """United Cup sits at WTA 500 in the list with singlesDrawSize 0; the dry
     run against production would have created it as a draw."""
-    e = dict(EVENTS[0]); e.update(title="United Cup - Perth, AUS", singlesDrawSize=0, liveScoringId="9999")
+    e = dict(EVENTS[0]); e.update(title="United Cup - Perth, AUS", tournamentGroup={"name": "UNITED CUP"},
+                                  singlesDrawSize=0, liveScoringId="9999")
     assert wta_season.to_discovered(e) is None
+
+
+def test_a_missing_size_is_not_a_team_event():
+    """The tour lists Eastbourne 2026 with both draw sizes 0 — a data gap, and
+    the one women's draw left unkeyed after the first production run because
+    the size filter threw it away. Kept, keyed, never resized, never created."""
+    e = dict(EVENTS[0]); e.update(title="Lexus Eastbourne Open - Eastbourne, GBR", tournamentGroup={"name": "EASTBOURNE"},
+                                  level="WTA 250", startDate="2026-06-22", endDate="2026-06-27", city="EASTBOURNE",
+                                  singlesDrawSize=0, doublesDrawSize=0, liveScoringId="710", year=2026)
+    d = wta_season.to_discovered(e)
+    assert d is not None and d.wta_id == 710 and d.draw_size == 0
+
+    async def go():
+        engine, Session = await _db()
+        async with Session() as db:
+            t = Tournament(name="Eastbourne Open", year=2026); db.add(t); await db.flush()
+            db.add(Draw(name="Eastbourne Open", year=2026, gender="F", draw_size=32, num_rounds=5, category="WTA 250",
+                        wiki_page_title="2026 Eastbourne Open – Women's singles", start_date=date(2026, 6, 22),
+                        end_date=date(2026, 6, 27), city="Eastbourne", tournament_id=t.id))
+            await db.commit()
+            r = await wta_season.sync_wta_season(db, 2026, events=[e], today=date(2026, 6, 1)); await db.commit()
+            d = (await db.execute(select(Draw).where(Draw.name == "Eastbourne Open"))).scalar_one()
+            assert r["keyed"] == 1 and r["created"] == 0
+            assert (await db.get(Tournament, t.id)).wta_live_scoring_id == 710
+            assert d.draw_size == 32, "a 0 from the list must not shrink the draw"
+        async with Session() as db:          # and with no draw to match, nothing is created
+            r = await wta_season.sync_wta_season(db, 2026, events=[dict(e, liveScoringId="711")], today=date(2026, 6, 1))
+            assert r["created"] == 0 and r.get("unsized") == 1
+        await engine.dispose()
+    asyncio.run(go())
 
 
 def test_a_sponsored_name_still_finds_our_draw_by_city_that_week():

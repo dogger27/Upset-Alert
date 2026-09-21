@@ -74,6 +74,15 @@ def clean_name(title: str, group: str) -> str:
     return name
 
 
+_TEAM_WORDS = ("united cup", "billie jean king cup", "hopman cup", "team event")
+
+
+def is_team_event(item: dict) -> bool:
+    """A tour-level entry that is a competition between nations, not a draw."""
+    text = " ".join(((item.get("title") or ""), ((item.get("tournamentGroup") or {}).get("name") or ""))).lower()
+    return any(w in text for w in _TEAM_WORDS)
+
+
 def _cached_json(url: str) -> dict:
     f = f"{CACHE_DIR}/{hashlib.sha1(url.encode()).hexdigest()}.json"
     try:
@@ -120,7 +129,12 @@ def to_discovered(item: dict) -> Optional[DiscoveredTournament]:
         lsid = int(item.get("liveScoringId"))
     except (TypeError, ValueError):
         return None
-    if int(item.get("singlesDrawSize") or 0) < 8:
+    # A TEAM EVENT IS NOT A DRAW; A MISSING SIZE IS NOT A TEAM EVENT. The list
+    # carries United Cup at WTA 500 with singlesDrawSize 0 — and, the same
+    # year, Eastbourne with 0 as a plain data gap. Excluding on size alone
+    # threw a real tournament away (the one women's draw left unkeyed after
+    # the first production run). Team events are named; sizes are advisory.
+    if is_team_event(item):
         return None
     group = (item.get("tournamentGroup") or {}).get("name") or ""
     name = clean_name(item.get("title") or "", group)
@@ -228,6 +242,8 @@ async def sync_wta_season(db, year: int, *, today: Optional[date] = None,
                     row.wta_live_scoring_id = d.wta_id
                     report["keyed"] += 1
         if existing is not None:
+            if d.draw_size < 8:
+                d.draw_size = existing.draw_size      # the list's 0 is a gap, not a size
             moved = _apply_official_dates(existing, d, today)
             if moved:
                 report["date_changes"].append((existing.id, existing.name, moved))
@@ -238,6 +254,10 @@ async def sync_wta_season(db, year: int, *, today: Optional[date] = None,
                 d.city = None
             if await _apply_update(existing, d, db) or moved:
                 report["updated"] += 1
+            continue
+        if d.draw_size < 8:
+            report["unsized"] = report.get("unsized", 0) + 1
+            logger.info("Not creating %d %s from the WTA list: no draw size stated", year, d.name)
             continue
         try:
             async with db.begin_nested():
