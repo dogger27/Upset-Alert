@@ -269,13 +269,35 @@ def _try_parse_date_range(raw: str, year: int) -> tuple[Optional[date], Optional
     return None, None
 
 
+# How an infobox names which tour a date range belongs to. Matched as
+# substrings of one segment, lowercased — "(atp)" catches "(ATP)" and
+# "(ATP singles)" alike. A segment naming both tours matches either, which is
+# right: it is one range for both.
+_GENDER_DATE_TAGS = {
+    "M": ("(men)", "(men's)", "(mens)", "(atp)"),
+    "F": ("(women)", "(women's)", "(womens)", "(wta)", "(ladies)"),
+}
+
+
 def _parse_infobox_date(wikitext: str, year: int, gender: str = "") -> tuple[Optional[date], Optional[date]]:
     """
     Parse start/end dates from the infobox | date = field.
 
-    When the field contains gender-qualified lines (e.g. '17–23 May (men)' /
-    '20–26 July (women)'), the matching gender line is preferred.
-    Falls back to the first parseable line when no gender match is found.
+    When the field contains gender-qualified lines, the matching gender's line
+    is preferred; the fallback is the first parseable line.
+
+    THE QUALIFIER IS WRITTEN SEVERAL WAYS, and reading only one of them put a
+    combined event's two draws on one set of dates. 2026 China Open says
+
+        | date=30 September – 11 October (WTA)<br> 30 September – 6 October (ATP)
+
+    — the WTA 1000 runs twelve days there and the ATP 500 seven — and with
+    only "(men)" in the vocabulary the men's draw matched nothing, fell
+    through to the first line, and took the women's end date. It showed up as
+    an ATP 500 apparently running twelve days, and as two tournaments
+    disappearing from "Next week" when their starts were corrected (owner,
+    2026-09-21). So the tours' own names count as qualifiers, and so do the
+    possessive forms.
     """
     m = _INFOBOX_DATE_RE.search(wikitext)
     if not m:
@@ -292,15 +314,16 @@ def _parse_infobox_date(wikitext: str, year: int, gender: str = "") -> tuple[Opt
     # Split into segments (by <br>, newline)
     segments = [s.strip() for s in re.split(r"<br\s*/?>|\n", raw_block) if s.strip()]
 
-    gender_tag = "(men)" if gender == "M" else "(women)" if gender == "F" else ""
+    gender_tags = _GENDER_DATE_TAGS.get(gender, ())
 
     def clean(seg: str) -> str:
         return re.sub(r"\s*\([^)]+\).*$", "", seg).strip()
 
     # 1. Try gender-matched segment
-    if gender_tag:
+    if gender_tags:
         for seg in segments:
-            if gender_tag.lower() in seg.lower():
+            low = seg.lower()
+            if any(tag in low for tag in gender_tags):
                 result = _try_parse_date_range(clean(seg), year)
                 if result[0]:
                     return result
