@@ -1863,7 +1863,7 @@ async def bootstrap_from_sofascore(tournament: Draw, db: AsyncSession) -> dict:
     fits — it returns None rather than guess. The shape is then handed to
     `_do_scrape`, so the write is the same write Wikipedia gets.
     """
-    from app.services.sofa_draw_shape import shape_to_parsed
+    from app.services.sofa_draw_shape import bracket_is_complete, shape_to_parsed
     from app.services.sofascore import resolve_without_field
     from app.services.system_log import app_log
 
@@ -1882,6 +1882,19 @@ async def bootstrap_from_sofascore(tournament: Draw, db: AsyncSession) -> dict:
         return report
 
     uid, season_id, shape = found
+    # A HALF-FILLED CUP TREE IS NOT A DRAW. Sofascore fills its bracket
+    # incrementally — Hangzhou read 20 entrants in a 32 bracket two days out,
+    # against Wikipedia's 28 — and writing that would present a partial field
+    # as the draw AND stamp it released, since 20 clears the 50% bar. The
+    # bootstrap only runs on a draw with no entries, so it would never come
+    # back to finish the job.
+    if not bracket_is_complete(shape):
+        report["error"] = (
+            f"Sofascore bracket is incomplete: {shape.entrant_count} entrants "
+            f"+ {len(shape.byes)} byes in a {shape.bracket_size} bracket")
+        report.update(uid=uid, season_id=season_id)
+        return report
+
     parsed = shape_to_parsed(shape)
     await _do_scrape(tournament, db, parsed=parsed)
     # Identity is worth keeping: the next pass reads the field directly.

@@ -326,3 +326,45 @@ def test_seeds_and_entry_types_survive_the_adapter(parsed):
 
 def test_every_player_keeps_its_slot(parsed):
     assert sorted(p.bracket_position for p in parsed.players) == WIKI_POSITIONS
+
+
+# ── the completeness gate ────────────────────────────────────────────────
+
+def test_a_full_bracket_is_complete(shape):
+    """Guadalajara: 28 entrants + 4 byes = 32 slots, nothing unaccounted for."""
+    from app.services.sofa_draw_shape import bracket_is_complete
+    assert bracket_is_complete(shape) is True
+    assert shape.entrant_count + len(shape.byes) == shape.bracket_size
+
+
+def test_the_half_filled_bracket_sofascore_actually_served(shape):
+    """MEASURED 2026-09-21 10:58, two days before play: Hangzhou and Chengdu
+    each read 20 entrants and 4 byes in a 32 bracket, while the Wikipedia draft
+    of the same draw held all 28. Writing that would have presented a partial
+    field as the draw and stamped it released, since 20 clears the 50% bar."""
+    from app.services.sofa_draw_shape import DrawShape, ShapeEntrant, bracket_is_complete
+    partial = DrawShape(
+        bracket_size=32, num_rounds=5,
+        entrants=[ShapeEntrant(bracket_position=i, name=f"P{i}") for i in range(1, 21)],
+        byes=[2, 10, 24, 32])
+    assert partial.entrant_count == 20
+    assert bracket_is_complete(partial) is False
+
+
+@pytest.mark.parametrize("entrants,byes,bracket", [
+    (28, 4, 32), (48, 16, 64), (96, 32, 128), (32, 0, 32), (128, 0, 128),
+])
+def test_every_real_draw_measured_that_day_is_complete(entrants, byes, bracket):
+    from app.services.sofa_draw_shape import DrawShape, ShapeEntrant, bracket_is_complete
+    s = DrawShape(bracket_size=bracket, num_rounds=5,
+                  entrants=[ShapeEntrant(bracket_position=i, name=f"P{i}")
+                            for i in range(entrants)],
+                  byes=list(range(byes)))
+    assert bracket_is_complete(s) is True
+
+
+def test_nothing_is_not_complete():
+    from app.services.sofa_draw_shape import DrawShape, bracket_is_complete
+    assert bracket_is_complete(None) is False
+    assert bracket_is_complete(DrawShape(bracket_size=0, num_rounds=0)) is False
+    assert bracket_is_complete(DrawShape(bracket_size=32, num_rounds=5)) is False

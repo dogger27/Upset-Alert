@@ -211,6 +211,33 @@ def draw_shape(payload: dict) -> Optional[DrawShape]:
     return shape
 
 
+def bracket_is_complete(shape: DrawShape) -> bool:
+    """Whether every slot in the bracket is accounted for.
+
+    A SOFASCORE CUP TREE FILLS INCREMENTALLY, and that is the difference
+    between it and a Wikipedia draw page. Measured 2026-09-21 at 10:58, two
+    days before play: Hangzhou and Chengdu each read 20 entrants and 4 byes in
+    a 32 bracket — 24 of 32 slots — while the Wikipedia draft of the same draw
+    held all 28 entrants including the four qualifier placeholders. Earlier the
+    same morning the cup trees 404'd entirely.
+
+    Without this gate the bootstrap would have written a 20-entrant draw and,
+    because 20 clears `draw_substantially_complete`'s 50% bar, STAMPED IT
+    RELEASED — a half-filled bracket presented as the field, with picks open on
+    it. And since the bootstrap only runs on a draw with no entries, it would
+    then never revisit it.
+
+    The rule is structural rather than a threshold: a bracket is complete when
+    every slot is either occupied or a bye. Verified against the four draws
+    measured that day — Guadalajara and Monterrey 28+4=32, Winston-Salem
+    48+16=64, Cincinnati 96+32=128 — and against the two incomplete ones,
+    20+4=24 in a 32.
+    """
+    if not shape or not shape.bracket_size:
+        return False
+    return shape.entrant_count + len(shape.byes) == shape.bracket_size
+
+
 # ── the shadow comparison ─────────────────────────────────────────────────
 # Evidence before authority. This says where Sofascore and Wikipedia disagree
 # about a draw we already hold, so the decision to demote Wikipedia can be made
