@@ -119,6 +119,15 @@ export function TournamentRenameSheet({ event, onClose }) {
       await setTournamentName(event.tournament_id, value, shortValue)
       // The day's rows carry the shown name; refetch them and the headings follow.
       invalidate('schedule:')
+      /* AND THE TOURNAMENTS LIST, which is where the SHORT name is read from.
+         invalidate() matches by prefix, and 'tournaments' does not begin with
+         'schedule:' — so renaming a tournament left every control that names
+         it from that list showing the old word until the app restarted: the
+         Schedule's filter pills, the tab bar's chooser, the draw screens
+         (owner, 2026-09-21). The pills re-solve their shared text size from
+         the new labels as soon as the data lands, so a longer short name
+         shrinks the row to fit rather than overflowing it. */
+      invalidate('tournaments')
       onClose()
     } catch (e) {
       setError(e?.message || 'Could not rename the tournament.')

@@ -303,13 +303,21 @@ export default function ScheduleScreen() {
      where "Korea" is set larger than "Hangzhou" reads as a mistake, and these
      are a set of equals. */
   const [pillRoom, setPillRoom] = useState(null)
-  const pillLabels = useMemo(
-    () => events.map(t => ({ name: t.short || t.name, tier: tierWord(t.categories) })),
-    [events])
-  const pillSize = useMemo(() => fitPillSize(pillLabels, {
+  const pillLabels = events.map(t => ({ name: t.short || t.name, tier: tierWord(t.categories) }))
+  /* NOT MEMOISED, on purpose. `events` is rebuilt every render, so a
+     dependency on it memoises nothing, and keying a memo on the words meant
+     packing them into a string and parsing them back — which a tournament
+     named with the separator in it would break. The solve is a reduce over at
+     most a handful of pills, each a short walk through a name's characters, so
+     it is cheaper than the bookkeeping.
+
+     It also gives the behaviour for free: change a tournament's short name and
+     the row re-solves its shared size on the next render, so a longer name
+     shrinks the row to fit instead of overflowing it (owner, 2026-09-21). */
+  const pillSize = fitPillSize(pillLabels, {
     avail: pillRoom, family: 'Archivo_700Bold', size: PILL_SIZE,
     tierRatio: PILL_TIER_RATIO, chrome: PILL_CHROME, gap: PILL_GAP, min: 6,
-  }), [pillLabels, pillRoom])
+  })
   const toggleEvent = id => {
     const cur = new Set(eventSel ?? events.map(t => t.id))
     if (cur.has(id)) cur.delete(id)
