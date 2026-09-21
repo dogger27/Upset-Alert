@@ -839,8 +839,19 @@ async def first_main_draw_start(uid: int, season_id: int):
     return starts[0] if starts else None
 
 
+async def _cuptree_of(uid: int, season_id: int) -> dict:
+    """The whole cup tree. One request, and the caller decides what to read.
+
+    Split out from _field_of because the payload carries far more than the
+    names it was reducing to — bracket position, seed, entry type and the byes,
+    i.e. everything Wikipedia was sole author of (see sofa_draw_shape.py). A
+    caller that wants both gets both from one request.
+    """
+    return await _get(f"/unique-tournament/{uid}/season/{season_id}/cuptrees")
+
+
 async def _field_of(uid: int, season_id: int) -> list:
-    payload = await _get(f"/unique-tournament/{uid}/season/{season_id}/cuptrees")
+    payload = await _cuptree_of(uid, season_id)
     return _main_draw_teams(payload.get("cupTrees", []))
 
 
@@ -1027,7 +1038,43 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
         return report
 
     if draw.sofa_tournament_id and draw.sofa_season_id:
-        field = await _field_of(draw.sofa_tournament_id, draw.sofa_season_id)
+        payload = await _cuptree_of(draw.sofa_tournament_id, draw.sofa_season_id)
+        field = _main_draw_teams(payload.get("cupTrees", []))
+        # EVIDENCE BEFORE AUTHORITY. The same payload states the draw's shape —
+        # slot, seed, entry type, byes — which Wikipedia is currently sole
+        # author of. Comparing the two here costs NO extra request and builds
+        # the record the decision to demote Wikipedia should be made on.
+        # Never writes, and never raises into the resolver.
+        try:
+            from app.services.sofa_draw_shape import (
+                compare_to_entries, disagreement_summary, draw_shape)
+
+            shape = draw_shape(payload)
+            if shape and shape.entrant_count:
+                cmp = compare_to_entries(shape, all_rows)
+                report["shape_matched"] = cmp["matched"]
+                why = disagreement_summary(cmp)
+                report["shape_disagreement"] = why
+                if why:
+                    await app_log(
+                        "warning", "sofascore",
+                        f"Draw shape disagrees with Wikipedia for {draw.year} "
+                        f"{draw.name} ({draw.gender}): {why}",
+                        {"draw_id": draw.id, "matched": cmp["matched"],
+                         "position": cmp["position"][:10], "seed": cmp["seed"][:10],
+                         "entry_type": cmp["entry_type"][:10],
+                         "byes_ours": cmp["byes_ours"],
+                         "byes_sofascore": cmp["byes_sofascore"]},
+                        dedup_key=f"shape_disagree_{draw.id}", dedup_hours=24)
+                else:
+                    logger.info(
+                        "Draw shape agrees with Wikipedia for %s %s (%s): "
+                        "%d entrant(s), byes %s",
+                        draw.year, draw.name, draw.gender,
+                        cmp["matched"], cmp["byes_sofascore"])
+        except Exception as exc:      # a comparison must never break resolution
+            logger.warning("Draw shape comparison failed for draw %s: %s",
+                           draw.id, exc)
     else:
         # Resolving the tournament already had to read the field to verify it;
         # reuse that rather than fetching the same cup tree twice.

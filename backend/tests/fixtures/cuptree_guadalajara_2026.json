@@ -1,0 +1,1045 @@
+{
+ "cupTrees": [
+  {
+   "name": "2026 Guadalajara, Mexico",
+   "rounds": [
+    {
+     "order": 1,
+     "blocks": [
+      {
+       "order": 1,
+       "matchesInRound": 0,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "1",
+         "team": {
+          "name": "Marta Kostyuk",
+          "id": 230056,
+          "slug": "kostyuk-marta"
+         }
+        }
+       ]
+      },
+      {
+       "order": 2,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Tatjana Maria",
+          "id": 19520,
+          "slug": "maria-tatjana"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "WC",
+         "team": {
+          "name": "Taylor Townsend",
+          "id": 51387,
+          "slug": "townsend-taylor"
+         }
+        }
+       ]
+      },
+      {
+       "order": 3,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Elvina Kalieva",
+          "id": 267045,
+          "slug": "kalieva-elvina"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": null,
+         "team": {
+          "name": "Kayla Day",
+          "id": 137962,
+          "slug": "day-kayla"
+         }
+        }
+       ]
+      },
+      {
+       "order": 4,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Elsa Jacquemot",
+          "id": 275530,
+          "slug": "jacquemot-elsa"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "8",
+         "team": {
+          "name": "Liudmila Samsonova",
+          "id": 128584,
+          "slug": "samsonova-liudmila"
+         }
+        }
+       ]
+      },
+      {
+       "order": 5,
+       "matchesInRound": 0,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "4",
+         "team": {
+          "name": "Diane Parry",
+          "id": 247791,
+          "slug": "parry-diane"
+         }
+        }
+       ]
+      },
+      {
+       "order": 6,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Peyton Stearns",
+          "id": 261095,
+          "slug": "stearns-peyton"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": null,
+         "team": {
+          "name": "Emiliana Arango",
+          "id": 198197,
+          "slug": "arango-emiliana"
+         }
+        }
+       ]
+      },
+      {
+       "order": 7,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "Q",
+         "team": {
+          "name": "Carole Monnet",
+          "id": 221362,
+          "slug": "monnet-carole"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "WC",
+         "team": {
+          "name": "Sloane Stephens",
+          "id": 23158,
+          "slug": "stephens-sloane"
+         }
+        }
+       ]
+      },
+      {
+       "order": 8,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Darja Vidmanova",
+          "id": 298339,
+          "slug": "vidmanova-darja"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "5",
+         "team": {
+          "name": "Janice Tjen",
+          "id": 291733,
+          "slug": "tjen-janice"
+         }
+        }
+       ]
+      },
+      {
+       "order": 9,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "6",
+         "team": {
+          "name": "Cristina Bucsa",
+          "id": 99131,
+          "slug": "bucsa-cristina"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "WC",
+         "team": {
+          "name": "Bianca Andreescu",
+          "id": 202924,
+          "slug": "andreescu-bianca"
+         }
+        }
+       ]
+      },
+      {
+       "order": 10,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Panna Udvardy",
+          "id": 218347,
+          "slug": "udvardy-panna"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "WC",
+         "team": {
+          "name": "Lois Boisson",
+          "id": 293708,
+          "slug": "boisson-lois"
+         }
+        }
+       ]
+      },
+      {
+       "order": 11,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Alycia Parks",
+          "id": 221410,
+          "slug": "parks-alycia"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "A",
+         "team": {
+          "name": "Varvara Lepchenko",
+          "id": 18919,
+          "slug": "lepchenko-varvara"
+         }
+        }
+       ]
+      },
+      {
+       "order": 12,
+       "matchesInRound": 0,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "3",
+         "team": {
+          "name": "Sara Bejlek",
+          "id": 360184,
+          "slug": "bejlek-sara"
+         }
+        }
+       ]
+      },
+      {
+       "order": 13,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "7",
+         "team": {
+          "name": "Magdalena Frech",
+          "id": 71250,
+          "slug": "frech-magdalena"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "Q",
+         "team": {
+          "name": "Nao Hibino",
+          "id": 72450,
+          "slug": "hibino-nao"
+         }
+        }
+       ]
+      },
+      {
+       "order": 14,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Renata Zarazua",
+          "id": 111189,
+          "slug": "zarazua-renata"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "Q",
+         "team": {
+          "name": "Caroline Dolehide",
+          "id": 123824,
+          "slug": "dolehide-caroline"
+         }
+        }
+       ]
+      },
+      {
+       "order": 15,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Zeynep Sönmez",
+          "id": 237669,
+          "slug": "sonmez-zeynep"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "Q",
+         "team": {
+          "name": "Iryna Shymanovich",
+          "id": 92879,
+          "slug": "shymanovich-iryna"
+         }
+        }
+       ]
+      },
+      {
+       "order": 16,
+       "matchesInRound": 0,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "2",
+         "team": {
+          "name": "Iva Jović",
+          "id": 420632,
+          "slug": "jovic-iva"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "blocks": [
+      {
+       "order": 1,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "1",
+         "team": {
+          "name": "Marta Kostyuk",
+          "id": 230056,
+          "slug": "kostyuk-marta"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "WC",
+         "team": {
+          "name": "Taylor Townsend",
+          "id": 51387,
+          "slug": "townsend-taylor"
+         }
+        }
+       ]
+      },
+      {
+       "order": 2,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Kayla Day",
+          "id": 137962,
+          "slug": "day-kayla"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "8",
+         "team": {
+          "name": "Liudmila Samsonova",
+          "id": 128584,
+          "slug": "samsonova-liudmila"
+         }
+        }
+       ]
+      },
+      {
+       "order": 3,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "4",
+         "team": {
+          "name": "Diane Parry",
+          "id": 247791,
+          "slug": "parry-diane"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": null,
+         "team": {
+          "name": "Peyton Stearns",
+          "id": 261095,
+          "slug": "stearns-peyton"
+         }
+        }
+       ]
+      },
+      {
+       "order": 4,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "WC",
+         "team": {
+          "name": "Sloane Stephens",
+          "id": 23158,
+          "slug": "stephens-sloane"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "5",
+         "team": {
+          "name": "Janice Tjen",
+          "id": 291733,
+          "slug": "tjen-janice"
+         }
+        }
+       ]
+      },
+      {
+       "order": 5,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "6",
+         "team": {
+          "name": "Cristina Bucsa",
+          "id": 99131,
+          "slug": "bucsa-cristina"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": null,
+         "team": {
+          "name": "Panna Udvardy",
+          "id": 218347,
+          "slug": "udvardy-panna"
+         }
+        }
+       ]
+      },
+      {
+       "order": 6,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Alycia Parks",
+          "id": 221410,
+          "slug": "parks-alycia"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "3",
+         "team": {
+          "name": "Sara Bejlek",
+          "id": 360184,
+          "slug": "bejlek-sara"
+         }
+        }
+       ]
+      },
+      {
+       "order": 7,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "7",
+         "team": {
+          "name": "Magdalena Frech",
+          "id": 71250,
+          "slug": "frech-magdalena"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "Q",
+         "team": {
+          "name": "Caroline Dolehide",
+          "id": 123824,
+          "slug": "dolehide-caroline"
+         }
+        }
+       ]
+      },
+      {
+       "order": 8,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Zeynep Sönmez",
+          "id": 237669,
+          "slug": "sonmez-zeynep"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "2",
+         "team": {
+          "name": "Iva Jović",
+          "id": 420632,
+          "slug": "jovic-iva"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "blocks": [
+      {
+       "order": 1,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "1",
+         "team": {
+          "name": "Marta Kostyuk",
+          "id": 230056,
+          "slug": "kostyuk-marta"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "8",
+         "team": {
+          "name": "Liudmila Samsonova",
+          "id": 128584,
+          "slug": "samsonova-liudmila"
+         }
+        }
+       ]
+      },
+      {
+       "order": 2,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Peyton Stearns",
+          "id": 261095,
+          "slug": "stearns-peyton"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "WC",
+         "team": {
+          "name": "Sloane Stephens",
+          "id": 23158,
+          "slug": "stephens-sloane"
+         }
+        }
+       ]
+      },
+      {
+       "order": 3,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "6",
+         "team": {
+          "name": "Cristina Bucsa",
+          "id": 99131,
+          "slug": "bucsa-cristina"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "3",
+         "team": {
+          "name": "Sara Bejlek",
+          "id": 360184,
+          "slug": "bejlek-sara"
+         }
+        }
+       ]
+      },
+      {
+       "order": 4,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "7",
+         "team": {
+          "name": "Magdalena Frech",
+          "id": 71250,
+          "slug": "frech-magdalena"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "2",
+         "team": {
+          "name": "Iva Jović",
+          "id": 420632,
+          "slug": "jovic-iva"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "blocks": [
+      {
+       "order": 1,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "8",
+         "team": {
+          "name": "Liudmila Samsonova",
+          "id": 128584,
+          "slug": "samsonova-liudmila"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": null,
+         "team": {
+          "name": "Peyton Stearns",
+          "id": 261095,
+          "slug": "stearns-peyton"
+         }
+        }
+       ]
+      },
+      {
+       "order": 2,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "6",
+         "team": {
+          "name": "Cristina Bucsa",
+          "id": 99131,
+          "slug": "bucsa-cristina"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "2",
+         "team": {
+          "name": "Iva Jović",
+          "id": 420632,
+          "slug": "jovic-iva"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "order": 5,
+     "blocks": [
+      {
+       "order": 1,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Peyton Stearns",
+          "id": 261095,
+          "slug": "stearns-peyton"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "2",
+         "team": {
+          "name": "Iva Jović",
+          "id": 420632,
+          "slug": "jovic-iva"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "2026 Guadalajara, Mexico, Qualifying",
+   "rounds": [
+    {
+     "order": 1,
+     "blocks": [
+      {
+       "order": 1,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "A",
+         "team": {
+          "name": "Nadiia Kichenok",
+          "id": 49682,
+          "slug": "kichenok-nadiia"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": null,
+         "team": {
+          "name": "Nicole Melichar-Martinez",
+          "id": 46084,
+          "slug": "melichar-martinez-nicole"
+         }
+        }
+       ]
+      },
+      {
+       "order": 2,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "WC",
+         "team": {
+          "name": "Sofiia Bielinska",
+          "id": 1135871,
+          "slug": "bielinska-sofiia"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "5",
+         "team": {
+          "name": "Nao Hibino",
+          "id": 72450,
+          "slug": "hibino-nao"
+         }
+        }
+       ]
+      },
+      {
+       "order": 3,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "2",
+         "team": {
+          "name": "Iryna Shymanovich",
+          "id": 92879,
+          "slug": "shymanovich-iryna"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": null,
+         "team": {
+          "name": "Ana Sofia Sanchez",
+          "id": 59662,
+          "slug": "sanchez-ana-sofia"
+         }
+        }
+       ]
+      },
+      {
+       "order": 4,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Lea Ma",
+          "id": 287806,
+          "slug": "ma-lea"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "7",
+         "team": {
+          "name": "Katarina Zavatska",
+          "id": 195334,
+          "slug": "zavatska-katarina"
+         }
+        }
+       ]
+      },
+      {
+       "order": 5,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "3",
+         "team": {
+          "name": "Carole Monnet",
+          "id": 221362,
+          "slug": "monnet-carole"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": null,
+         "team": {
+          "name": "Julia Garcia",
+          "id": 316256,
+          "slug": "garcia-julia"
+         }
+        }
+       ]
+      },
+      {
+       "order": 6,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Alexandra Panova",
+          "id": 24431,
+          "slug": "panova-alexandra"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "6",
+         "team": {
+          "name": "Katrina Scott",
+          "id": 297369,
+          "slug": "scott-katrina"
+         }
+        }
+       ]
+      },
+      {
+       "order": 7,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "4",
+         "team": {
+          "name": "Sara Sorribes Tormo",
+          "id": 60392,
+          "slug": "sorribes-tormo-sara"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": null,
+         "team": {
+          "name": "Ena Koike",
+          "id": 425590,
+          "slug": "koike-ena"
+         }
+        }
+       ]
+      },
+      {
+       "order": 8,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": null,
+         "team": {
+          "name": "Mingge Xu",
+          "id": 386230,
+          "slug": "xu-mingge"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "8",
+         "team": {
+          "name": "Caroline Dolehide",
+          "id": 123824,
+          "slug": "dolehide-caroline"
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "blocks": [
+      {
+       "order": 1,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "A",
+         "team": {
+          "name": "Nadiia Kichenok",
+          "id": 49682,
+          "slug": "kichenok-nadiia"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "5",
+         "team": {
+          "name": "Nao Hibino",
+          "id": 72450,
+          "slug": "hibino-nao"
+         }
+        }
+       ]
+      },
+      {
+       "order": 2,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "2",
+         "team": {
+          "name": "Iryna Shymanovich",
+          "id": 92879,
+          "slug": "shymanovich-iryna"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": null,
+         "team": {
+          "name": "Lea Ma",
+          "id": 287806,
+          "slug": "ma-lea"
+         }
+        }
+       ]
+      },
+      {
+       "order": 3,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "3",
+         "team": {
+          "name": "Carole Monnet",
+          "id": 221362,
+          "slug": "monnet-carole"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "6",
+         "team": {
+          "name": "Katrina Scott",
+          "id": 297369,
+          "slug": "scott-katrina"
+         }
+        }
+       ]
+      },
+      {
+       "order": 4,
+       "matchesInRound": 1,
+       "participants": [
+        {
+         "order": 1,
+         "teamSeed": "4",
+         "team": {
+          "name": "Sara Sorribes Tormo",
+          "id": 60392,
+          "slug": "sorribes-tormo-sara"
+         }
+        },
+        {
+         "order": 2,
+         "teamSeed": "8",
+         "team": {
+          "name": "Caroline Dolehide",
+          "id": 123824,
+          "slug": "dolehide-caroline"
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
