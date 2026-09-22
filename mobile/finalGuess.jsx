@@ -423,11 +423,6 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
                     data.best_of === 5 ? 'best of five' : 'best of three'].filter(Boolean).join(' · ')}
                 </Text>
               </View>
-              {/* Three questions, and the reader is told so before the first. */}
-              <Text style={s.intro}>
-                Three questions, one at a time. Ties are settled on the sets first,
-                then the aces, then the minutes.
-              </Text>
             </>
           ) : null}
 
