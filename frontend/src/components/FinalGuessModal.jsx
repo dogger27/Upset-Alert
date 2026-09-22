@@ -314,7 +314,7 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
                   {/* "12 month max", not "the longest on hard in 12 months
                       (Ningbo 2025)" (owner, 2026-09-22): three lines to say
                       what the number beside them already says. */}
-                  <span className="fg-ends-max">{fmtLong(durMax)} · 12 month max</span>
+                  <span className="fg-ends-max">{fmtMinutes(durMax)} · 12 month max</span>
                 </div>
                 {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
                 <Reference ctx={ctx} which="minutes" sets={sets} />

@@ -36,18 +36,8 @@ export function fmtMinutes(m) {
    while comparing them is the one job this dialog should not hand back.
    Under an hour the two forms are the same number, so it is said once. */
 export function fmtLong(m) {
-  const { main, sub } = fmtLongParts(m)
-  return sub ? `${main} ${sub}` : main
-}
-
-/* The same rule, kept apart, for the places that STACK the two forms rather
-   than run them together — the slider's ceiling puts the raw minutes on a
-   line of their own, the way the plate above it already does (owner,
-   2026-09-22). One rule, so the two can never disagree about when a duration
-   is long enough to be worth saying twice. */
-export function fmtLongParts(m) {
-  if (m == null) return { main: '–', sub: null }
-  return m >= 60 ? { main: fmtMinutes(m), sub: `(${m} min)` } : { main: `${m} min`, sub: null }
+  if (m == null) return '–'
+  return m >= 60 ? `${fmtMinutes(m)} (${m} min)` : `${m} min`
 }
 
 /* THE PICKED FINAL, IN A LINE (owner, 2026-09-19): "Ostapenko def. Birrell".
@@ -449,8 +439,9 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
                 <Text style={s.qTitle}>What will be the match duration of the final?</Text>
                 <Plate value={fmtMinutes(minutes)} sub={`${minutes} min`} />
               </View>
-              <Scale value={minutes} max={durMax} maxLabel={fmtLongParts(durMax).main}
-                     maxSub={fmtLongParts(durMax).sub} onChange={setMinutes}
+              {/* The clock reading alone: the raw minutes under it were a
+                  third line on an end that is already two (owner, 2026-09-22). */}
+              <Scale value={minutes} max={durMax} maxLabel={fmtMinutes(durMax)} onChange={setMinutes}
                      disabled={locked} label="Length of the final"
                      what="12 month max" zero="a walkover" />
               {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
@@ -530,7 +521,7 @@ function Step({ n, of }) {
  * it starts and where it ends, which is what they mean. What the ends SAY —
  * the floor's meaning, the record holder — stays on the line beneath, under
  * the number it is about. */
-function Scale({ value, max, maxLabel, maxSub, onChange, disabled, label, rec, what, zero }) {
+function Scale({ value, max, maxLabel, onChange, disabled, label, rec, what, zero }) {
   const holder = rec
     ? `${rec.player ? `${surname(rec.player)}, ` : ''}${rec.tournament} ${rec.year}`
     : null
@@ -543,15 +534,12 @@ function Scale({ value, max, maxLabel, maxSub, onChange, disabled, label, rec, w
                      disabled={disabled} accessibilityLabel={label} />
         <Text style={[s.endValue, s.endRecord]}>{maxLabel ?? max}</Text>
       </View>
-      {zero || maxSub || who ? (
+      {zero || who ? (
         <View style={s.ends}>
           {zero ? <Text style={s.endWho}>{zero}</Text> : null}
-          {maxSub || who ? (
+          {who ? (
             <View style={s.endRight}>
-              {maxSub ? <Text style={[s.endWho, s.endWhoRight]}>{maxSub}</Text> : null}
-              {who ? (
-                <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>{who}</Text>
-              ) : null}
+              <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>{who}</Text>
             </View>
           ) : null}
         </View>
