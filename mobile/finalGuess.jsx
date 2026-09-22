@@ -376,7 +376,7 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
             <>
               <Text style={s.intro}>
                 Ties occurring in the final standings of all leagues will be decided
-                by the questions below.
+                by the questions which follow.
               </Text>
               <View style={s.hero}>
                 <Text style={s.heroLabel}>Your current prediction for the final:</Text>
