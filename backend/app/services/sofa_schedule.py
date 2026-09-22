@@ -167,6 +167,18 @@ def _names(team: dict) -> tuple[list, list]:
     return parts, nations
 
 
+def _seed_marks(value, n: int) -> list:
+    """One team's seeding mark, repeated for each player on its side.
+
+    Sofascore states `'1'`, `'WC'`, `'Q'` or nothing at all. Anything that is
+    not a non-empty string is nothing: an absent seed arrives as null, and a
+    team with no mark must not be given an empty one that later reads as
+    "this source says no seed" where the truth is "this source did not say".
+    """
+    mark = str(value).strip() if value is not None else ""
+    return [mark or None] * n
+
+
 def normalize_day(events: list[dict], day: date,
                   venue_tz: Optional[str] = None) -> bytes:
     """One day's events, as the bytes the ingest parses and hashes.
@@ -212,6 +224,18 @@ def parse_sofa_day(doc: bytes, venue_tz: Optional[str] = None,
         rname = ((e.get("roundInfo") or {}).get("name") or "").strip().lower()
         a, na = _names(e.get("homeTeam") or {})
         b, nb = _names(e.get("awayTeam") or {})
+        # THE SEED THE FEED STATES, carried as data (owner, 2026-09-23).
+        # Sofascore writes a plain name — "Alexandre Muller" — and puts the
+        # mark in its own field, where a PDF prints "[2] Alexandre MULLER FRA".
+        # The field holds a number OR a code ("WC"), the same two things a
+        # printed bracket holds, so it is passed on unsplit for the one reader
+        # that splits them.
+        #
+        # One mark per TEAM, so both halves of a doubles pair carry the pair's
+        # — which is what a seeding on a doubles team means, and how a printed
+        # "[1] KRAJICEK / MEKTIC" reads too.
+        sa = _seed_marks(e.get("homeTeamSeed"), len(a))
+        sb = _seed_marks(e.get("awayTeamSeed"), len(b))
         out.append(Match(
             court=court,
             time=hhmm,
@@ -223,6 +247,7 @@ def parse_sofa_day(doc: bytes, venue_tz: Optional[str] = None,
             # honest reading and keeps a reader from trusting a minute value.
             start_raw=(f"Est. {hhmm}" if hhmm else None),
             side_a=a, side_b=b, nations_a=na, nations_b=nb,
+            seeds_a=sa, seeds_b=sb,
         ))
     out.sort(key=feed_order)
     return out, {"source": "sofascore", "day": day.isoformat() if day else None,

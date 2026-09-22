@@ -215,6 +215,18 @@ class ScheduleEntryPlayer(Base):
     # draw entry's nationality; this is the answer before resolution exists,
     # e.g. Slam qualifiers days before the draw is released.
     nationality: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # THE SEEDING MARK AS THE SOURCE STATES IT — "1", "WC", "Q" — for sources
+    # that carry it as a FIELD rather than inside the printed name. A PDF
+    # sheet prints "[1] Alexandre MULLER FRA" and the router reads the mark
+    # back out of raw_name; Sofascore states `homeTeamSeed: '1'` and writes a
+    # plain "Alexandre Muller", so without this the mark had nowhere to live
+    # and qualifying rows — which have no draw_entries row to fall back on —
+    # lost their seeds the day the schedule moved to the feeds.
+    #
+    # Deliberately the raw mark and not an int: the same field carries "WC"
+    # and "Q", and splitting a number from a code is the router's job, done
+    # in one place for every source (_printed_mark).
+    seed_mark: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     draw_entry_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("draw_entries.id"), nullable=True, index=True)
 
