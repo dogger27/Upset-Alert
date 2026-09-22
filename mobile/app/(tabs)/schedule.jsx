@@ -1115,7 +1115,13 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
      The gesture is armed only when there is something in the menu, so a row
      with no head-to-head, no picks and nothing played does not answer a long
      press with an empty sheet. */
-  const menu = onMenu && actionsFor({ pair, picks, openable, finished: e.winner_side != null }).length
+  /* `lock` so a LIVE match with nothing else to open still arms the press:
+     the Lock Screen action can be the only thing in the menu. lockOn is not
+     asked here — it changes the wording, never the count. */
+  const menu = onMenu && actionsFor({
+    pair, picks, openable, finished: e.winner_side != null,
+    lock: lockScreenAvailable() && e.match_id != null && isLive(e),
+  }).length
     ? () => onMenu({ e, pair, picks, openable, match: matchFromEntry(e) })
     : null
   const Wrap = openable || menu ? Pressable : View
