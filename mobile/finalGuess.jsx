@@ -235,7 +235,7 @@ function setsRows(data) {
   const where = tier?.surface_scoped === false ? 'all surfaces' : (data?.surface || '').toLowerCase()
   const rows = []
   if (tier?.sets_per_match != null) {
-    rows.push({ label: `${data.tier_label} finals on ${where}, past ${tier.years} yrs`,
+    rows.push({ label: `recent ${data.tier_label} finals on ${where}`,
                 value: String(tier.sets_per_match), note: `${tier.matches} finals` })
   }
   const met = (n) => `${n} H2H ${n === 1 ? 'match' : 'matches'}`
@@ -259,7 +259,7 @@ function acesRows(data, sets) {
   const rows = []
   const scale = (r) => (r?.aces_per_set == null ? null : round1(r.aces_per_set * sets))
   if (q.tier_finals?.aces_per_set != null) {
-    rows.push({ label: `${sets}-set ${data.tier_label} finals on ${where}, past ${q.tier_finals.years} yrs`,
+    rows.push({ label: `recent ${sets}-set ${data.tier_label} finals on ${where}`,
                 value: String(scale(q.tier_finals)), note: `${q.tier_finals.matches} finals` })
   }
   if (q.champion_vs?.aces_per_set != null) {
@@ -288,12 +288,12 @@ function minutesRows(data, sets) {
      prediction's (owner's correction, 2026-09-19). */
   const tierMins = q.tier_minutes_by_sets?.[key]
   if (tierMins != null) {
-    rows.push({ label: `${sets}-set ${data.tier_label} finals on ${where}, past ${q.tier_finals?.years ?? 5} yrs`,
+    rows.push({ label: `recent ${sets}-set ${data.tier_label} finals on ${where}`,
                 value: fmtMinutes(tierMins), note: `${q.tier_finals?.matches ?? ''} finals`.trim() })
   }
   const champMins = q.champion_on_surface?.by_sets?.[key]
   if (champMins != null) {
-    rows.push({ label: `${sets}-set ${a} matches on ${surf}, past ${q.champion_on_surface.years} yrs`,
+    rows.push({ label: `recent ${sets}-set ${a} matches on ${surf}`,
                 value: fmtMinutes(champMins),
                 note: `${q.champion_on_surface.matches} matches` })
   }

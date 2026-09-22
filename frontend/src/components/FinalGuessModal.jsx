@@ -84,7 +84,7 @@ function rowsFor(ctx, which, sets) {
     const q = ctx.sets_question || {}
     const where = q.tier_finals?.surface_scoped === false ? 'all surfaces' : surf
     if (q.tier_finals?.sets_per_match != null) {
-      rows.push([`${ctx.tier_label} finals on ${where}, past ${q.tier_finals.years} yrs`,
+      rows.push([`recent ${ctx.tier_label} finals on ${where}`,
                  q.tier_finals.sets_per_match, `${q.tier_finals.matches} finals`])
     }
     if (q.h2h?.on_surface) {
@@ -102,7 +102,7 @@ function rowsFor(ctx, which, sets) {
     const where = q.tier_finals?.surface_scoped === false ? 'all surfaces' : surf
     const scale = (r) => (r?.aces_per_set == null ? null : round1(r.aces_per_set * sets))
     if (q.tier_finals?.aces_per_set != null) {
-      rows.push([`${sets}-set ${ctx.tier_label} finals on ${where}, past ${q.tier_finals.years} yrs`,
+      rows.push([`recent ${sets}-set ${ctx.tier_label} finals on ${where}`,
                  scale(q.tier_finals), `${q.tier_finals.matches} finals`])
     }
     if (q.champion_vs?.aces_per_set != null) {
@@ -119,11 +119,11 @@ function rowsFor(ctx, which, sets) {
   const where = q.tier_finals?.surface_scoped === false ? 'all surfaces' : surf
   const key = String(sets)
   if (q.tier_minutes_by_sets?.[key] != null) {
-    rows.push([`${sets}-set ${ctx.tier_label} finals on ${where}, past ${q.tier_finals?.years ?? 5} yrs`,
+    rows.push([`recent ${sets}-set ${ctx.tier_label} finals on ${where}`,
                fmtMinutes(q.tier_minutes_by_sets[key]), `${q.tier_finals?.matches ?? ''} finals`.trim()])
   }
   if (q.champion_on_surface?.by_sets?.[key] != null) {
-    rows.push([`${sets}-set ${a} matches on ${surf}, past ${q.champion_on_surface.years} yrs`,
+    rows.push([`recent ${sets}-set ${a} matches on ${surf}`,
                fmtMinutes(q.champion_on_surface.by_sets[key]),
                `${q.champion_on_surface.matches} matches`])
   }
