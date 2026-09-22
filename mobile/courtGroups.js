@@ -6,6 +6,12 @@
  * not Infinity — two unseeded courts would compare as NaN and a NaN
  * comparator leaves the array in whatever order it started.
  *
+ * A QUALIFYING seed is seeded separately too, so it ranks below every
+ * main-draw seed and above none (QUALI_SEED + n). Chengdu 2026-09-23: the
+ * Q-final [1] and [3] put both qualifying courts above CENTER COURT's R32 [8],
+ * the reverse of the sheet. Offset, not dropped, so a qualifying-only day
+ * still orders its courts by seed. The web's twin is Schedule.jsx `byCourt`.
+ *
  * BY TOURNAMENT, ALWAYS (owner, 2026-09-17; always 2026-09-20): tournaments
  * in name order, as a past day's record is, each one's courts ranked among
  * themselves, and the first court of each carrying the tournament's heading
@@ -21,6 +27,7 @@
  * Returns [{ key, court, title, list }], each list in the court's own
  * running order. */
 const NO_SEED = 9999
+const QUALI_SEED = 1000
 
 export function courtGroups(entries) {
   const byT = new Map()
@@ -41,7 +48,11 @@ export function courtGroups(entries) {
       for (const e of list) {
         if (e.discipline !== 'singles') continue
         count += 1
-        for (const p of e.players || []) if (p.seed != null && p.seed < best) best = p.seed
+        for (const p of e.players || []) {
+          if (p.seed == null) continue
+          const rank = e.stage === 'qualifying' ? QUALI_SEED + p.seed : p.seed
+          if (rank < best) best = rank
+        }
       }
       return { court, list, best, count }
     })
