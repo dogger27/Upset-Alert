@@ -277,7 +277,7 @@ function acesRows(data, sets) {
                 note: `${q.champion_vs.matches} ${q.champion_vs.matches === 1 ? 'match' : 'matches'}` })
   }
   if (q.champion_on_surface?.aces_per_set != null) {
-    rows.push({ label: `all ${sets}-set ${a} matches on ${surf}`, value: String(scale(q.champion_on_surface)),
+    rows.push({ label: `${sets}-set ${a} matches on ${surf}`, value: String(scale(q.champion_on_surface)),
                 note: `${q.champion_on_surface.matches} matches` })
   }
   return rows
@@ -303,7 +303,7 @@ function minutesRows(data, sets) {
   }
   const champMins = q.champion_on_surface?.by_sets?.[key]
   if (champMins != null) {
-    rows.push({ label: `all ${sets}-set ${a} matches on ${surf}`,
+    rows.push({ label: `recent ${sets}-set ${a} matches on ${surf}`,
                 value: fmtMinutes(champMins),
                 note: `${q.champion_on_surface.matches} matches` })
   }
