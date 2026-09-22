@@ -84,7 +84,7 @@ function rowsFor(ctx, which, sets) {
     const q = ctx.sets_question || {}
     const where = q.tier_finals?.surface_scoped === false ? 'all surfaces' : surf
     if (q.tier_finals?.sets_per_match != null) {
-      rows.push([`${ctx.tier_label} finals on ${where}, past ${q.tier_finals.years} years`,
+      rows.push([`${ctx.tier_label} finals on ${where}, past ${q.tier_finals.years} yrs`,
                  q.tier_finals.sets_per_match, `${q.tier_finals.matches} finals`])
     }
     if (q.h2h?.on_surface) {
@@ -102,14 +102,15 @@ function rowsFor(ctx, which, sets) {
     const where = q.tier_finals?.surface_scoped === false ? 'all surfaces' : surf
     const scale = (r) => (r?.aces_per_set == null ? null : round1(r.aces_per_set * sets))
     if (q.tier_finals?.aces_per_set != null) {
-      rows.push([`a ${sets}-set ${ctx.tier_label} final on ${where}, past ${q.tier_finals.years} years`,
+      rows.push([`${sets}-set ${ctx.tier_label} finals on ${where}, past ${q.tier_finals.years} yrs`,
                  scale(q.tier_finals), `${q.tier_finals.matches} finals`])
     }
     if (q.champion_vs?.aces_per_set != null) {
-      rows.push([`${a} v ${b} on ${surf}`, scale(q.champion_vs), met(q.champion_vs.matches)])
+      rows.push([`${sets}-set ${a} v ${b} matches on ${surf}`, scale(q.champion_vs),
+                 met(q.champion_vs.matches)])
     }
     if (q.champion_on_surface?.aces_per_set != null) {
-      rows.push([`${a} on ${surf}, anyone`, scale(q.champion_on_surface),
+      rows.push([`${sets}-set ${a} matches on ${surf}`, scale(q.champion_on_surface),
                  `${q.champion_on_surface.matches} matches`])
     }
     return rows
@@ -118,16 +119,16 @@ function rowsFor(ctx, which, sets) {
   const where = q.tier_finals?.surface_scoped === false ? 'all surfaces' : surf
   const key = String(sets)
   if (q.tier_minutes_by_sets?.[key] != null) {
-    rows.push([`a ${sets}-set ${ctx.tier_label} final on ${where}, past ${q.tier_finals?.years ?? 5} years`,
+    rows.push([`${sets}-set ${ctx.tier_label} finals on ${where}, past ${q.tier_finals?.years ?? 5} yrs`,
                fmtMinutes(q.tier_minutes_by_sets[key]), `${q.tier_finals?.matches ?? ''} finals`.trim()])
   }
   if (q.champion_on_surface?.by_sets?.[key] != null) {
-    rows.push([`a ${sets}-set ${a} match on ${surf}, past ${q.champion_on_surface.years} years`,
+    rows.push([`${sets}-set ${a} matches on ${surf}, past ${q.champion_on_surface.years} yrs`,
                fmtMinutes(q.champion_on_surface.by_sets[key]),
                `${q.champion_on_surface.matches} matches`])
   }
   if (q.h2h_estimate?.by_sets?.[key] != null) {
-    rows.push([`${a} v ${b} on ${surf}, estimated`, fmtMinutes(q.h2h_estimate.by_sets[key]),
+    rows.push([`${sets}-set ${a} v ${b} matches on ${surf}, estimated`, fmtMinutes(q.h2h_estimate.by_sets[key]),
                met(q.h2h_estimate.matches)])
   }
   return rows
@@ -140,11 +141,12 @@ function rowsFor(ctx, which, sets) {
    word they all share is said once, here.
 
    `unit` is the word after each figure, omitted where the figure already
-   reads as its own — "1h 46m" needs no noun after it. `qualifier` is the
-   column's own note, a different thing: it says the aces and minutes figures
-   are scaled to the set count just chosen, so it belongs above the column
-   rather than on every line of it. */
-function Reference({ ctx, which, sets, unit, qualifier }) {
+   reads as its own — "1h 46m" needs no noun after it.
+
+   THE SET COUNT IS IN THE LABELS, NOT A COLUMN HEAD (owner, 2026-09-22). With
+   each figure on its own line under its sentence there is no column left for a
+   head to sit over, so every scaled row states the set count itself. */
+function Reference({ ctx, which, sets, unit }) {
   const rows = rowsFor(ctx, which, sets)
   if (!rows.length) {
     return <p className="fg-muted">{ctx?.champion?.name
@@ -163,13 +165,8 @@ function Reference({ ctx, which, sets, unit, qualifier }) {
        grid left to be a table OF. */
     <div className="fg-refs">
       {/* The block says what it is: under a question and its answer sat a run
-          of sentences with numbers, and nothing said they were evidence. The
-          title takes the left, where reading starts; the column's note keeps
-          the right it already had. */}
-      <div className="fg-refs-head">
-        <p className="fg-refs-title">Reference data</p>
-        {qualifier && <p className="fg-refs-note">{qualifier}</p>}
-      </div>
+          of sentences with numbers, and nothing said they were evidence. */}
+      <p className="fg-refs-title">Reference data</p>
       {rows.map(([label, value, note]) => (
         <div className="fg-ref" key={label}>
           {/* "Avg", not "Average": the word is on every row and what follows
@@ -342,7 +339,7 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
                     {record?.aces_record && ` · ${record.aces_record.player}, ${record.aces_record.tournament} ${record.aces_record.year}`}
                   </span>
                 </div>
-                <Reference ctx={ctx} which="aces" sets={sets} unit="aces" qualifier={`${sets} sets`} />
+                <Reference ctx={ctx} which="aces" sets={sets} unit="aces" />
               </section>
               <section className="fg-q">
                 <label className="fg-label" htmlFor="fg-min">How long will the final last?</label>
@@ -359,7 +356,7 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
                   </span>
                 </div>
                 {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
-                <Reference ctx={ctx} which="minutes" sets={sets} qualifier={`${sets} sets`} />
+                <Reference ctx={ctx} which="minutes" sets={sets} />
               </section>
               <Meetings ctx={ctx} />
               {ctx?.actual && (

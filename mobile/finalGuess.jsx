@@ -102,10 +102,9 @@ export function ValueSlider({ value, min = 0, max = 1, onChange, disabled, acces
 
 /* The three per-question reference builders live beside the wizard below —
    setsRows, acesRows and minutesRows. This table renders whichever it is
-   given: one label column, one right-aligned numeric column with the unit
-   stated once in its head, and the sample size trailing faint. Three numbers
-   are shown so they can be COMPARED, and prose bullets made the reader parse
-   each one to do it. */
+   given: a sentence per row with its figure and the sample it was taken over
+   on the line beneath. Three numbers are shown so they can be COMPARED, and
+   prose bullets made the reader parse each one to do it. */
 /* EVERY ROW IS AN AVERAGE, AND EVERY FIGURE CARRIES ITS UNIT (owner,
  * 2026-09-22). The rows read as bare facts — "WTA 500 finals on hard, past 10
  * years … 2.4" — which is a count of finals as easily as an average per final,
@@ -114,11 +113,15 @@ export function ValueSlider({ value, min = 0, max = 1, onChange, disabled, acces
  *
  * `unit` is the word after each figure — sets, aces — and is omitted where the
  * figure already reads as its own unit: "1h 46m" needs no noun after it.
- * `qualifier` is the column's own note, which is a different thing: it says
- * the aces and minutes figures are scaled to the set count the reader just
- * chose, and belongs above the column rather than on every line of it.
+ *
+ * THE SET COUNT IS IN THE LABELS, NOT A COLUMN HEAD (owner, 2026-09-22). While
+ * the figures sat in a column, "3 sets" over it said the aces and minutes
+ * rows were scaled to the set count just chosen. With each figure on its own
+ * line under its sentence there is no column for a head to sit over, so every
+ * scaled row states the set count itself — which is where the reader is
+ * looking anyway.
  */
-function StatTable({ rows, unit, qualifier }) {
+function StatTable({ rows, unit }) {
   if (!rows.length) return null
   return (
     <View style={s.table}>
@@ -127,10 +130,7 @@ function StatTable({ rows, unit, qualifier }) {
           were evidence rather than more of the question. The title takes the
           left, where reading starts; the column's note keeps the right it
           already had, so one line carries both. */}
-      <View style={s.tableHead}>
-        <Text style={s.tableTitle}>Reference data</Text>
-        {qualifier ? <Text style={s.tableUnit}>{qualifier}</Text> : null}
-      </View>
+      <Text style={s.tableTitle}>Reference data</Text>
       {/* TWO LINES, NOT THREE COLUMNS (owner, 2026-09-22). The description is
           the longest thing here and it was sharing a row with a number column
           and a sample column, so it wrapped to two lines on every row while
@@ -289,7 +289,7 @@ function setsRows(data) {
   const where = tier?.surface_scoped === false ? 'all surfaces' : (data?.surface || '').toLowerCase()
   const rows = []
   if (tier?.sets_per_match != null) {
-    rows.push({ label: `${data.tier_label} finals on ${where}, past ${tier.years} years`,
+    rows.push({ label: `${data.tier_label} finals on ${where}, past ${tier.years} yrs`,
                 value: String(tier.sets_per_match), note: `${tier.matches} finals` })
   }
   const met = (n) => `${n} H2H ${n === 1 ? 'match' : 'matches'}`
@@ -313,15 +313,15 @@ function acesRows(data, sets) {
   const rows = []
   const scale = (r) => (r?.aces_per_set == null ? null : round1(r.aces_per_set * sets))
   if (q.tier_finals?.aces_per_set != null) {
-    rows.push({ label: `a ${sets}-set ${data.tier_label} final on ${where}, past ${q.tier_finals.years} years`,
+    rows.push({ label: `${sets}-set ${data.tier_label} finals on ${where}, past ${q.tier_finals.years} yrs`,
                 value: String(scale(q.tier_finals)), note: `${q.tier_finals.matches} finals` })
   }
   if (q.champion_vs?.aces_per_set != null) {
-    rows.push({ label: `${a} v ${b} on ${surf}`, value: String(scale(q.champion_vs)),
+    rows.push({ label: `${sets}-set ${a} v ${b} matches on ${surf}`, value: String(scale(q.champion_vs)),
                 note: `${q.champion_vs.matches} ${q.champion_vs.matches === 1 ? 'match' : 'matches'}` })
   }
   if (q.champion_on_surface?.aces_per_set != null) {
-    rows.push({ label: `${a} on ${surf}, anyone`, value: String(scale(q.champion_on_surface)),
+    rows.push({ label: `${sets}-set ${a} matches on ${surf}`, value: String(scale(q.champion_on_surface)),
                 note: `${q.champion_on_surface.matches} matches` })
   }
   return rows
@@ -342,18 +342,18 @@ function minutesRows(data, sets) {
      prediction's (owner's correction, 2026-09-19). */
   const tierMins = q.tier_minutes_by_sets?.[key]
   if (tierMins != null) {
-    rows.push({ label: `a ${sets}-set ${data.tier_label} final on ${where}, past ${q.tier_finals?.years ?? 5} years`,
+    rows.push({ label: `${sets}-set ${data.tier_label} finals on ${where}, past ${q.tier_finals?.years ?? 5} yrs`,
                 value: fmtMinutes(tierMins), note: `${q.tier_finals?.matches ?? ''} finals`.trim() })
   }
   const champMins = q.champion_on_surface?.by_sets?.[key]
   if (champMins != null) {
-    rows.push({ label: `a ${sets}-set ${a} match on ${surf}, past ${q.champion_on_surface.years} years`,
+    rows.push({ label: `${sets}-set ${a} matches on ${surf}, past ${q.champion_on_surface.years} yrs`,
                 value: fmtMinutes(champMins),
                 note: `${q.champion_on_surface.matches} matches` })
   }
   const est = q.h2h_estimate?.by_sets?.[key]
   if (est != null) {
-    rows.push({ label: `${a} v ${b} on ${surf}, estimated`, value: fmtMinutes(est),
+    rows.push({ label: `${sets}-set ${a} v ${b} matches on ${surf}, estimated`, value: fmtMinutes(est),
                 note: `${q.h2h_estimate.matches} H2H ${q.h2h_estimate.matches === 1 ? 'match' : 'matches'}` })
   }
   return rows
@@ -474,8 +474,7 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               <Ends max={acesMax} rec={rec?.aces_record} />
               {/* Scaled to the sets just chosen, which is why that question
                   comes first (owner, 2026-09-19). */}
-              <StatTable rows={acesRows(data, sets)} unit="aces"
-                         qualifier={`${sets} sets`} />
+              <StatTable rows={acesRows(data, sets)} unit="aces" />
             </View>
           ) : null}
 
@@ -491,7 +490,7 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               <Ends max={fmtLong(durMax)} rec={rec?.duration_record}
                     what="the longest in 12 months" zero="a walkover" />
               {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
-              <StatTable rows={minutesRows(data, sets)} qualifier={`${sets} sets`} />
+              <StatTable rows={minutesRows(data, sets)} />
               <Meetings data={data} />
               {!data.guess && data.default ? (
                 <Text style={s.default}>
@@ -738,10 +737,7 @@ const s = StyleSheet.create({
 
   /* ── The evidence, as a table ──────────────────────────────────────────── */
   table: { marginTop: S.xs },
-  tableHead: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm,
-               paddingBottom: 3, marginTop: S.xs },
-  tableTitle: { ...T.smallMed, color: C.muted },
-  tableUnit: { ...T.tiny, color: C.faint, flex: 1, textAlign: 'right' },
+  tableTitle: { ...T.smallMed, color: C.muted, marginTop: S.xs, marginBottom: 3 },
   /* A ROW IS TWO LINES NOW: the description across the full width, then the
      figure and the sample it was taken over. */
   tr: { gap: 1, paddingVertical: 5 },
