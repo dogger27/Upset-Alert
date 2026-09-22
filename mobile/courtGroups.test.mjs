@@ -61,3 +61,19 @@ test('two events sharing a court name stay two groups', () => {
   ])
   assert.equal(new Set(g.map(x => x.key)).size, 2)
 })
+
+test('a qualifying seed ranks below every main-draw seed (Chengdu 2026-09-23)', () => {
+  const q = (id, court, court_order, seeds) =>
+    ({ ...row(id, 17, 'Chengdu Open', court, court_order, seeds), stage: 'qualifying' })
+  const g = courtGroups([
+    q(1, 'COURT 1', 1, [2, 7]),
+    q(2, 'COURT 1', 2, [1, 8]),
+    q(3, 'COURT 2', 1, [3, 6]),
+    row(4, 17, 'Chengdu Open', 'CENTER COURT', 1, [8, null]),
+    row(5, 17, 'Chengdu Open', 'CENTER COURT', 2, [null, null]),
+    row(6, 17, 'Chengdu Open', 'COURT 3', 1, [null, null]),
+  ])
+  /* The sheet's order: the show court with the main-draw [8] first, then the
+     qualifying courts by THEIR seeds, then an unseeded main-draw court. */
+  assert.deepEqual(g.map(x => x.court), ['CENTER COURT', 'COURT 1', 'COURT 2', 'COURT 3'])
+})

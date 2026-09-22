@@ -248,6 +248,9 @@ function expectedStart(e, zone, venueMode) {
 // compare as Infinity - Infinity = NaN, and a NaN comparator silently leaves
 // the array in whatever order it started in.
 const NO_SEED = 9999
+// Where a qualifying seed ranks a court: below every main-draw seed, above
+// NO_SEED. See byCourt.
+const QUALI_SEED = 1000
 
 /* A round label that already announces qualifying, so the separate "Q" chip
    beside it would only repeat itself. */
@@ -925,6 +928,11 @@ export default function Schedule() {
     // big the match is next to a singles [1]. A court hosting only doubles
     // scores nothing on either measure and settles at the bottom, which is
     // where it belongs without being hidden.
+    // A QUALIFYING seed is seeded separately too, so it ranks below every
+    // main-draw seed (and above no seed at all). Chengdu 2026-09-23: the
+    // Q-final [1] and [3] put both qualifying courts above CENTER COURT's R32
+    // [8], the reverse of the sheet. Offset, not dropped, so a qualifying-only
+    // day still orders its courts by seed. mobile/courtGroups.js is the twin.
     const ranked = [...m.entries()].map(([name, list]) => {
       let best = NO_SEED
       let count = 0
@@ -933,7 +941,8 @@ export default function Schedule() {
         count += 1
         for (const p of e.players) {
           const n = seedNumber(p)
-          if (n != null && n < best) best = n
+          const rank = n == null ? null : (e.stage === 'qualifying' ? QUALI_SEED + n : n)
+          if (rank != null && rank < best) best = rank
         }
       }
       return { name, list, best, count }
