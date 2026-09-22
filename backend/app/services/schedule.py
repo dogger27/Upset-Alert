@@ -35,7 +35,7 @@ from typing import Optional
 
 from sqlalchemy import and_, delete, or_, select, update
 
-from app.services.sofascore_doubles import _sheet_people
+from app.services.sofascore_doubles import _fold as _sofa_fold, _sheet_people
 from app.models.schedule import (ScheduleChange, ScheduleDocument,
                                  ScheduleEntry, ScheduleEntryPlayer)
 from app.models.tournament import Draw, DrawEntry, Match
@@ -2075,6 +2075,55 @@ def _prefer_challenger(row, twin) -> bool:
     return len(row.players or []) > len(twin.players or [])
 
 
+def _take_placement(keep, drop) -> None:
+    """The NEWER row's statement of where, when and how the slot is printed,
+    onto the survivor of a merge — which `_prefer_challenger` picks by who is
+    in it, not by which sheet is current.
+
+    Hangzhou 2026-09-23: the Sofascore feed wrote the day first (doc 414),
+    already knowing Matsuoka had won his Q1, as "Taro Daniel vs Hayato
+    Matsuoka" on "Court 1" at "Est. 12:00". The feed then declined the day and
+    the sheet took it back (doc 418), printed before that result: "[4] Taro
+    DANIEL JPN vs Arthur WEBER FRA or [6] Hayato MATSUOKA JPN", COURT 1 #1,
+    "Starts At 12:00". `_resolves` rightly saw one slot, the settled feed row
+    rightly survived — and kept ALL of the feed's placement with it. The page
+    showed COURT 1 as two courts ("Court 1" holding one feed-spelled row with
+    no seeds, "COURT 1" opening on a "Followed By" with no clock and filed
+    last in Time view). The ingest's update path re-stamps court, order and
+    wording from the newest sheet on every pass; a merge is the one road onto
+    a row that skipped it.
+
+    A sheet that printed NO wording for the box keeps the survivor's, the
+    ingest's `keep_start` rule. Names: a person the newer row prints in the
+    sheet's form is re-spelled that way (`_sync_players`' rule — the stored
+    name IS the page's rendering). Matched person to person by whole name,
+    never by position, since the newer row may hold that side still open.
+    """
+    for field in ("court", "court_order", "stage", "tour", "round_label",
+                  "printed_score"):
+        new = getattr(drop, field, None)
+        if new is not None:
+            setattr(keep, field, new)
+    if drop.start_note is not None:
+        for field in ("start_type", "start_time_local", "start_note"):
+            setattr(keep, field, getattr(drop, field))
+    printed = [q for q in (drop.players or [])
+               if q.raw_name and "/" not in q.raw_name and _is_sheet_form(q.raw_name)]
+    for p in (keep.players or []):
+        mine = _fold(p.raw_name or "")
+        if not mine:
+            continue
+        hits = [q for q in printed
+                if (f := _fold(q.raw_name)) and (f <= mine or mine <= f)]
+        if len(hits) != 1 or hits[0].raw_name == p.raw_name:
+            continue
+        p.raw_name = hits[0].raw_name
+        if hits[0].nationality:
+            p.nationality = hits[0].nationality
+        if hits[0].draw_entry_id and not p.draw_entry_id:
+            p.draw_entry_id = hits[0].draw_entry_id
+
+
 async def _absorb(db, keep, drop) -> None:
     """Fold one row into another: the surviving row inherits the earlier
     first_seen_at (it is when the slot was first printed, and _renumber_courts
@@ -2105,6 +2154,9 @@ async def _absorb(db, keep, drop) -> None:
                   "match_id", "draw_id", "round_label"):
         if getattr(keep, field, None) is None and getattr(drop, field, None) is not None:
             setattr(keep, field, getattr(drop, field))
+    # Before the document hand-over below, which is what this compares.
+    if (drop.last_document_id or 0) > (keep.last_document_id or 0):
+        _take_placement(keep, drop)
     # The survivor was restated by whichever revision restated EITHER row: the
     # two are one slot, so the newest sheet that printed it printed this. The
     # keep/drop choice above is made on how settled and how full a row is, not
@@ -2537,6 +2589,53 @@ def join_surnames(raw_names) -> frozenset:
     return frozenset(p.surname for p in _sheet_people(list(raw_names)) if p.surname)
 
 
+def _surname_readings(part: str) -> frozenset:
+    """Every surname ONE printed person could be read as.
+
+    A sheet's name states its surname — the capitals — so it has one reading,
+    exactly `join_surnames`'. A feed's name does not, and "the last word" is a
+    guess that Sofascore's own spelling breaks: it writes Chinese names
+    surname FIRST. Hangzhou 2026-09-22 stored the Q1 "Bernard Tomić vs Te
+    Rigele" (Sofascore's shortName even reads "T. Rigele"), the next day's
+    sheet printed the slot it decided "[3] Bernard TOMIC AUS or [WC] Rigele TE
+    CHN", and the two keys were {tomic, rigele} and {tomic, te}: the page went
+    on offering TOMIC or TE with Tomić's win recorded (doc 418,
+    `pending_side_result_unjoined`). So a name that does not say which word is
+    its surname is read BOTH ways, first word and last — initials excluded,
+    since no surname is one letter.
+    """
+    people = _sheet_people([part])
+    if not people:
+        return frozenset()
+    if _is_sheet_form(part):
+        return frozenset({people[0].surname})
+    words = [w for w in (_sofa_fold(t) for t in
+                         re.sub(r'\[[^\]]*\]', ' ', part or '').split())
+             if len(w) >= 2]
+    return frozenset(words[:1] + words[-1:]) or frozenset({people[0].surname})
+
+
+def join_keys(raw_names) -> set:
+    """`join_surnames`, as the SET of keys the people named could be read as —
+    one per combination of `_surname_readings`. For names that all state their
+    surname (every sheet row) that is exactly `{join_surnames(raw_names)}`; a
+    feed name adds its other reading. Empty when nobody is named."""
+    keys = {frozenset()}
+    for raw in raw_names:
+        for part in (raw or "").split("/"):
+            readings = _surname_readings(part)
+            if readings:
+                keys = {k | {s} for k in keys for s in readings}
+    return {k for k in keys if k}
+
+
+def result_pair_keys(names_a, names_b) -> set:
+    """Every key a match between these two sides joins on — the result row's
+    side of the join AND the pending slot's, so both halves read names the
+    same way (see `settled_sides_index`)."""
+    return {ka | kb for ka in join_keys(names_a) for kb in join_keys(names_b)}
+
+
 def settled_sides_index(rows) -> dict:
     """{every surname in a finished match} -> that match's WINNING side's rows.
 
@@ -2546,20 +2645,22 @@ def settled_sides_index(rows) -> dict:
     so for a doubles slot this is the only record of who came through.
 
     Keyed through `join_surnames`: the result row and the slot it settles are
-    routinely written by different sources (see there).
+    routinely written by different sources (see there) — under EVERY reading
+    of a feed's name (`result_pair_keys`), since a feed does not say which of
+    its words is the surname.
     """
     idx: dict = {}
     for r in rows:
         sides: dict = {}
         for p in r.players:
             sides.setdefault(p.side, []).append(p)
-        a = join_surnames([p.raw_name for p in sides.get("a", [])])
-        b = join_surnames([p.raw_name for p in sides.get("b", [])])
-        if not a or not b:
-            continue
         win = sides.get("a" if r.winner_side == "a" else "b", [])
-        if win:
-            idx[frozenset(a | b)] = sorted(win, key=lambda p: p.position or 1)
+        if not win:
+            continue
+        win = sorted(win, key=lambda p: p.position or 1)
+        for key in result_pair_keys([p.raw_name for p in sides.get("a", [])],
+                                    [p.raw_name for p in sides.get("b", [])]):
+            idx[key] = win
     return idx
 
 
@@ -2617,14 +2718,22 @@ def settle_from_result_rows(side_players, index) -> tuple:
     """
     if len(side_players) != 2:
         return side_players, False
-    teams = [join_surnames([p.raw_name]) for p in side_players]
+    teams = [join_keys([p.raw_name]) for p in side_players]
     if not all(teams):
         return side_players, False
-    win_rows = index.get(frozenset(teams[0] | teams[1]))
-    if not win_rows:
+    # One result, however many readings reach it; two different results
+    # answering one question is not an answer.
+    hits: list = []
+    for key in result_pair_keys([side_players[0].raw_name],
+                                [side_players[1].raw_name]):
+        found = index.get(key)
+        if found and not any(found is h for h in hits):
+            hits.append(found)
+    if len(hits) != 1:
         return side_players, False
-    won = join_surnames([p.raw_name for p in win_rows])
-    keep = [p for p, t in zip(side_players, teams) if t & won]
+    win_rows = hits[0]
+    won = frozenset().union(*join_keys([p.raw_name for p in win_rows]))
+    keep = [p for p, t in zip(side_players, teams) if any(k & won for k in t)]
     # Exactly one of the two, or we have not identified anything.
     if len(keep) != 1:
         return side_players, False
