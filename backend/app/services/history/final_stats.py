@@ -41,6 +41,7 @@ PLAUSIBLE = {3: {"aces": 60, "minutes": 400}, 5: {"aces": 120, "minutes": 700}}
 # How far back a player's or the tour's rate looks: three seasons.
 SINCE_SEASONS = 3
 
+_ALPHA = re.compile(r"[A-Za-z]")
 _SET_RE = re.compile(r"^\d+-\d+(\(\d+\))?$|^\[\d+-\d+\]$")
 
 
@@ -81,6 +82,88 @@ def _year_ago(today: Optional[date] = None) -> str:
         return d.replace(year=d.year - 1).isoformat()
     except ValueError:                      # 29 February
         return d.replace(year=d.year - 1, day=28).isoformat()
+
+
+# THE DURATION TRACK'S WINDOW (owner, 2026-09-23). Three years rather than
+# the one the aces track reads: the end of this track is now the longest match
+# of ONE set count, which is a much smaller population — a single year of
+# two-set finals on a given surface can miss the genuinely long one, and a
+# ceiling that moves every week is a scale the reader cannot learn.
+DURATION_CEILING_YEARS = 3
+# AND THE JUNK HAS TO BE CAPPED PER SET, because the ceiling now is. The
+# module's format caps (400 minutes for a best-of-three) were never meant to
+# judge one set count: "6-2 6-3 in 219 minutes" and "7-6(3) 6-3 in 221" are
+# both inside 400 and both impossible, and both would have been the far end of
+# a two-set slider.
+#
+# 90 comes from the record rather than from taste. Across 24,063 tour matches
+# since 2023: median 44 minutes a set, p99 69, p99.9 81 — then 92, then 158.
+# The distribution stops and the junk starts in that gap. Thirteen rows sit
+# above 90 and every one is a fault: three impossible two-setters (one of them
+# stored twice), an unfinished set, and a run of Indian Wells retirements
+# whose minutes outlast the sets they record.
+MAX_MINUTES_PER_SET = 90
+
+
+def duration_by_sets(conn, tour: str, surface: str, best_of: int,
+                     today: Optional[date] = None) -> tuple:
+    """The longest match of EACH set count, on this surface, in three years.
+
+    "The far right of the slider should represent the max length of a 2-set
+    match on hard over the past 3 years. Instead of currently which is: ANY
+    number of sets over 1 year" (owner, 2026-09-23). The old end was the
+    longest match of any length, so a reader answering "2 sets" was handed a
+    scale whose far end was a five-setter — a number their own answer had
+    already ruled out, and most of the track unreachable.
+
+    Sets are not a column: they are counted off Sackmann's score string, so
+    the rows come back longest-first and are walked until every set count has
+    its longest. The walk stops there, which is why the ORDER BY is the whole
+    query — the answer for a two-setter is in the first handful of rows.
+
+    Returns ({"2": minutes}, {"2": record}) — string keys, because that is
+    what survives JSON and what the client already reads elsewhere.
+    """
+    wanted = set(set_lengths(best_of))
+    cap = PLAUSIBLE.get(best_of, PLAUSIBLE[3])["minutes"]
+    levels = _levels_sql(tour)
+    since = _years_ago(DURATION_CEILING_YEARS, today)
+    maxima: dict = {}
+    records: dict = {}
+
+    def walk(where: str, params: tuple):
+        cur = conn.execute(f"""
+            SELECT minutes, score, tourney_name, tourney_date, winner_name, loser_name
+            FROM tml_matches
+            WHERE tour = ? AND best_of = ? AND tourney_level IN {levels}
+              AND minutes IS NOT NULL AND minutes > 0 AND minutes <= ?
+              {where}
+            ORDER BY minutes DESC""", params)
+        for minutes, score, name, tdate, win, lose in cur:
+            # A RETIREMENT IS NOT AN EXAMPLE OF THIS LENGTH. Its minutes are
+            # real and its set count is partial — "6-4 6-6 RET" is two sets by
+            # the count and an hour and a half of one match by the clock — so
+            # a completed score is what the end of this track is made of.
+            # Letters in a score are exactly RET, W/O, DEF and ABN.
+            if not score or _ALPHA.search(score):
+                continue
+            n = sets_in(score)
+            if minutes > n * MAX_MINUTES_PER_SET:
+                continue
+            if n in wanted and str(n) not in maxima:
+                maxima[str(n)] = int(minutes)
+                records[str(n)] = {"players": f"{win} d. {lose}", "minutes": int(minutes),
+                                   "tournament": name, "year": str(tdate)[:4], "score": score}
+                if len(maxima) == len(wanted):
+                    return True
+        return False
+
+    if not walk("AND surface = ? AND tourney_date >= ?", (tour, best_of, cap, surface, since)):
+        # A set count this surface has no example of in three years — a five
+        # on grass, in practice. The format's own longest of that length keeps
+        # the track sane rather than leaving it without an end.
+        walk("AND tourney_date >= ?", (tour, best_of, cap, since))
+    return maxima, records
 
 
 def ceilings(conn, tour: str, surface: str, best_of: int,
@@ -148,8 +231,16 @@ def ceilings(conn, tour: str, surface: str, best_of: int,
     duration_max = int(drow[4]) if drow else 0
     dur_rec = ({"players": f"{drow[2]} d. {drow[3]}", "minutes": duration_max,
                 "tournament": drow[0], "year": str(drow[1])[:4], "score": drow[5]} if drow else None)
+    by_sets, rec_by_sets = duration_by_sets(conn, tour, surface, best_of, today)
     return {"aces_max": int(aces_max), "aces_record": aces_rec,
-            "duration_max_min": duration_max, "duration_record": dur_rec}
+            # Kept: the format's longest of any length, which is still the end
+            # of the track for a client that has not been told about set
+            # counts, and the fallback when a set count has no example at all.
+            "duration_max_min": duration_max, "duration_record": dur_rec,
+            # What the slider actually ends at now, per set count.
+            "duration_max_by_sets": by_sets,
+            "duration_record_by_sets": rec_by_sets,
+            "duration_ceiling_years": DURATION_CEILING_YEARS}
 
 
 def _rate(rows) -> Optional[dict]:
