@@ -350,10 +350,10 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
                 </div>
                 <div className="fg-ends">
                   <span>0 · walkover</span>
-                  <span className="fg-ends-max">
-                    {fmtLong(durMax)} · the longest on {ctx.surface.toLowerCase()} in 12 months
-                    {record?.duration_record && ` (${record.duration_record.tournament} ${record.duration_record.year})`}
-                  </span>
+                  {/* "12 month max", not "the longest on hard in 12 months
+                      (Ningbo 2025)" (owner, 2026-09-22): three lines to say
+                      what the number beside them already says. */}
+                  <span className="fg-ends-max">{fmtLong(durMax)} · 12 month max</span>
                 </div>
                 {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
                 <Reference ctx={ctx} which="minutes" sets={sets} />

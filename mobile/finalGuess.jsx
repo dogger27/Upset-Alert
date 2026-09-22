@@ -491,8 +491,7 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               </View>
               <ValueSlider value={minutes} min={0} max={durMax} onChange={setMinutes}
                            disabled={locked} accessibilityLabel="Length of the final" />
-              <Ends max={fmtLong(durMax)} rec={rec?.duration_record}
-                    what="the longest in 12 months" zero="a walkover" />
+              <Ends max={fmtLong(durMax)} what="12 month max" zero="a walkover" />
               {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
               <StatTable rows={minutesRows(data, sets)} />
               <Meetings data={data} />
@@ -558,10 +557,13 @@ function Step({ n, of }) {
  * wrong, and no label is the right amount to say about a number that speaks
  * for itself.
  *
- * `what` names what the TOP of the scale is, and the aces question no longer
- * passes one: "28 — the most in 12 months — Tauson, Indian Wells 2026" spent
- * two thirds of a two-line label on a phrase the clay-coloured number already
- * implies. The holder is the part a reader gets something from.
+ * `what` names what the TOP of the scale is. The two questions want opposite
+ * halves of it: the aces end passes only a `rec`, because the holder is the
+ * part a reader gets something from and the phrase in front of it repeated
+ * what the clay-coloured number already implies; the minutes end passes only
+ * a `what`, and that is now the three words "12 month max" — "3h 33m — the
+ * longest in 12 months — Ningbo 2025" ran to three lines to say what its own
+ * number says (owner, 2026-09-22).
  */
 function Ends({ max, rec, what, zero }) {
   const holder = rec
