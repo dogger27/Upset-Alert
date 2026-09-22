@@ -54,7 +54,7 @@ function surname(full) {
 const KNOB = 28
 
 /* A draggable whole-number slider. `onChange` fires as the knob moves. */
-export function ValueSlider({ value, min = 0, max = 1, onChange, disabled, accessibilityLabel }) {
+export function ValueSlider({ value, min = 0, max = 1, onChange, disabled, accessibilityLabel, style }) {
   const [width, setWidth] = useState(0)
   const usable = Math.max(1, width - KNOB)
   const span = Math.max(1, max - min)
@@ -90,7 +90,7 @@ export function ValueSlider({ value, min = 0, max = 1, onChange, disabled, acces
   const fillStyle = useAnimatedStyle(() => ({ width: x.value + KNOB / 2 }))
   return (
     <GestureDetector gesture={Gesture.Race(pan, tap)}>
-      <View style={s.track} onLayout={e => setWidth(e.nativeEvent.layout.width)}
+      <View style={[s.track, style]} onLayout={e => setWidth(e.nativeEvent.layout.width)}
             accessible accessibilityRole="adjustable" accessibilityLabel={accessibilityLabel}
             accessibilityValue={{ min, max, now: value ?? min }}>
         <View style={s.rail} />
@@ -417,10 +417,9 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
                 <Text style={s.qTitle}>How many aces will the champion hit in the final?</Text>
                 <Plate value={String(aces)} />
               </View>
-              <ValueSlider value={aces} min={0} max={acesMax} onChange={setAces}
-                           disabled={locked} accessibilityLabel="Aces in the final" />
-              {/* No floor label and no "the most in 12 months" — see Ends. */}
-              <Ends max={acesMax} rec={rec?.aces_record} />
+              {/* No floor label and no "the most in 12 months" — see Scale. */}
+              <Scale value={aces} max={acesMax} onChange={setAces} disabled={locked}
+                     label="Aces in the final" rec={rec?.aces_record} />
               {/* Scaled to the sets just chosen, which is why that question
                   comes first (owner, 2026-09-19). */}
               <StatTable rows={acesRows(data, sets)} unit="aces" />
@@ -434,9 +433,9 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
                 <Text style={s.qTitle}>What will be the match duration of the final?</Text>
                 <Plate value={fmtMinutes(minutes)} sub={`${minutes} min`} />
               </View>
-              <ValueSlider value={minutes} min={0} max={durMax} onChange={setMinutes}
-                           disabled={locked} accessibilityLabel="Length of the final" />
-              <Ends max={fmtLong(durMax)} what="12 month max" zero="a walkover" />
+              <Scale value={minutes} max={durMax} maxLabel={fmtLong(durMax)} onChange={setMinutes}
+                     disabled={locked} label="Length of the final"
+                     what="12 month max" zero="a walkover" />
               {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
               <StatTable rows={minutesRows(data, sets)} />
               {!data.guess && data.default ? (
@@ -491,8 +490,7 @@ function Step({ n, of }) {
   return <Text style={s.step}>{`Question ${n} of ${of}`}</Text>
 }
 
-/* The two ends of a slider's track — value over meaning, no separator. */
-/* THE TWO ENDS OF THE SLIDER, and what each of them means.
+/* THE SLIDER AND ITS TWO ENDS, and what each of them means.
  *
  * `zero` EXPLAINS THE FLOOR ONLY WHERE IT NEEDS EXPLAINING. A final of zero
  * MINUTES is a walkover, and saying so is the only way that end of the scale
@@ -509,23 +507,35 @@ function Step({ n, of }) {
  * longest in 12 months — Ningbo 2025" ran to three lines to say what its own
  * number says (owner, 2026-09-22).
  */
-function Ends({ max, rec, what, zero }) {
+/* THE ENDS SIT ON THE TRACK'S OWN ROW (owner, 2026-09-22). Under it they were
+ * two numbers floating in a band of their own, and the reader had to carry
+ * them back up to the line they belong to. Flanking the track they are where
+ * it starts and where it ends, which is what they mean. What the ends SAY —
+ * the floor's meaning, the record holder — stays on the line beneath, under
+ * the number it is about. */
+function Scale({ value, max, maxLabel, onChange, disabled, label, rec, what, zero }) {
   const holder = rec
     ? `${rec.player ? `${surname(rec.player)}, ` : ''}${rec.tournament} ${rec.year}`
     : null
   const who = [what, holder].filter(Boolean).join(' — ')
   return (
-    <View style={s.ends}>
-      <View style={s.endLeft}>
+    <View style={s.scale}>
+      <View style={s.scaleRow}>
         <Text style={s.endValue}>0</Text>
-        {zero ? <Text style={s.endWho}>{zero}</Text> : null}
+        <ValueSlider style={s.scaleTrack} value={value} min={0} max={max} onChange={onChange}
+                     disabled={disabled} accessibilityLabel={label} />
+        <Text style={[s.endValue, s.endRecord]}>{maxLabel ?? max}</Text>
       </View>
-      <View style={s.endRight}>
-        <Text style={[s.endValue, s.endRecord]}>{max}</Text>
-        {who ? (
-          <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>{who}</Text>
-        ) : null}
-      </View>
+      {zero || who ? (
+        <View style={s.ends}>
+          {zero ? <Text style={s.endWho}>{zero}</Text> : null}
+          {who ? (
+            <View style={s.endRight}>
+              <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>{who}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -670,14 +680,18 @@ const s = StyleSheet.create({
 
   /* The slider's two ends. The left is a floor nobody aims at; the right is a
      record, which is the one number here worth a name under it. */
-  ends: { flexDirection: 'row', justifyContent: 'space-between', gap: S.md, marginTop: -2 },
+  scale: { gap: 2 },
+  scaleRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  scaleTrack: { flex: 1 },
+  /* The captions keep to the ends they belong to: the right one is pushed
+     over rather than spaced apart, so it stays right when it is alone. */
+  ends: { flexDirection: 'row', gap: S.md },
   /* THE RIGHT END KEEPS TO ITS OWN HALF (owner, 2026-09-22: wrap it "so that
      it does not go too far to the left"). Two lines of a record holder ran
      back across the slider and read as a sentence about the left end as much
      as the right. 55% leaves the 0 its room and still fits "Tauson, Indian
      Wells 2026" in the two lines the Text allows. */
-  endLeft: { flexShrink: 0 },
-  endRight: { flexShrink: 1, alignItems: 'flex-end', maxWidth: '55%' },
+  endRight: { flexShrink: 1, alignItems: 'flex-end', maxWidth: '55%', marginLeft: 'auto' },
   // Right-aligned only on the right end; the left keeps the default.
 
   endValue: { ...T.smallMed, color: C.muted, fontVariant: ['tabular-nums'] },
