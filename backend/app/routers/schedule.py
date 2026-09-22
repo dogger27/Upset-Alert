@@ -368,8 +368,15 @@ async def _slugs_by_name(db, raws: list) -> dict:
     return hits
 
 
+def _qual(qual_ranks: dict, e, p) -> dict:
+    """The qualifying field's answer for one row: its place, and its seed."""
+    place, seed = qual_ranks.get(
+        (e.tournament_id, e.tour, _name_key(p.raw_name))) or (None, None)
+    return {"qual_rank": place, "qual_seed": seed}
+
+
 async def _qualifying_ranks(db, fields: set) -> dict:
-    """(tournament_id, tour, name key) -> the player's place in the qualifying field.
+    """(tournament_id, tour, name key) -> (place in the field, the field's seed).
 
     THE QUALIFYING DRAW HAS NO BRACKET HERE (owner, 2026-09-23: "add an
     inferred seed for qualifying players as well"). `draw_entries` holds the
@@ -408,25 +415,33 @@ async def _qualifying_ranks(db, fields: set) -> dict:
     field: dict = _dd(dict)                       # (tid, tour) -> key -> (seed, ranking)
     for tid, tour, raw, mark in rows:
         key = _name_key(raw)
-        if not key or key in field[(tid, tour)]:
+        if not key:
             continue
         seed, _etype = _printed_mark(raw)
         if seed is None and mark:
             seed, _etype = _printed_mark(f"[{mark}]")
         ranking = (_by_name(profiles, raw) or {}).get("ranking")
-        field[(tid, tour)][key] = (seed, ranking)
+        # A PLAYER'S ROWS ARE POOLED, not read one and skipped after. The
+        # feeds mark a field unevenly — Hangzhou's 2026-09-22 stated one seed
+        # of its sixteen and its 2026-09-23 stated three others, the same
+        # players either way — so taking the first row seen would have thrown
+        # away three quarters of what the source said. A seeding stated on any
+        # of a player's rows is their seeding in this field.
+        was = field[(tid, tour)].get(key)
+        field[(tid, tour)][key] = (seed if seed is not None else (was or (None, None))[0],
+                                   ranking if ranking is not None else (was or (None, None))[1])
 
     out: dict = {}
     for (tid, tour), by_key in field.items():
         for key, place in qualifying_places(by_key).items():
-            out[(tid, tour, key)] = place
+            out[(tid, tour, key)] = (place, by_key[key][0])
     return out
 
 
 def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_bracket: bool,
                 slugs: dict = None, extra: dict = None, by_name: dict = None,
                 extra_by_name: dict = None, pair_rank: Optional[int] = None,
-                qual_rank: Optional[int] = None):
+                qual_rank: Optional[int] = None, qual_seed: Optional[int] = None):
     """One player, preferring what the bracket knows over what the sheet printed.
 
     `from_bracket` is false for anything but main-draw singles. A doubles
@@ -452,6 +467,13 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_brack
         m_seed, m_type = _printed_mark(f"[{mark}]" if mark else "")
         seed = seed if seed is not None else m_seed
         etype = etype or m_type
+    # THE SEEDING THE FIELD STATES, for a row of that field the source did not
+    # mark. A seeding belongs to the player in the draw, not to the day: the
+    # feed marked Bernard Tomić as Hangzhou's [3] on his second-round row and
+    # not on his first, and the same player in the same qualifying draw cannot
+    # be seeded on Tuesday and unseeded on Monday.
+    if seed is None and qual_seed is not None:
+        seed = qual_seed
     draw_rank = None
     if from_bracket:
         seed = seeds.get(p.draw_entry_id) or seed
@@ -1240,8 +1262,7 @@ async def schedule_day(
                         e.discipline == "singles" and e.stage == "main",
                         ent_slugs, ent_extra, slugs_by_name, extra_by_name,
                         pair_rank=pair_ranks.get((e.id, p.side)),
-                        qual_rank=qual_ranks.get(
-                            (e.tournament_id, e.tour, _name_key(p.raw_name))))
+                        **_qual(qual_ranks, e, p))
             for p in ordered
         ]
         # A row whose match finished on another day holds no result of its
