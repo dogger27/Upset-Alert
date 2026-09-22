@@ -31,9 +31,7 @@
    the full width so it does not wrap, and the figure leads the line below
    with the sample it was taken over beside it. */
 .fg-refs { margin-top: 0.25rem; }
-.fg-refs-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.2rem; }
-.fg-refs-title { margin: 0; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
-.fg-refs-note { margin: 0; text-align: right; font-size: 0.72rem; color: var(--text-muted); }
+.fg-refs-title { margin: 0 0 0.2rem; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
 .fg-ref { padding: 0.35rem 0; }
 .fg-ref + .fg-ref { border-top: 1px solid var(--border); }
 .fg-ref-label { margin: 0; font-size: 0.85rem; color: var(--text); }
