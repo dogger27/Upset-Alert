@@ -9,6 +9,20 @@
 .fg-label { display: block; font-weight: 700; margin-bottom: 0.4rem; }
 .fg-row { display: flex; align-items: center; gap: 0.8rem; }
 .fg-row input[type="range"] { flex: 1; accent-color: var(--green-500, #40916c); height: 28px; cursor: pointer; }
+/* THE SET COUNT IS A CHOICE OF TWO, NOT A SLIDER. These three classes were
+   in the JSX with no CSS anywhere, so the web showed two default browser
+   buttons where the app shows a pair of cards. Same anatomy as the app's:
+   equal halves, the figure large and the noun quiet under it, and the chosen
+   one carried by the green border rather than by a fill alone. */
+.fg-setrow { display: flex; gap: 0.5rem; }
+.fg-setbtn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
+             padding: 0.7rem 0.5rem; border: 1px solid var(--border); border-radius: 8px;
+             background: var(--surface-sunken); color: var(--text-muted);
+             font-size: 0.72rem; cursor: pointer; }
+.fg-setbtn strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; color: var(--text); }
+.fg-setbtn:disabled { cursor: default; opacity: 0.6; }
+.fg-setbtn--on { border-color: var(--green-500, #40916c); background: color-mix(in srgb, var(--green-500, #40916c) 12%, var(--surface-sunken)); color: var(--green-500, #40916c); }
+.fg-setbtn--on strong { color: var(--green-500, #40916c); }
 .fg-value { min-width: 4.5rem; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.15rem; }
 /* The unit rides with the figure and stays quieter than it: the number is
    what the eye compares down the column, the noun only says of what. */
@@ -17,11 +31,15 @@
    the full width so it does not wrap, and the figure leads the line below
    with the sample it was taken over beside it. */
 .fg-refs { margin-top: 0.25rem; }
-.fg-refs-note { margin: 0 0 0.15rem; text-align: right; font-size: 0.72rem; color: var(--text-muted); }
+.fg-refs-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.2rem; }
+.fg-refs-title { margin: 0; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+.fg-refs-note { margin: 0; text-align: right; font-size: 0.72rem; color: var(--text-muted); }
 .fg-ref { padding: 0.35rem 0; }
 .fg-ref + .fg-ref { border-top: 1px solid var(--border); }
 .fg-ref-label { margin: 0; font-size: 0.85rem; color: var(--text); }
-.fg-ref-figures { margin: 0.1rem 0 0; display: flex; align-items: baseline; gap: 0.5rem; }
+/* The answer sits under its question: the indent is what makes the figure
+   belong to the sentence above rather than start a new one. */
+.fg-ref-figures { margin: 0.1rem 0 0; padding-left: 0.9rem; display: flex; align-items: baseline; gap: 1rem; }
 .fg-td-value { font-weight: 700; font-variant-numeric: tabular-nums; }
 .fg-td-note { font-size: 0.72rem; color: var(--text-muted); }
 /* The right end keeps to its own half, and wraps rather than running back
@@ -29,8 +47,6 @@
    sentence about the left end as much as the right (owner, 2026-09-22). */
 .fg-ends-max { max-width: 55%; text-align: right; }
 .fg-ends { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; }
-.fg-ref { margin: 0.45rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; line-height: 1.35; color: var(--text); }
-.fg-ref li + li { margin-top: 0.15rem; }
 .fg-actual { margin: 0 0 0.8rem; font-weight: 600; }
 .fg-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.4rem; }
 .fg-btn { border: 1px solid var(--green-500, #40916c); background: var(--green-500, #40916c); color: #fff; border-radius: 8px; padding: 0.5rem 0.9rem; font-weight: 700; cursor: pointer; }
