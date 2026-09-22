@@ -493,6 +493,36 @@ def _law_person(raw: str) -> str:
         c for c in s if not _ud.combining(c)).lower()).split())
 
 
+def _law_people(raw_names) -> list[frozenset]:
+    """One side's PEOPLE as the law reads them: per person (a "/" splits a
+    team) the words of `_law_person` that are names rather than initials.
+
+    Whole names, never a surname extraction — that is the serve path's
+    reading (`schedule.join_surnames`), and a law that joined results the
+    same way would go blind with it. "Petr Bar Biryukov" and "Petr BAR
+    BIRYUKOV" are the same three words however either source capitalises."""
+    out = []
+    for raw in raw_names:
+        for part in (raw or "").split("/"):
+            words = frozenset(w for w in _law_person(part).split() if len(w) >= 2)
+            if words:
+                out.append(words)
+    return out
+
+
+def _people_agree(xs: list, ys: list) -> bool:
+    """Do two lists of `_law_people` name the same people, one-to-one? A pair
+    agrees when one's words are the other's or a subset ("C. BUCSA" is
+    Cristina Bucsa) — `_sides_agree`, person by person."""
+    if not xs or len(xs) != len(ys):
+        return False
+    if len(xs) == 1:
+        return _sides_agree(xs[0], ys[0])
+    from itertools import permutations
+    return any(all(_sides_agree(x, y) for x, y in zip(xs, perm))
+               for perm in permutations(ys))
+
+
 def player_on_two_courts(rows) -> list[tuple]:
     """(row, other row, the person) wherever two rows still to come book one
     person on different courts into overlapping windows.
@@ -701,7 +731,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # over the stored rows cannot.
     from datetime import date as _date, timedelta as _td
     from app.services.schedule import (
-        _sheet_surnames, settle_from_result_rows, settled_sides_index)
+        join_surnames, settle_from_result_rows, settled_sides_index)
     _pd = _date.fromisoformat(play_date) if isinstance(play_date, str) else play_date
     venue_tz = (await db.execute(
         select(Draw.venue_timezone).where(
@@ -742,6 +772,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # document that follows it inherits the clock of the fetch it re-reads.
     doc_fetched: dict = document_clocks(day_docs)
     doc_published: dict = publication_clocks(day_docs)
+    wins: list = []
     if any(e.is_tbd for e in rows):
         wins = (await db.execute(
             select(ScheduleEntry).where(
@@ -751,8 +782,8 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 ScheduleEntry.play_date <= _pd))).scalars().all()
         settled_idx = settled_sides_index(wins)
         for r in wins:
-            a = _sheet_surnames([p.raw_name for p in r.players if p.side == "a"])
-            b = _sheet_surnames([p.raw_name for p in r.players if p.side == "b"])
+            a = join_surnames([p.raw_name for p in r.players if p.side == "a"])
+            b = join_surnames([p.raw_name for p in r.players if p.side == "b"])
             if a and b and r.completed_at is not None:
                 decided_at[frozenset(a | b)] = _naive_utc(r.completed_at)
 
@@ -992,7 +1023,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 if not resolved:
                     continue
                 key = frozenset().union(
-                    *(_sheet_surnames([p.raw_name]) for p in alts))
+                    *(join_surnames([p.raw_name]) for p in alts))
                 done = decided_at.get(key)
                 if done is not None and done + _REISSUE_LATENCY < fetched:
                     flag("pending_side_decided_before_document", e,
@@ -1002,6 +1033,69 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                            f"document {e.last_document_id} was fetched "
                            f"{fetched.isoformat()} — the newer sheet's "
                            "rendering of this slot was lost")
+
+        # 2026-09-22, Chengdu COURT 1 (doc 410): the Q2 slot "[2] Alexandre
+        # MULLER FRA or Luka PAVLOVIC FRA vs Petr BAR BIRYUKOV or [7] Andre
+        # ILAGAN USA" went on offering both choices after both Q1 feeders had
+        # finished. The results were on the Sofascore feed's rows for the day
+        # before, spelled "Luka Pavlović" and "Petr Bar Biryukov", and the
+        # serve path joined results to slots by `_sheet_surnames` — which keeps
+        # the accent and, finding no capitals, reads a feed's compound surname
+        # as its last word. Neither key met. Two slots over, the Ymer/Galarneau
+        # feeder, spelled alike by both sources, settled, so the page was
+        # inconsistent with itself as well as with the results.
+        #
+        # Every rule above that judges a settled side runs the serve path's
+        # resolver and only looks at what it RESOLVED, so a join that silently
+        # misses is invisible to all of them, and `decided_at` shared the same
+        # key and went blind the same way. This one finds the feeder with the
+        # law's own reading of a person (`_law_people`: whole names, folded,
+        # countries stripped by membership). Where that reading finds a
+        # finished match between exactly this side's two candidates, the serve
+        # path must have settled the side, and settled it to the winner.
+        #
+        # A side whose candidates all carry a draw entry is left to
+        # `alternatives_already_decided`: the serve path asks the bracket
+        # first, and the bracket is that rule's business.
+        if e.is_tbd and wins:
+            for side_key in (e.tbd_side or "ab"):
+                alts = sorted((p for p in players if p.side == side_key),
+                              key=lambda x: x.position or 1)
+                if len(alts) != 2 or all(p.draw_entry_id for p in alts):
+                    continue
+                cands = [_law_people([p.raw_name]) for p in alts]
+                if not all(cands):
+                    continue
+                feeder = None
+                for r in wins:
+                    if r.id == e.id:
+                        continue
+                    ra = _law_people([p.raw_name for p in r.players if p.side == "a"])
+                    rb = _law_people([p.raw_name for p in r.players if p.side == "b"])
+                    if ((_people_agree(cands[0], ra) and _people_agree(cands[1], rb))
+                            or (_people_agree(cands[0], rb) and _people_agree(cands[1], ra))):
+                        feeder = (r, ra if r.winner_side == "a" else rb)
+                        break
+                if feeder is None:
+                    continue
+                r, won = feeder
+                served, resolved = settle_from_result_rows(alts, settled_idx)
+                if not resolved:
+                    flag("pending_side_result_unjoined", e,
+                         f"side {side_key} still offers "
+                         + " or ".join(p.raw_name or "" for p in alts)
+                         + f", but entry {r.id} ({r.play_date}) recorded that "
+                           "match's winner: "
+                         + " / ".join(p.raw_name or "" for p in r.players
+                                      if p.side == r.winner_side)
+                         + " — the serve path's name join missed it")
+                elif not _people_agree(_law_people([p.raw_name for p in served]), won):
+                    flag("settled_side_not_winner", e,
+                         f"side {side_key} settles to "
+                         + " / ".join(p.raw_name or "" for p in served)
+                         + f", but entry {r.id} ({r.play_date}) was won by "
+                         + " / ".join(p.raw_name or "" for p in r.players
+                                      if p.side == r.winner_side))
 
         # 2026-08-28, Monterrey ESTADIO: the doubles semi-final printed a choice
         # between two whole PAIRS — "M. Chwalinska / S. Kraus OR S. Aoyama /
