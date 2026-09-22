@@ -28,10 +28,15 @@
  * data does, and a match with nothing to open never opens the menu at all —
  * see `actionsFor`, which the row asks before it arms the gesture.
  */
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useState } from 'react'
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } from './liveactivity'
+import { isAvailable as lockScreenAvailable } from './modules/live-activity'
 import { matchLine } from './matchLine'
+import { isLive } from './schedule'
+import { showToast } from './toast'
 import { C, R, S, T, TOUR } from './theme'
 import { eyebrowType } from './ui'
 import { leading } from './fontScale.js'
@@ -40,8 +45,26 @@ import { leading } from './fontScale.js'
    then what other people think, then what happened. Returns [] when there is
    nothing — the caller uses that to leave the long press unarmed rather than
    opening an empty sheet. */
-export function actionsFor({ pair, picks, openable, finished }) {
+export function actionsFor({ pair, picks, openable, finished, lock, lockOn }) {
   const out = []
+  /* THE LOCK SCREEN FIRST (owner, 2026-09-22), because it is the only one of
+     these that acts rather than opens: the others show you something about
+     the match, this one puts the match somewhere. It is also the one with a
+     live window — a match you can watch right now — so it belongs where a
+     thumb lands first.
+
+     `lock` is whether it is OFFERED and `lockOn` whether it is already there,
+     which only changes the wording. The row asks actionsFor with lockOn
+     unknown, purely to decide whether to arm the long press at all, and the
+     count is the same either way. */
+  if (lock) {
+    out.push({
+      key: 'lock',
+      label: lockOn ? 'Remove from Lock Screen' : 'Show Score on Lock Screen',
+      hint: lockOn ? 'Stop the live score there' : 'The live score, without unlocking',
+      icon: lockOn ? 'lock-open' : 'lock-closed',
+    })
+  }
   if (pair) {
     out.push({
       key: 'h2h',
@@ -73,9 +96,20 @@ const EYEBROW = eyebrowType({ small: true })
 
 export function MatchMenu({ target, onClose, onH2H, onPredictors, onHistory }) {
   const insets = useSafeAreaInsets()
+  /* BEFORE THE EARLY RETURN, because it is a hook. It takes a null id — the
+     sheet is mounted with no target most of the time — and answers false. */
+  const [onLockScreen, recheckLock] = useShowingOnLockScreen(target?.e?.match_id)
+  const [lockBusy, setLockBusy] = useState(false)
   if (!target) return null
   const { e, pair, picks, openable } = target
-  const actions = actionsFor({ pair, picks, openable, finished: e.winner_side != null })
+  /* OFFERED ON THE SAME MATCHES AS THE SCHEDULE'S OWN LOCK CHIP: a match we
+     hold an id for, on a build with the native module, that is either running
+     or already up there. A finished match that is not showing has nothing to
+     put on a Lock Screen — the end push retires its activity by itself. */
+  const lock = !!(lockScreenAvailable() && e.match_id != null
+                  && (onLockScreen || isLive(e)))
+  const actions = actionsFor({ pair, picks, openable, finished: e.winner_side != null,
+                              lock, lockOn: onLockScreen })
   const line = matchLine(e)
   /* The tour's own colours, as the card and the tier badge take them. A
      doubles row carries no gender, so `tour` is the fallback — and a mixed
@@ -83,7 +117,33 @@ export function MatchMenu({ target, onClose, onH2H, onPredictors, onHistory }) {
   const key = e.gender || (e.tour === 'WTA' ? 'F' : e.tour === 'ATP' ? 'M' : null)
   const tint = TOUR[key] || { plate: C.sunken, text: C.greenLit, label: null }
 
+  /* THE ONE ACTION THAT DOES NOT CLOSE FIRST. The others hand off to a sheet;
+     this one awaits the system and can fail, and a menu that vanished before
+     the failure would leave the error with nothing to explain it. So it
+     reports, then closes. Guarded against a double tap, as the schedule's
+     chip is. */
+  const toggleLock = async () => {
+    if (lockBusy) return
+    setLockBusy(true)
+    try {
+      if (onLockScreen) {
+        await hideFromLockScreen(e.match_id)
+        showToast('Removed from the Lock Screen')
+      } else {
+        await showMatchOnLockScreen(e.match_id)
+        showToast('Now showing on the Lock Screen')
+      }
+      onClose()
+    } catch (err) {
+      Alert.alert('Lock Screen', err?.message || 'Could not change the Lock Screen')
+    } finally {
+      setLockBusy(false)
+      recheckLock()
+    }
+  }
+
   const run = (k) => {
+    if (k === 'lock') { toggleLock(); return }
     onClose()
     if (k === 'h2h') onH2H(pair)
     else if (k === 'picks') onPredictors(target.match)
