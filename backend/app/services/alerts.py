@@ -54,6 +54,24 @@ ALERT_RECURRENCE_HOURS = 24.0
 # problem whose own email said "nothing since". Quiet means resolved or
 # already-handled; only a problem still producing rows is worth a re-send.
 ALERT_QUIET_HOURS = 6.0
+# ONE EMAIL PER PROBLEM, NOT TWO (owner, 2026-09-23: "Do not send me two
+# emails for: Issue detected and issue healed").
+#
+# The self-healer reads these same signatures every ten minutes; when it fixes
+# one it sends its own single line — "A detected issue has been healed" — and
+# an alert sent the moment the row appeared made that two emails about one
+# problem. So a signature is held back until it has OUTLIVED the fixer: it
+# must have been logged before the grace window opened and still be logging
+# inside it. A problem that stops — healed, or a blip — is never mailed from
+# here at all, and one that is still going after 45 minutes has survived four
+# passes of the fixer and is genuinely the owner's to look at.
+#
+# The trade, stated plainly: a fault that happens ONCE and never again is not
+# emailed by this path. That is deliberate — the healer has already seen it
+# and either fixed it (its own mail), judged it an expected state, or was
+# blocked (its own mail). What this path exists for is the problem nothing
+# could fix.
+ALERT_HEAL_GRACE_MINUTES = 45.0
 ALERT_MAX_PER_DAY = 3
 ALERT_MIN_GAP_HOURS = 4.0
 ALERT_MAX_ISSUES_PER_EMAIL = 20
@@ -178,6 +196,14 @@ async def scan_and_alert() -> None:
             newest = _as_utc(fresh[-1].created_at)
             if newest and (now - newest) > timedelta(hours=ALERT_QUIET_HOURS):
                 continue  # The tail of an alerted incident, long gone quiet.
+
+            # Survived the fixer, or not mailed at all — see the grace above.
+            grace = timedelta(minutes=ALERT_HEAL_GRACE_MINUTES)
+            oldest = _as_utc(fresh[0].created_at)
+            if not oldest or (now - oldest) < grace:
+                continue           # Too young to know: the fixer has it now.
+            if not newest or (now - newest) > grace:
+                continue           # Stopped happening — healed, or a blip.
 
             latest = fresh[-1]
             pending.append({

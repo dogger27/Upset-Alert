@@ -96,6 +96,54 @@ def _footer(unsubscribe_url: str = "", unsubscribe_label: str = "") -> str:
     )
 
 
+# ── the subject line ──────────────────────────────────────────────────────
+#
+# A SUBJECT GMAIL CUTS OFF IS A SUBJECT THAT FAILED (owner, 2026-09-23:
+# "NEVER send an email whose subject gets cut off in Gmail"). Gmail's web list
+# shows roughly 70 characters before the preview text takes over and its phone
+# app fewer still; 60 sits inside both, and inside Apple Mail's list as well.
+#
+# The number is a FLOOR UNDER THE BUILDERS, not a licence to write long ones:
+# every subject in this file is written to fit, and this is what catches the
+# one whose tournament name runs away. Shortening drops whole words from the
+# end, never a syllable, and the trailing detail after a dash or a bracket
+# goes first — the part a reader loses least by losing.
+SUBJECT_MAX = 60
+# Words that cannot end a sentence, so they cannot end a shortened subject.
+_SUBJECT_ORPHANS = frozenset(
+    "a an and at by for from in of on or the to with presented sponsored vs v".split())
+
+
+def subject_line(text: str) -> str:
+    """One subject, guaranteed to read whole in a mail client's list.
+
+    Shortening takes WHOLE WORDS off the end and then tidies what it leaves:
+    a trailing dash, a dangling "presented by", a possessive with nothing
+    after it. Never an ellipsis, and never a cut through a word — a subject
+    that stops mid-word looks like the failure it is trying to avoid.
+
+    Deliberately keeps the head rather than the tail. An earlier draft dropped
+    everything after the separator, which turned "Round of 16 Complete: 2026
+    Korea Open" into "Round of 16 Complete" — the reader lost WHICH event,
+    which is the half they cannot guess.
+    """
+    out = " ".join(str(text or "").split())
+    if len(out) <= SUBJECT_MAX:
+        return out
+    words = out.split(" ")
+    while len(words) > 1 and len(" ".join(words)) > SUBJECT_MAX:
+        words.pop()
+    # What a dropped tail can leave behind: an orphaned connective, an opening
+    # bracket, a possessive waiting for its noun, a separator with one side.
+    while len(words) > 1 and (
+            words[-1].lower() in _SUBJECT_ORPHANS
+            or words[-1].endswith(("'s", "\u2019s", "("))
+            or not any(c.isalnum() for c in words[-1])):
+        words.pop()
+    kept = " ".join(words).rstrip(" \u2014\u2013-:,;\u00b7/|(")
+    return kept if 0 < len(kept) <= SUBJECT_MAX else out[:SUBJECT_MAX].rstrip()
+
+
 def _finalise(params: "resend.Emails.SendParams", unsubscribe_url: str = "",
               unsubscribe_label: str = "") -> dict:
     """Add the footer to any message, and the unsubscribe headers to a
@@ -103,6 +151,11 @@ def _finalise(params: "resend.Emails.SendParams", unsubscribe_url: str = "",
     network and cannot append the footer twice.
     """
     out = dict(params)
+    # Every send in the app passes through here, so the subject rule holds
+    # wherever a subject was built — including the ones a caller assembles
+    # from a tournament's own name.
+    if out.get("subject"):
+        out["subject"] = subject_line(out["subject"])
     html = out.get("html") or ""
     if html and _FOOTER_MARK not in html:
         out["html"] = html + _footer(unsubscribe_url, unsubscribe_label)
@@ -1594,10 +1647,17 @@ async def send_system_alert_digest(
     errors = sum(1 for i in issues if i["level"] == "error")
     warnings = len(issues) - errors
 
+    # THE ONLY REASON THIS EMAIL EXISTS IS THAT SOMETHING IS STILL WRONG
+    # (owner, 2026-09-23). The self-healer sees every signature within ten
+    # minutes and sends its own one-line "healed" mail; alerts.py holds a
+    # problem back until it has outlived that, so anything that reaches here
+    # has survived the fixer and is the owner's to look at. The subject says
+    # so in the words the owner asked for, and stays inside subject_line's
+    # limit so no client cuts it in half.
     if len(issues) == 1:
         one = issues[0]
-        headline = _headline(one["message"])
-        subject = f"Upset Alert {one['level']} in {one['category']} — {headline}"
+        headline = _headline(one["message"], limit=SUBJECT_MAX - 26)
+        subject = f"** FEEDBACK NEEDED **: {headline}"
         heading = "Something needs your attention"
     else:
         counts = " and ".join(
@@ -1605,7 +1665,7 @@ async def send_system_alert_digest(
                         f"{warnings} warning{'s' if warnings != 1 else ''}" if warnings else "")
             if p
         )
-        subject = f"Upset Alert: {len(issues)} issues ({counts})"
+        subject = f"** FEEDBACK NEEDED **: {len(issues)} issues ({counts})"
         heading = f"{len(issues)} issues need your attention"
 
     # Only count something as "still going" if it actually happened recently.
@@ -1661,7 +1721,10 @@ async def send_system_alert_digest(
     exc = await asyncio.to_thread(_send, {
         "from": FROM,
         "to": [to_email],
-        "subject": subject,
+        # This path deliberately does not go through send_async (see the
+        # docstring), so it applies the subject rule itself rather than
+        # inheriting it from _finalise.
+        "subject": subject_line(subject),
         "html": html,
     })
     return exc is None
