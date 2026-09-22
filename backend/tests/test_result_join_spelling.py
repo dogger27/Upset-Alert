@@ -65,3 +65,33 @@ def test_the_law_reads_people_on_its_own():
                          _law_people(["Nicole Melichar-Martinez", "Cristina Bucsa"]))
     assert not _people_agree(_law_people(["Alexander ZVEREV GER"]),
                              _law_people(["Mischa Zverev"]))
+
+
+def test_a_surname_first_feed_name_still_joins():
+    # Hangzhou 2026-09-22/23 (doc 418): Sofascore stores Chinese names surname
+    # FIRST — "Te Rigele", shortName "T. Rigele" — so its last word is the
+    # given name, and the Q1 result never met the sheet's "[WC] Rigele TE CHN".
+    wins = [_Row(["Bernard Tomić"], ["Te Rigele"], "a"),
+            _Row(["Fajing Sun"], ["Matthew Dellavedova"], "b")]
+    idx = settled_sides_index(wins)
+    side_a = [_P("a", 1, "[3] Bernard TOMIC AUS"), _P("a", 2, "[WC] Rigele TE CHN")]
+    side_b = [_P("b", 1, "Fajing SUN CHN"), _P("b", 2, "[7] Matthew DELLAVEDOVA AUS")]
+    got_a, ok_a = settle_from_result_rows(side_a, idx)
+    got_b, ok_b = settle_from_result_rows(side_b, idx)
+    assert ok_a and [p.raw_name for p in got_a] == ["[3] Bernard TOMIC AUS"]
+    assert ok_b and [p.raw_name for p in got_b] == ["[7] Matthew DELLAVEDOVA AUS"]
+    # ...and when the surname-first player is the one who came through.
+    idx = settled_sides_index([_Row(["Bernard Tomić"], ["Te Rigele"], "b")])
+    got, ok = settle_from_result_rows(side_a, idx)
+    assert ok and [p.raw_name for p in got] == ["[WC] Rigele TE CHN"]
+
+
+def test_a_sheet_name_keeps_its_one_reading():
+    from app.services.schedule import join_keys
+    # A sheet states its surname, so nothing is added for it: the given name
+    # "Rigele" is not a reading of "[WC] Rigele TE CHN".
+    assert join_keys(["[WC] Rigele TE CHN"]) == {frozenset({"te"})}
+    assert join_keys(["Te Rigele"]) == {frozenset({"te"}), frozenset({"rigele"})}
+    assert join_keys(["H. Nys"]) == {frozenset({"nys"})}
+    assert join_keys([""]) == set()
+

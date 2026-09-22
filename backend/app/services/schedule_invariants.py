@@ -461,6 +461,50 @@ def court_opened_twice(rows) -> list[tuple]:
     return out
 
 
+def court_spelled_two_ways(rows) -> list[tuple]:
+    """(row, other spelling) for rows whose court is another court's name
+    spelled differently — case and spacing only.
+
+    Hangzhou 2026-09-23 (doc 418): a merge kept the Sofascore feed's "Court 1"
+    on a row the sheet prints on "COURT 1", and the page grouped by the stored
+    string — one court shown twice, its opener on one card and its second
+    match opening the other with no clock. Rows on the less common spelling
+    are reported (ties: the later-sorting one), so the court most of the day
+    agrees on is the one named as right.
+    """
+    groups: dict = {}
+    for r in rows:
+        name = r.court or ""
+        groups.setdefault(" ".join(name.split()).casefold(), {}).setdefault(name, []).append(r)
+    out = []
+    for spellings in groups.values():
+        if len(spellings) < 2:
+            continue
+        ranked = sorted(spellings, key=lambda n: (-len(spellings[n]), n))
+        for name in ranked[1:]:
+            out += [(r, ranked[0]) for r in spellings[name]]
+    return out
+
+
+def sheet_row_placed_by_feed(rows, feed_docs) -> list:
+    """Rows a SHEET document restated that still carry a feed's own start.
+
+    "Est. 12:00" (`start_type` 'estimated') is a wording only a feed writes —
+    Sofascore's staggered guess, the WTA's isEstimatedStartTime. A row whose
+    newest document is a sheet and whose start is still the feed's was
+    restated by the sheet without taking the sheet's placement: the doc-418
+    merge (see `court_spelled_two_ways`), which `_prefer_challenger` settled
+    in the feed row's favour and whose survivor kept the feed's court, clock
+    and spellings under the sheet's document id. A played box is exempt: a
+    sheet drops a finished match's time band, and the row then keeps what it
+    had (ingest's `keep_start`).
+    """
+    return [r for r in rows
+            if r.start_type == "estimated" and r.last_document_id
+            and r.last_document_id not in feed_docs
+            and not (r.started_at or r.completed_at or r.winner_side)]
+
+
 def feed_order_unstated(rows, feed_docs) -> list[list]:
     """Courts, as lists of rows, whose order a FEED wrote without knowing it.
 
@@ -731,7 +775,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # over the stored rows cannot.
     from datetime import date as _date, timedelta as _td
     from app.services.schedule import (
-        join_surnames, settle_from_result_rows, settled_sides_index)
+        result_pair_keys, settle_from_result_rows, settled_sides_index)
     _pd = _date.fromisoformat(play_date) if isinstance(play_date, str) else play_date
     venue_tz = (await db.execute(
         select(Draw.venue_timezone).where(
@@ -782,10 +826,12 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 ScheduleEntry.play_date <= _pd))).scalars().all()
         settled_idx = settled_sides_index(wins)
         for r in wins:
-            a = join_surnames([p.raw_name for p in r.players if p.side == "a"])
-            b = join_surnames([p.raw_name for p in r.players if p.side == "b"])
-            if a and b and r.completed_at is not None:
-                decided_at[frozenset(a | b)] = _naive_utc(r.completed_at)
+            if r.completed_at is None:
+                continue
+            for key in result_pair_keys(
+                    [p.raw_name for p in r.players if p.side == "a"],
+                    [p.raw_name for p in r.players if p.side == "b"]):
+                decided_at[key] = _naive_utc(r.completed_at)
 
     def flag(code, entry, detail):
         # ROWS THE FEEDS WROTE ARE NOT JUDGED BY THE SHEET'S RENDERING
@@ -1022,9 +1068,8 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 _served, resolved = settle_from_result_rows(alts, settled_idx)
                 if not resolved:
                     continue
-                key = frozenset().union(
-                    *(join_surnames([p.raw_name]) for p in alts))
-                done = decided_at.get(key)
+                done = next((decided_at[k] for k in result_pair_keys(
+                    [alts[0].raw_name], [alts[1].raw_name]) if k in decided_at), None)
                 if done is not None and done + _REISSUE_LATENCY < fetched:
                     flag("pending_side_decided_before_document", e,
                          f"side {side_key} still offers "
@@ -1586,6 +1631,19 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
              f"{e.court!r} #{e.court_order} and #{other.court_order} (entry "
              f"{other.id}) both START at {e.start_time_local!r} — two courts "
              f"read as one")
+    # 2026-09-23, Hangzhou (doc 418): the sheet took a feed-written day back
+    # and a dedupe merge kept the feed row's court, clock and names under the
+    # sheet's document id — COURT 1 rendered as two courts. See
+    # schedule._take_placement.
+    for e, other in court_spelled_two_ways(rows):
+        flag("court_spelled_two_ways", e,
+             f"{e.court!r} #{e.court_order} is {other!r} spelled another way — "
+             f"the page shows one court twice")
+    for e in sheet_row_placed_by_feed(rows, feed_docs):
+        flag("sheet_row_placed_by_feed", e,
+             f"{e.court!r} #{e.court_order} was restated by sheet document "
+             f"{e.last_document_id} but still starts {e.start_note!r}, a feed's "
+             f"estimate — a merge kept the older row's placement")
     for rs in feed_order_unstated(rows, feed_docs):
         first = min(rs, key=lambda r: (r.court_order or 0, r.id))
         flag("feed_order_unstated", first,
