@@ -384,7 +384,7 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
           {page === 'intro' ? (
             <>
               <Text style={s.intro}>
-                Scores occurring in the final standings of all leagues will be decided
+                Ties occurring in the final standings of all leagues will be decided
                 by the questions below.
               </Text>
               <View style={s.hero}>

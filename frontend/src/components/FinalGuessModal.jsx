@@ -250,7 +250,7 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
               narrowly — "final score ties" read as a tie in the final's SCORE
               rather than a tie in the table (owner, 2026-09-19). */}
           <p className="fg-intro">
-            Scores occurring in the final standings of all leagues will be decided
+            Ties occurring in the final standings of all leagues will be decided
             by the questions below.
           </p>
           {/* The bracket's own answer to "which final?", so the two questions
