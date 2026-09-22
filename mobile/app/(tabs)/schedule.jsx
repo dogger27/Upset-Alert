@@ -37,7 +37,7 @@ import { useChoosableTournaments } from '../../choosableTournaments'
 import { DayStrip } from '../../DayStrip'
 import { SWIPE_PX, SWIPE_VX, swipeStep } from '../../swipeDay'
 import { beginSwipe, endSwipe, unlessSwiping } from '../../swipeGuard'
-import { dayLabels, relativeDayWord } from '../../dayLabels'
+import { dayLabels, relativeDayWord, widestDayWord } from '../../dayLabels'
 import { holdSelection, rowInTournaments } from '../../scheduleRows'
 import { eventTour, tierWord } from '../../category'
 import { MatchCard } from '../../scorecard'
@@ -505,12 +505,15 @@ export default function ScheduleScreen() {
     return [{ key: 'all', list: dense ? startedFirst(chrono) : chrono }]
   }, [visible, view, grouped, dense])
 
+  /* The widest the right slot has to be, in points. dayLabels picks the word;
+     this measures it, because the font is the screen's to know. */
+  const rightSlotW = useMemo(() => {
+    const word = widestDayWord(dates.data?.dates || [], today(), shortDate, date)
+    if (!word) return undefined
+    return Math.ceil(textWidth(word, 'Archivo_700Bold', 14)) + S.md + S.lg
+  }, [dates.data, date])
+
   const refetch = () => { day.refetch(); dates.refetch() }
-  /* ON COURT HERE, not on court anywhere. It counted the whole day's rows, so
-     a page pinned to a finished event announced three matches in progress at
-     tournaments it was not showing. `visible` is the same set the rows below
-     are drawn from, so the number and the list can never disagree. */
-  const liveCount = visible.filter(isLive).length
 
   /* A champion is a whole-screen event, so the row reports up and the
      fanfare covers the screen from here — the site's ChampionFanfare. It
@@ -534,14 +537,24 @@ export default function ScheduleScreen() {
             now (owner, 2026-09-17). Rendered even with no days, so a day
             with no sheet still says which day it is. "Yday", "Today" and "Tmrw"
             when the day has a word, else month and day (owner): "Sep 15". */}
+        {/* THE RULE BESIDE THE DATE STAYS PUT (owner, 2026-09-22). The slot
+            used to be sized by whatever word was in it, so the line down its
+            left edge slid as the reader swiped from "Today" to "Sep 24" and
+            back. Sized to the widest word the CURRENT range can show, it
+            moves only when the range does. Measured from the font's own
+            metrics — the same 14pt bold the slot draws — plus the slot's own
+            padding, which is the strip's to add. */}
         <DayStrip
           days={days} active={date} onPick={setPinned}
+          rightWidth={rightSlotW}
           right={(
             <View style={s.today}>
+              {/* THE DAY, AND NOTHING UNDER IT (owner, 2026-09-22: remove the
+                  "1 on court" line). The Completed / Live / Upcoming switch
+                  below counts the same matches and does it per segment, so
+                  this was the number said twice — and it was the taller of
+                  the slot's two lines that made the rule beside it move. */}
               <Text style={s.todayDate}>{relativeDayWord(date, today()) ?? shortDate(date)}</Text>
-              {liveCount > 0 && (
-                <Text style={[T.tiny, { color: C.greenLit }]}>{liveCount} on court</Text>
-              )}
             </View>
           )}
         />
