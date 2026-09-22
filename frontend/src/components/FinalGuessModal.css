@@ -13,6 +13,17 @@
 /* The unit rides with the figure and stays quieter than it: the number is
    what the eye compares down the column, the noun only says of what. */
 .fg-td-unit { font-size: 0.72rem; font-weight: 500; color: var(--text-muted); }
+/* A reference is a sentence with its figure under it: the description gets
+   the full width so it does not wrap, and the figure leads the line below
+   with the sample it was taken over beside it. */
+.fg-refs { margin-top: 0.25rem; }
+.fg-refs-note { margin: 0 0 0.15rem; text-align: right; font-size: 0.72rem; color: var(--text-muted); }
+.fg-ref { padding: 0.35rem 0; }
+.fg-ref + .fg-ref { border-top: 1px solid var(--border); }
+.fg-ref-label { margin: 0; font-size: 0.85rem; color: var(--text); }
+.fg-ref-figures { margin: 0.1rem 0 0; display: flex; align-items: baseline; gap: 0.5rem; }
+.fg-td-value { font-weight: 700; font-variant-numeric: tabular-nums; }
+.fg-td-note { font-size: 0.72rem; color: var(--text-muted); }
 /* The right end keeps to its own half, and wraps rather than running back
    across the slider — where two lines of a record holder read as a
    sentence about the left end as much as the right (owner, 2026-09-22). */

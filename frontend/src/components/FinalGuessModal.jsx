@@ -152,22 +152,31 @@ function Reference({ ctx, which, sets, unit, qualifier }) {
       : 'Pick your champion in the draw to see their history here'}</p>
   }
   return (
-    <table className="fg-table">
-      {qualifier && <thead><tr><th /><th>{qualifier}</th><th /></tr></thead>}
-      <tbody>
-        {rows.map(([label, value, note]) => (
-          <tr key={label}>
-            <td>Average for {label}</td>
-            <td className="fg-td-value">
+    /* TWO LINES PER ROW, NOT THREE COLUMNS (owner, 2026-09-22). The
+       description is the longest thing here and it was sharing a row with a
+       figure column and a sample column, so it wrapped while two thirds of the
+       width sat empty beside it. Given the full width it reads on one line,
+       and the figure and its sample go underneath — which is their real
+       relationship anyway: both are about the sentence above them.
+
+       A list rather than a table, because with the columns gone there is no
+       grid left to be a table OF. */
+    <div className="fg-refs">
+      {qualifier && <p className="fg-refs-note">{qualifier}</p>}
+      {rows.map(([label, value, note]) => (
+        <div className="fg-ref" key={label}>
+          <p className="fg-ref-label">Average for {label}</p>
+          <p className="fg-ref-figures">
+            <span className="fg-td-value">
               {value}{unit && <span className="fg-td-unit"> {unit}</span>}
-            </td>
+            </span>
             {/* "Over 82 finals" — the count is the SAMPLE the average was
                 taken over, said once here as "Average for" is. */}
-            <td className="fg-td-note">{note && `Over ${note}`}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+            {note && <span className="fg-td-note">Over {note}</span>}
+          </p>
+        </div>
+      ))}
+    </div>
   )
 }
 
