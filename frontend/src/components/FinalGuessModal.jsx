@@ -188,45 +188,6 @@ function Reference({ ctx, which, sets, unit }) {
   )
 }
 
-/* THE MEETINGS THEMSELVES (owner, 2026-09-19). The reference lines give the
-   RATE; this gives the matches behind it — who won, the score, the length and
-   the aces each player hit. Sackmann's score is written from the winner's
-   side, so naming the winner in front of it makes "6-4 6-3" read the right
-   way round. */
-function Meetings({ ctx }) {
-  const h = ctx?.h2h
-  if (!h?.matches?.length) return null
-  const a = surname(ctx?.champion?.name)
-  const b = surname(ctx?.runner_up?.name)
-  return (
-    <section className="fg-q">
-      <span className="fg-label">
-        When they have met{h.total > 1 ? ` — ${a} ${h.champion_wins}, ${b} ${h.opponent_wins}` : ''}
-      </span>
-      <ul className="fg-meets">
-        {h.matches.map((m, i) => (
-          <li key={`${m.date}-${i}`}>
-            <span className="fg-meet-when">
-              {[m.year, m.tournament, m.round, m.surface].filter(Boolean).join(' · ')}
-            </span>
-            <span className="fg-meet-score">
-              {surname(m.winner_name)} {m.score}{m.minutes ? ` · ${fmtLong(m.minutes)}` : ''}
-            </span>
-            <span className="fg-meet-aces">
-              {m.champion_aces != null || m.opponent_aces != null
-                ? `${a} ${m.champion_aces ?? '–'} aces · ${b} ${m.opponent_aces ?? '–'}`
-                : 'Aces not recorded for this match'}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {h.total > h.shown && (
-        <p className="fg-muted">The {h.shown} most recent of {h.total} meetings</p>
-      )}
-    </section>
-  )
-}
-
 export default function FinalGuessModal({ tournamentId, open, onClose, reason }) {
   const qc = useQueryClient()
   const { data: ctx, isLoading } = useFinalGuess(tournamentId, open)
@@ -358,7 +319,6 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
                 {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
                 <Reference ctx={ctx} which="minutes" sets={sets} />
               </section>
-              <Meetings ctx={ctx} />
               {ctx?.actual && (
                 <p className="fg-actual">The final: {ctx.actual.final_sets ?? '–'} sets, {ctx.actual.final_aces} aces, {fmtLong(ctx.actual.final_duration_min)}.</p>
               )}
