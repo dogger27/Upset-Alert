@@ -427,6 +427,29 @@ def court_opener_untimed(rows) -> list:
     return out
 
 
+def singles_stage_contradicts_round(rows) -> list:
+    """Singles rows whose round belongs to the other draw from their stage.
+
+    2026-09-23, Hangzhou (doc 421): Court view listed COURT 1 (qualifying
+    finals only) above CENTER COURT, which the sheet prints first and which
+    carried the day's two unseeded main-draw R32s. Courts are ranked by STAGE
+    before seed now — a main-draw match outranks every qualifying seed (web
+    utils/courtRank.js, mobile courtGroups.js; pinned by courtRank.test.mjs and
+    courtGroups.test.mjs) — so the order of a day's courts is only as right as
+    each row's stage. A singles row whose round names the other draw would
+    wear the wrong badge AND lift a qualifying court over the show court, or
+    sink the show court beneath one. Stored at the time: 0 of 822 singles rows.
+    """
+    out = []
+    for r in rows:
+        lab = (r.round_label or "").strip()
+        if r.discipline != "singles" or not lab:
+            continue
+        if bool(_QUALI_ROUND_RE.match(lab)) != (r.stage == "qualifying"):
+            out.append(r)
+    return out
+
+
 def court_unnamed(rows) -> list:
     """Rows stored with no court at all.
 
@@ -1616,6 +1639,14 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
              f"{e.court} #{e.court_order} opens the court printed "
              f"{e.start_note or e.start_type!r} with no clock — it follows a "
              f"box the ingest never read, and the page can print no time")
+
+    # 2026-09-23, Hangzhou (doc 421): the Court view ranks courts by stage
+    # before seed, so a row filed in the wrong draw misorders the courts.
+    for e in singles_stage_contradicts_round(rows):
+        flag("singles_stage_contradicts_round", e,
+             f"singles row filed stage={e.stage!r} with round_label="
+             f"{e.round_label!r} — the page badges it, and ranks its court, "
+             f"by the wrong draw")
 
     # 2026-09-19, Singapore and Korea qualifying (feed documents 306/307):
     # the WTA's published shape names its court in `CourtName` and gives the

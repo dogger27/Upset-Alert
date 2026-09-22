@@ -7,10 +7,15 @@
  * comparator leaves the array in whatever order it started.
  *
  * A QUALIFYING seed is seeded separately too, so it ranks below every
- * main-draw seed and above none (QUALI_SEED + n). Chengdu 2026-09-23: the
- * Q-final [1] and [3] put both qualifying courts above CENTER COURT's R32 [8],
- * the reverse of the sheet. Offset, not dropped, so a qualifying-only day
- * still orders its courts by seed. The web's twin is Schedule.jsx `byCourt`.
+ * main-draw seed (QUALI_SEED + n). Chengdu 2026-09-23: the Q-final [1] and [3]
+ * put both qualifying courts above CENTER COURT's R32 [8], the reverse of the
+ * sheet. Offset, not dropped, so a qualifying-only day still orders its courts
+ * by seed. AND BELOW EVERY MAIN-DRAW MATCH, seeded or not: Hangzhou 2026-09-23
+ * (doc 421) put its two unseeded R32s on CENTER COURT and only Q-finals on
+ * COURT 1, and an unseeded player ranking at NO_SEED listed COURT 1's
+ * qualifying [1] first — the reverse of the sheet again. An unseeded main-draw
+ * player ranks at QUALI_SEED, between the two. The web's twin is
+ * frontend/src/utils/courtRank.js.
  *
  * BY TOURNAMENT, ALWAYS (owner, 2026-09-17; always 2026-09-20): tournaments
  * in name order, as a past day's record is, each one's courts ranked among
@@ -49,8 +54,9 @@ export function courtGroups(entries) {
         if (e.discipline !== 'singles') continue
         count += 1
         for (const p of e.players || []) {
-          if (p.seed == null) continue
-          const rank = e.stage === 'qualifying' ? QUALI_SEED + p.seed : p.seed
+          const rank = e.stage === 'qualifying'
+            ? (p.seed == null ? NO_SEED : QUALI_SEED + p.seed)
+            : (p.seed == null ? QUALI_SEED : p.seed)
           if (rank < best) best = rank
         }
       }

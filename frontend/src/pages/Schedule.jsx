@@ -17,6 +17,7 @@ import { getPredictions } from '../api/predictions'
 import { nationalityIso2, splitPlayerName } from '../utils/flags'
 import { isSuspended, isUnderWay } from '../utils/playState'
 import { byTimeOfDay } from '../utils/dayOrder'
+import { courtsByRank } from '../utils/courtRank'
 import { noteHasClock, rewriteNoteClock } from '../utils/noteClock'
 import { rootFontPx, textWidth } from '../utils/text'
 import { parseSet } from '../utils/score'
@@ -244,14 +245,6 @@ function expectedStart(e, zone, venueMode) {
   return printed ? t : `~${t}`
 }
 
-// A finite sentinel rather than Infinity: two unseeded courts would otherwise
-// compare as Infinity - Infinity = NaN, and a NaN comparator silently leaves
-// the array in whatever order it started in.
-const NO_SEED = 9999
-// Where a qualifying seed ranks a court: below every main-draw seed, above
-// NO_SEED. See byCourt.
-const QUALI_SEED = 1000
-
 /* A round label that already announces qualifying, so the separate "Q" chip
    beside it would only repeat itself. */
 const QUALI_ROUND = /^(q\d?|fq)$/i
@@ -293,25 +286,6 @@ function courtScale(court) {
   return longest > COURT_FIT
     ? { '--court-scale': Math.max(0.7, COURT_FIT / longest) }
     : undefined
-}
-
-/**
- * A player's seed number, or null.
- *
- * The API sends it as a field, taken from the bracket where the player
- * resolved and from the sheet's own "[17]" otherwise — so a resolved name can
- * be shown clean without the seeding disappearing with the brackets. The parse
- * stays as the fallback for anything the API has not filled in.
- *
- * Only digits count. The same brackets carry [Q], [WC], [LL], [PR] and [Alt],
- * which say how a player ENTERED rather than how highly they are ranked — and a
- * name can carry both, as in "[WC] [2]".
- */
-function seedNumber(player) {
-  if (player?.seed != null) return player.seed
-  const { seed } = splitPlayerName(player?.name)
-  const nums = seed && seed.match(/\d+/g)
-  return nums ? Math.min(...nums.map(Number)) : null
 }
 
 /**
@@ -909,48 +883,10 @@ export default function Schedule() {
      its history live in utils/dayOrder.js, pinned by dayOrder.test.mjs. */
   const timeEntries = useMemo(() => byTimeOfDay(entries), [entries])
 
-  const byCourt = useMemo(() => {
-    const m = new Map()
-    for (const e of entries) {
-      const k = e.court || 'Unassigned'
-      if (!m.has(k)) m.set(k, [])
-      m.get(k).push(e)
-    }
-    for (const list of m.values()) list.sort((x, y) => x.court_order - y.court_order)
-
-    // Courts are ordered by the best seed playing on them, so the show courts
-    // rise to the top without hardcoding venue-specific names — every
-    // tournament calls its main court something different. Falls back to how
-    // many matches a court is hosting, which is the next best proxy for
-    // importance when nobody seeded is out there.
-    // Ranked on SINGLES only, even though the view now lists everything: a
-    // doubles bracket is seeded separately, so its [1] says nothing about how
-    // big the match is next to a singles [1]. A court hosting only doubles
-    // scores nothing on either measure and settles at the bottom, which is
-    // where it belongs without being hidden.
-    // A QUALIFYING seed is seeded separately too, so it ranks below every
-    // main-draw seed (and above no seed at all). Chengdu 2026-09-23: the
-    // Q-final [1] and [3] put both qualifying courts above CENTER COURT's R32
-    // [8], the reverse of the sheet. Offset, not dropped, so a qualifying-only
-    // day still orders its courts by seed. mobile/courtGroups.js is the twin.
-    const ranked = [...m.entries()].map(([name, list]) => {
-      let best = NO_SEED
-      let count = 0
-      for (const e of list) {
-        if (e.discipline !== 'singles') continue
-        count += 1
-        for (const p of e.players) {
-          const n = seedNumber(p)
-          const rank = n == null ? null : (e.stage === 'qualifying' ? QUALI_SEED + n : n)
-          if (rank != null && rank < best) best = rank
-        }
-      }
-      return { name, list, best, count }
-    })
-    ranked.sort((a, b) =>
-      a.best - b.best || b.count - a.count || a.name.localeCompare(b.name))
-    return ranked.map(r => [r.name, r.list])
-  }, [entries])
+  /* The court view: courts in rank order, each in its own running order. The
+     rule and its history live in utils/courtRank.js, pinned by
+     courtRank.test.mjs. */
+  const byCourt = useMemo(() => courtsByRank(entries), [entries])
 
   /*
    * No measuring pass. There used to be one here that sized every card to the
