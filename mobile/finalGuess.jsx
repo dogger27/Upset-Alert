@@ -449,7 +449,8 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               </View>
               <ValueSlider value={aces} min={0} max={acesMax} onChange={setAces}
                            disabled={locked} accessibilityLabel="Aces in the final" />
-              <Ends max={acesMax} rec={rec?.aces_record} what="the most in 12 months" />
+              {/* No floor label and no "the most in 12 months" — see Ends. */}
+              <Ends max={acesMax} rec={rec?.aces_record} />
               {/* Scaled to the sets just chosen, which is why that question
                   comes first (owner, 2026-09-19). */}
               <StatTable rows={acesRows(data, sets)} unit="aces"
@@ -466,7 +467,8 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               </View>
               <ValueSlider value={minutes} min={0} max={durMax} onChange={setMinutes}
                            disabled={locked} accessibilityLabel="Length of the final" />
-              <Ends max={fmtLong(durMax)} rec={rec?.duration_record} what="the longest in 12 months" />
+              <Ends max={fmtLong(durMax)} rec={rec?.duration_record}
+                    what="the longest in 12 months" zero="a walkover" />
               {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
               <StatTable rows={minutesRows(data, sets)} qualifier={`${sets} sets`} />
               <Meetings data={data} />
@@ -523,19 +525,36 @@ function Step({ n, of }) {
 }
 
 /* The two ends of a slider's track — value over meaning, no separator. */
-function Ends({ max, rec, what }) {
-  const who = rec
-    ? `${what} — ${rec.player ? `${surname(rec.player)}, ` : ''}${rec.tournament} ${rec.year}`
-    : what
+/* THE TWO ENDS OF THE SLIDER, and what each of them means.
+ *
+ * `zero` EXPLAINS THE FLOOR ONLY WHERE IT NEEDS EXPLAINING. A final of zero
+ * MINUTES is a walkover, and saying so is the only way that end of the scale
+ * makes sense. Zero ACES is an ordinary afternoon — "women will often hit 0
+ * aces over a full match" (owner, 2026-09-22) — so calling it a walkover was
+ * wrong, and no label is the right amount to say about a number that speaks
+ * for itself.
+ *
+ * `what` names what the TOP of the scale is, and the aces question no longer
+ * passes one: "28 — the most in 12 months — Tauson, Indian Wells 2026" spent
+ * two thirds of a two-line label on a phrase the clay-coloured number already
+ * implies. The holder is the part a reader gets something from.
+ */
+function Ends({ max, rec, what, zero }) {
+  const holder = rec
+    ? `${rec.player ? `${surname(rec.player)}, ` : ''}${rec.tournament} ${rec.year}`
+    : null
+  const who = [what, holder].filter(Boolean).join(' — ')
   return (
     <View style={s.ends}>
-      <View>
+      <View style={s.endLeft}>
         <Text style={s.endValue}>0</Text>
-        <Text style={s.endWho}>a walkover</Text>
+        {zero ? <Text style={s.endWho}>{zero}</Text> : null}
       </View>
       <View style={s.endRight}>
         <Text style={[s.endValue, s.endRecord]}>{max}</Text>
-        <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>{who}</Text>
+        {who ? (
+          <Text style={[s.endWho, s.endWhoRight]} numberOfLines={2}>{who}</Text>
+        ) : null}
       </View>
     </View>
   )
@@ -682,7 +701,13 @@ const s = StyleSheet.create({
   /* The slider's two ends. The left is a floor nobody aims at; the right is a
      record, which is the one number here worth a name under it. */
   ends: { flexDirection: 'row', justifyContent: 'space-between', gap: S.md, marginTop: -2 },
-  endRight: { flexShrink: 1, alignItems: 'flex-end' },
+  /* THE RIGHT END KEEPS TO ITS OWN HALF (owner, 2026-09-22: wrap it "so that
+     it does not go too far to the left"). Two lines of a record holder ran
+     back across the slider and read as a sentence about the left end as much
+     as the right. 55% leaves the 0 its room and still fits "Tauson, Indian
+     Wells 2026" in the two lines the Text allows. */
+  endLeft: { flexShrink: 0 },
+  endRight: { flexShrink: 1, alignItems: 'flex-end', maxWidth: '55%' },
   // Right-aligned only on the right end; the left keeps the default.
 
   endValue: { ...T.smallMed, color: C.muted, fontVariant: ['tabular-nums'] },
