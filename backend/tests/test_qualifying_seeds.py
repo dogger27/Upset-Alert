@@ -134,3 +134,23 @@ def test_the_qualifying_place_reaches_the_row_the_bracket_cannot_describe():
     from app.routers.schedule import _player_out
     out = _player_out(_player("Alexandre Muller"), {}, {}, {}, {}, False, qual_rank=9)
     assert out.draw_rank == 9
+
+
+def test_a_seed_is_a_change_the_fingerprint_can_see():
+    """A day already read must be reachable by a mark the feed states later,
+    or by a parser that can suddenly see one — the same trap the byte check
+    exempts feeds from. The fingerprint is what decides, so it holds seeds."""
+    import hashlib
+    from app.services.oop_parser import Match
+
+    def fp(matches):
+        return hashlib.sha256(repr([
+            (m.court, m.time, m.start_raw, m.tour, m.round, m.discipline,
+             m.tbd, m.tbd_side, tuple(m.side_a), tuple(m.side_b),
+             tuple(getattr(m, 'seeds_a', ()) or ()), tuple(getattr(m, 'seeds_b', ()) or ()))
+            for m in matches]).encode()).hexdigest()
+
+    bare = Match(court="Court 1", side_a=["Muller A."], side_b=["Pavlovic L."])
+    seeded = Match(court="Court 1", side_a=["Muller A."], side_b=["Pavlovic L."],
+                   seeds_a=["2"], seeds_b=[None])
+    assert fp([bare]) != fp([seeded])

@@ -965,11 +965,18 @@ async def ingest_document(db, tournament, play_date: date, url: str,
     # file; content identity here stops a changed file whose SLOTS are
     # unchanged from minting a document, a rev.N email that says "No slot
     # changes", and a verifier run. Everything a reader would call a change —
-    # court, order, wording, round, tour, sides — is in the fingerprint;
-    # printed scores and statuses are deliberately not.
+    # court, order, wording, round, tour, sides, SEEDS — is in the
+    # fingerprint; printed scores and statuses are deliberately not.
+    #
+    # The seeds belong here for the reason the scores do not: a seeding is a
+    # property of the row that the page draws and that does not move on its
+    # own. Left out, a mark the feed states only later — or one a corrected
+    # parser can suddenly see — could never reach a day already read, which
+    # is the same trap the byte check above exempts feeds from.
     content_fp = hashlib.sha256(repr([
         (m.court, m.time, m.start_raw, m.tour, m.round, m.discipline,
-         m.tbd, m.tbd_side, tuple(m.side_a), tuple(m.side_b))
+         m.tbd, m.tbd_side, tuple(m.side_a), tuple(m.side_b),
+         tuple(getattr(m, 'seeds_a', ()) or ()), tuple(getattr(m, 'seeds_b', ()) or ()))
         for m in matches
     ]).encode()).hexdigest()
     if (matches and prev is not None and prev.content_sha == content_fp
