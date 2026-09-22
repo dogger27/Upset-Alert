@@ -166,7 +166,7 @@ function Reference({ ctx, which, sets, unit }) {
     <div className="fg-refs">
       {/* The block says what it is: under a question and its answer sat a run
           of sentences with numbers, and nothing said they were evidence. */}
-      <p className="fg-refs-title">Reference data</p>
+      <p className="fg-refs-title">Reference data:</p>
       {rows.map(([label, value, note]) => (
         <div className="fg-ref" key={label}>
           {/* "Avg", not "Average": the word is on every row and what follows

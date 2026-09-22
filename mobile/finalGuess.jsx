@@ -131,7 +131,7 @@ function StatTable({ rows, unit }) {
           were evidence rather than more of the question. The title takes the
           left, where reading starts; the column's note keeps the right it
           already had, so one line carries both. */}
-      <Text style={s.tableTitle}>Reference data</Text>
+      <Text style={s.tableTitle}>Reference data:</Text>
       {/* TWO LINES, NOT THREE COLUMNS (owner, 2026-09-22). The description is
           the longest thing here and it was sharing a row with a number column
           and a sample column, so it wrapped to two lines on every row while
@@ -709,7 +709,7 @@ const s = StyleSheet.create({
 
   /* ── The evidence, as a table ──────────────────────────────────────────── */
   table: { marginTop: S.xs },
-  tableTitle: { ...T.smallMed, color: C.muted, marginTop: S.xs, marginBottom: 3 },
+  tableTitle: { ...T.smallBold, color: C.muted, marginTop: S.xs, marginBottom: 3 },
   /* A ROW IS TWO LINES NOW: the description across the full width, then the
      figure and the sample it was taken over. */
   tr: { gap: 1, paddingVertical: 5 },

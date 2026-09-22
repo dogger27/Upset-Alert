@@ -195,6 +195,7 @@ export const T = {
   bodyBold: { fontFamily: 'Archivo_700Bold',          fontSize: 15, lineHeight: leading(21) },
   small:    { fontFamily: 'Archivo_400Regular',       fontSize: 13, lineHeight: leading(18) },
   smallMed: { fontFamily: 'Archivo_500Medium',        fontSize: 13, lineHeight: leading(18) },
+  smallBold:{ fontFamily: 'Archivo_700Bold',          fontSize: 13, lineHeight: leading(18) },
   tiny:     { fontFamily: 'Archivo_500Medium',        fontSize: 11, lineHeight: leading(15) },
 }
 
