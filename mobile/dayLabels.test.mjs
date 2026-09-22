@@ -1,6 +1,6 @@
 /* node dayLabels.test.mjs */
 import assert from 'node:assert/strict'
-import { dayLabels, relativeDayWord, widestDayWord } from './dayLabels.js'
+import { dayLabels, dayWords, relativeDayWord } from './dayLabels.js'
 
 const labels = (dates, main) => dayLabels(dates, main).map(d => d.label)
 
@@ -89,12 +89,17 @@ assert.equal(relativeDayWord('2028-03-01', '2028-02-29'), 'Tmrw')
 assert.equal(relativeDayWord('2026-09-21', null), null)
 
 
-/* ── THE RIGHT SLOT'S WIDTH, so the rule beside it stays put ──────────────
+/* ── THE RIGHT SLOT'S WORDS, so the rule beside it stays put ─────────────
  *
  * The slot was sized by whatever word was in it, so the line down its left
  * edge slid sideways as the reader swiped from "Today" to "Sep 24" and back
  * (owner, 2026-09-22). It is now sized to the widest word the CURRENT range
  * can show, which moves only when the range does.
+ *
+ * This lists the candidates; the screen measures them and adds slack, because
+ * only the font knows which is widest and the advance tables carry no kerning.
+ * "Sep 20" wrapped onto two lines when the slot was sized to the exact
+ * measurement — 45.6pt of text in 46pt of room.
  */
 const SHORT = iso => {
   // 'Sep 15' / 'Sep 5', without leaning on the test runner's locale.
@@ -102,27 +107,31 @@ const SHORT = iso => {
   return `${['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+m]} ${+d}`
 }
 
-// A range around today: the words beat the dates, and "Today" beats "Yday".
-assert.equal(widestDayWord(['2026-09-21', '2026-09-22', '2026-09-23'], '2026-09-22', SHORT),
-             'Today')
+// A range around today: the three words, in the order the days run.
+assert.deepEqual(dayWords(['2026-09-21', '2026-09-22', '2026-09-23'], '2026-09-22', SHORT),
+                 ['Yday', 'Today', 'Tmrw'])
 
-// A range with no word in it falls to the longest date.
-assert.equal(widestDayWord(['2026-09-05', '2026-09-15'], '2026-10-01', SHORT), 'Sep 15')
+// A range with no word in it is all dates.
+assert.deepEqual(dayWords(['2026-09-05', '2026-09-15'], '2026-10-01', SHORT), ['Sep 5', 'Sep 15'])
 
 /* THE CHOSEN DAY COUNTS EVEN WHEN IT HAS NO SHEET — the slot shows the day
    the reader is on, and a day with no matches still says which day it is. */
-assert.equal(widestDayWord(['2026-09-05'], '2026-10-01', SHORT, '2026-09-15'), 'Sep 15')
-assert.equal(widestDayWord([], '2026-09-22', SHORT, '2026-09-22'), 'Today')
+assert.deepEqual(dayWords(['2026-09-05'], '2026-10-01', SHORT, '2026-09-15'), ['Sep 5', 'Sep 15'])
+assert.deepEqual(dayWords([], '2026-09-22', SHORT, '2026-09-22'), ['Today'])
+
+// The active day is already in the range: named once, not twice — a duplicate
+// would not change the widest, but it would make the list lie about the range.
+assert.deepEqual(dayWords(['2026-09-22'], '2026-09-22', SHORT, '2026-09-22'), ['Today'])
 
 // Nothing to show, nothing to size by: the caller leaves the slot to grow.
-assert.equal(widestDayWord([], '2026-09-22', SHORT), '')
-assert.equal(widestDayWord(null, '2026-09-22', SHORT), '')
-assert.equal(widestDayWord([null, undefined], '2026-09-22', SHORT), '')
+assert.deepEqual(dayWords([], '2026-09-22', SHORT), [])
+assert.deepEqual(dayWords(null, '2026-09-22', SHORT), [])
+assert.deepEqual(dayWords([null, undefined], '2026-09-22', SHORT), [])
 
-/* IT DOES NOT MOVE ACROSS THE RANGE. Every day of one range must answer with
-   the same word, or the rule shifts on a swipe — which is the whole bug. */
+/* IT DOES NOT MOVE ACROSS THE RANGE. Every day of one range must see the same
+   candidates, or the slot changes width on a swipe — which is the whole bug. */
 {
   const range = ['2026-09-20', '2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24']
-  const answers = new Set(range.map(d => widestDayWord(range, '2026-09-22', SHORT, d)))
+  const answers = new Set(range.map(d => dayWords(range, '2026-09-22', SHORT, d).join('|')))
   assert.equal(answers.size, 1, `the slot changed width mid-range: ${[...answers]}`)
 }
