@@ -314,9 +314,22 @@ export default function ScheduleScreen() {
      It also gives the behaviour for free: change a tournament's short name and
      the row re-solves its shared size on the next render, so a longer name
      shrinks the row to fit instead of overflowing it (owner, 2026-09-21). */
-  const pillSize = fitPillSize(pillLabels, {
-    avail: pillRoom, family: 'Archivo_700Bold', size: PILL_SIZE,
-    tierRatio: PILL_TIER_RATIO, chrome: PILL_CHROME, gap: PILL_GAP, min: 6,
+  /* SOLVED FOR ONE CELL, not for the row (owner, 2026-09-22, when the row
+     became a bar of equal cells). Before, the cells were as wide as their
+     text and the question was whether they all fitted side by side; now every
+     cell is the same width and a long name cannot borrow room from a short
+     neighbour — so the label that has to fit is the WIDEST one, in a cell of
+     its own. Solving the old way would have left "Hangzhou" clipped beside a
+     roomy "Korea". */
+  const widestLabel = useMemo(() => pillLabels.reduce((best, p) => {
+    const w = Math.max(textWidth(p.name, 'Archivo_700Bold', 1),
+                       textWidth(p.tier, 'Archivo_700Bold', PILL_TIER_RATIO))
+    return best && best.w >= w ? best : { w, p }
+  }, null)?.p, [pillLabels])
+  const pillSize = fitPillSize(widestLabel ? [widestLabel] : [], {
+    avail: pillRoom ? pillRoom / Math.max(1, pillLabels.length) : null,
+    family: 'Archivo_700Bold', size: PILL_SIZE,
+    tierRatio: PILL_TIER_RATIO, chrome: PILL_CHROME, gap: 0, min: 6,
   })
   const toggleEvent = id => {
     const cur = new Set(eventSel ?? events.map(t => t.id))
@@ -665,18 +678,24 @@ export default function ScheduleScreen() {
         {pinnedEvent == null && events.length > 1 && (
           <View style={s.events}
                 onLayout={e => setPillRoom(e.nativeEvent.layout.width)}>
-            {events.map(t => {
+            {events.map((t, i) => {
               const on = !eventSel || eventSel.has(t.id)
               // GREYED WHEN IT HAS NOTHING ON THIS DAY (owner, 2026-09-17): the
               // days are every live tournament's, so a box can name an event
               // that is idle today. Still a box — ticking it is harmless.
               const playing = all.some(e => e.tournament_id === t.id)
-              /* LIT IN ITS OWN TOUR'S COLOUR — blue ATP, pink WTA (owner,
-                 2026-09-21) — the same pair the rows' gender bars use, so one
-                 glance down the screen reads as one language. A combined week
-                 belongs to neither tour and keeps the neutral green: blending
-                 the two is a gradient decision on a small pill and there is no
-                 such token to borrow (theme.js TOUR.X). */
+              /* THE TOUR'S COLOUR MOVED FROM THE FILL TO THE INK (owner,
+                 2026-09-22): the boxes are gone, so blue ATP and pink WTA now
+                 colour the NAME. The pair is unchanged — TOUR_BAR, the same
+                 one the rows' gender bars use — and a combined week still
+                 belongs to neither tour and takes the neutral, because
+                 blending the two is a gradient decision and there is no such
+                 token to borrow (theme.js TOUR.X).
+
+                 It also carries the SELECTION now, which the fill used to: a
+                 tournament being shown wears its tour, one that is ticked off
+                 goes muted. That is the only thing left saying so, so it is
+                 the whole of the state. */
               const tint = TOUR_BAR[eventTour(t.genders)]
               const tier = tierWord(t.categories)
               return (
@@ -695,9 +714,7 @@ export default function ScheduleScreen() {
                            accessibilityHint={on && eventSel?.size === 1
                              ? 'Hold to show every tournament'
                              : 'Hold to show only this tournament'}
-                           style={[s.eventBox,
-                                   on && (tint ? { backgroundColor: tint, borderColor: tint }
-                                               : s.eventBoxOn),
+                           style={[s.eventCell, i > 0 && s.eventCellNext,
                                    !playing && s.eventIdle]}
                            accessibilityRole="button"
                            accessibilityState={{ selected: on }}
@@ -710,11 +727,19 @@ export default function ScheduleScreen() {
                       read as a number that failed to load. Quieter than the
                       name and never the thing you read first. */}
                   {tier ? (
-                    <Text style={[s.eventTier, on ? s.eventTierOn : { color: C.faint },
-                                  { fontSize: pillSize * PILL_TIER_RATIO }]}
-                          numberOfLines={1} ellipsizeMode="clip">
-                      {tier}
-                    </Text>
+                    /* A PLATE ROUND THE TIER (owner, 2026-09-22): "a border
+                       with rounded edges around the tournament category, and
+                       shade the inside a darker colour". Darker than the bar
+                       rather than lighter, so it reads as set INTO the row —
+                       the same direction theme.js's surface ladder means by
+                       `sunken`. */
+                    <View style={[s.eventTierPlate, !on && s.eventTierPlateOff]}>
+                      <Text style={[s.eventTier, { color: on ? (tint || C.greenBright) : C.faint },
+                                    { fontSize: pillSize * PILL_TIER_RATIO }]}
+                            numberOfLines={1} ellipsizeMode="clip">
+                        {tier}
+                      </Text>
+                    </View>
                   ) : null}
                   {/* THE PILL IS THE STATE (owner, 2026-09-20): lit when the
                       event is showing, quiet when it is not. A tick inside a
@@ -722,8 +747,9 @@ export default function ScheduleScreen() {
                       that the names needed — which is also why these say the
                       SHORT name. The full name stays the spoken label, so
                       nothing is lost to a screen reader. */}
-                  <Text style={[s.eventName, on ? s.eventNameOn : { color: C.muted },
-                                { fontSize: pillSize }]}
+                  <Text style={[s.eventName,
+                                { color: on ? (tint || C.greenBright) : C.muted,
+                                  fontSize: pillSize }]}
                         numberOfLines={1} ellipsizeMode="clip">
                     {t.short || t.name}
                   </Text>
@@ -1453,9 +1479,11 @@ const PILL_TIER_RATIO = 0.8   // the tier line, relative to the name
    no margin"). It was 14, which spent 150pt of a 358pt row on padding and
    forced the names down until they truncated. The box is now exactly as wide
    as the wider of its two lines. */
-const PILL_PAD = 0
-const PILL_GAP = 6
-const PILL_CHROME = PILL_PAD * 2 + 2   // + the 1pt border either side
+/* A CELL'S OWN AIR, and the line that divides it from the next. The bar draws
+   one 1pt separator between cells, so a cell's chrome is its padding plus that
+   line — no gaps any more: the line IS the gap (owner, 2026-09-22). */
+const PILL_PAD = 6
+const PILL_CHROME = PILL_PAD * 2 + 1
 
 const s = StyleSheet.create({
   /* FAR LESS AIR AROUND A COURT NAME (owner, 2026-09-17): the group's
@@ -1748,47 +1776,50 @@ const s = StyleSheet.create({
   tabOn: { backgroundColor: C.greenDeep, borderColor: C.greenLit },
   /* The tournament filter. A wrapping row, because two names can be longer
      than a phone and a horizontal scroller hides its own overflow. */
-  /* ONE LINE, NOT A WRAPPING BLOCK (owner, 2026-09-21): the size is solved
-     to make the row fit, so wrapping would only ever hide a solver bug. */
-  events: { flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'stretch', gap: PILL_GAP },
-  eventBox: {
-    /* A COLUMN NOW: the tier sits above the name (owner, 2026-09-21). */
-    flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    /* ONLY JUST ROUNDED (owner, 2026-09-21). At R.pill these read as buttons
-       and, two lines tall, as lozenges; R.xs keeps a corner you notice only
-       if you look for it, and lets them read as labels. */
-    borderRadius: R.xs, borderWidth: 1, borderColor: C.border,
-    backgroundColor: C.card,
-    /* NO lineHeight ON EITHER LINE, and almost no vertical padding (owner,
-       2026-09-21: "make the pill boxes way less tall reduce all spaces both
-       above and below all text").
-
-       The tallness was a lineHeight of 1.2x on each line, and on iOS RN adds
-       everything a lineHeight gives beyond the font's natural line ABOVE the
-       glyphs rather than around them — so it paid for the height twice: once
-       in the box and once as a gap over each word, which also sank both lines
-       off centre (feedback_ios_lineheight_sinks_caps). Dropping it lets
-       Archivo's own line box set the height, which centres its capitals to a
-       tenth of a point on its own, and is the SAFEST thing under Dynamic Type
-       besides: fontSize scales with the reader's text setting and there is no
-       fixed line box left for the glyphs to outgrow
-       (feedback_dynamic_type_lineheight). */
-    paddingHorizontal: PILL_PAD, paddingVertical: 1,
-    /* flexShrink STAYS, as the last guard against a row wider than the phone:
-       the solver is what keeps the text whole, and if it is ever wrong it is
-       better to squeeze the boxes than to push the last one off the screen.
-       The Texts clip rather than ellipsize, so a squeeze can never print "…"
-       (feedback_name_shortening_ladder — this project does not print it). */
-    flexShrink: 1,
+  events: {
+    flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'stretch',
+    marginHorizontal: -S.lg,
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.border,
   },
+  /* A BAR, NOT A ROW OF BUTTONS (owner, 2026-09-22): "only a line separating
+     each draw", with the same line closing it top and bottom. Edge to edge,
+     like the day strip above it — a bar stopping short of the screen's edges
+     would read as one more box.
+
+     EQUAL CELLS, so the separators land at even intervals, which is what
+     makes it read as a bar rather than as buttons that lost their edges. The
+     text size is therefore solved for ONE cell's width, not the whole row's:
+     with equal cells a long name cannot borrow room from a short neighbour.
+
+     No lineHeight on either line, as before: on iOS RN puts everything a
+     lineHeight adds beyond the font's natural line ABOVE the glyphs, which
+     both inflates the row and sinks the text
+     (feedback_ios_lineheight_sinks_caps), and leaving it out is also the
+     safest thing under Dynamic Type — fontSize scales with the reader's
+     setting and there is no fixed box left for the glyphs to outgrow
+     (feedback_dynamic_type_lineheight). */
+  eventCell: {
+    flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: PILL_PAD, paddingVertical: 4,
+  },
+  // The only line between two draws, and only on cells after the first, so
+  // the bar's own left edge is not doubled.
+  eventCellNext: { borderLeftWidth: 1, borderLeftColor: C.border },
+  /* THE TIER'S PLATE: rounded, bordered, and darker INSIDE than the bar it
+     sits on (owner, 2026-09-22). `sunken` is theme.js's own word for below
+     the page on its surface ladder, so "set into" is the app's term rather
+     than a colour invented here. */
+  eventTierPlate: {
+    borderRadius: R.xs + 1, borderWidth: 1, borderColor: C.borderOn,
+    backgroundColor: C.sunken, paddingHorizontal: 5, marginBottom: 1,
+  },
+  eventTierPlateOff: { borderColor: C.border },
   // Greyed when the tournament has nothing on the day. This line once sat
   // INSIDE eventBox - a nested key no style reads - so nothing greyed.
   eventIdle: { opacity: 0.4 },
   // Lit, the same green the Doubles chip lights with — these are siblings in
   // the same stack of controls and a second green would read as a second
   // meaning.
-  eventBoxOn: { backgroundColor: C.green, borderColor: C.green },
-  eventNameOn: { color: '#fff' },
   /* fontSize and lineHeight are set at render from the solved size, so they
      are deliberately absent here — T.tiny's would silently win otherwise. */
   eventName: { color: C.ink, fontFamily: 'Archivo_700Bold', textAlign: 'center', flexShrink: 1 },
@@ -1800,7 +1831,6 @@ const s = StyleSheet.create({
      the row overflows again. */
   eventTier: { fontFamily: 'Archivo_700Bold', color: C.muted, textAlign: 'center',
                flexShrink: 1 },
-  eventTierOn: { color: '#ffffffcc' },
 
   // Rows breathe: the gap is what separates one match from the next, and at
   // S.xs the cards read as a single ruled block rather than a stack of cards.
