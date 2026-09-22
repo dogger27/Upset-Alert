@@ -60,13 +60,18 @@ def classify(name: str) -> Optional[tuple]:
     return None
 
 
+def name_tokens(name: str) -> list[str]:
+    """Accents folded, lower-cased, split on anything not a letter or digit —
+    in the name's own order."""
+    folded = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9 ]+", " ", folded.lower()).split()
+
+
 def name_key(name: str) -> str:
     """Accents folded, lower-cased, tokens sorted — so "Cerúndolo Juan Manuel"
     (Tennis Explorer) and "Juan Manuel Cerundolo" (TML) are the same key.
     The order-free form is what the Elo scraper already matches on."""
-    folded = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
-    tokens = re.sub(r"[^a-z0-9 ]+", " ", folded.lower()).split()
-    return " ".join(sorted(tokens))
+    return " ".join(sorted(name_tokens(name)))
 
 
 def name_keys(name: str) -> set[str]:
