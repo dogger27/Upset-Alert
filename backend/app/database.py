@@ -513,6 +513,10 @@ async def _migrate(conn):
         # actual.
         "ALTER TABLE draws ADD COLUMN final_sets INTEGER",
         "ALTER TABLE draw_final_guesses ADD COLUMN final_sets INTEGER",
+        # The predicted final an answer was given for, so the clients can
+        # say when it no longer matches the picks (owner, 2026-09-22).
+        "ALTER TABLE draw_final_guesses ADD COLUMN final_a_entry_id INTEGER",
+        "ALTER TABLE draw_final_guesses ADD COLUMN final_b_entry_id INTEGER",
         "ALTER TABLE draws ADD COLUMN final_ref_json JSON",
         ("CREATE INDEX IF NOT EXISTS ix_draw_entries_sofa "
          "ON draw_entries (sofa_player_id)"),

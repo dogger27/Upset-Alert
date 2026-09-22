@@ -3021,7 +3021,7 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
 # picked to win; the PUT stores the answers, until the picks lock.
 # ---------------------------------------------------------------------------
 from pydantic import BaseModel as _BaseModel, Field as _Field  # noqa: E402
-from app.models.final_guess import DrawFinalGuess  # noqa: E402
+from app.models.final_guess import DrawFinalGuess, answers_are_stale  # noqa: E402
 
 
 class FinalGuessIn(_BaseModel):
@@ -3147,6 +3147,21 @@ async def get_final_guess(tournament_id: int, db: AsyncSession = Depends(get_db)
         "locked": bool(lock.draw_locked) or draw.status == "completed",
         "champion": {"entry_id": champion_id, "name": champ_name, "has_history": bool(champ_tml)},
         "runner_up": {"entry_id": runner_up_id, "name": run_name, "has_history": bool(run_tml)},
+        # ANSWERED FOR A DIFFERENT FINAL (owner, 2026-09-22). The questions are
+        # about two named players, so a pick that changes who reaches the final
+        # invalidates the answers — and nothing used to say so. The clients
+        # colour their way in when this is true.
+        #
+        # False unless we can PROVE it: no guess, or a row saved before the
+        # finalists were stamped, or a draw already locked (where nothing can
+        # be done about it) all read false. Order matters — swapping who wins
+        # the final changes who the aces question is about.
+        "stale": answers_are_stale(
+            guess, champion_id, runner_up_id,
+            locked=bool(lock.draw_locked) or draw.status == "completed"),
+        "answered_for": ({"champion_entry_id": guess.final_a_entry_id,
+                          "runner_up_entry_id": guess.final_b_entry_id}
+                         if guess is not None and guess.final_a_entry_id is not None else None),
         # ── The three questions, each with only the figures it needs ────────
         "sets_question": {
             "tier_finals": (tier_ref or {}).get("sets"),
@@ -3205,14 +3220,25 @@ async def put_final_guess(tournament_id: int, body: FinalGuessIn, db: AsyncSessi
     lock = await draw_lock_state(db, draw)
     if lock.draw_locked or draw.status == "completed":
         raise HTTPException(status_code=409, detail="Picks are locked for this draw")
+    # THE FINAL THESE ANSWERS ARE ABOUT, recorded with them. Read from the
+    # user's own picks at save time, exactly as the GET reads it, so the two
+    # can be compared later without either guessing what the other meant.
+    matches = (await db.execute(select(Match).where(Match.draw_id == tournament_id))).scalars().all()
+    preds = (await db.execute(select(UserPrediction).where(
+        UserPrediction.draw_id == tournament_id,
+        UserPrediction.user_id == current_user.id))).scalars().all()
+    picks = {p.match_id: p.predicted_winner_id for p in preds if p.predicted_winner_id is not None}
+    champion_id, runner_up_id = predicted_finalists(picks, matches, draw.num_rounds)
     guess = (await db.execute(select(DrawFinalGuess).where(
         DrawFinalGuess.draw_id == tournament_id, DrawFinalGuess.user_id == current_user.id))).scalars().first()
     if guess is None:
         guess = DrawFinalGuess(user_id=current_user.id, draw_id=tournament_id,
                                final_sets=body.final_sets,
-                               final_aces=body.final_aces, final_duration_min=body.final_duration_min)
+                               final_aces=body.final_aces, final_duration_min=body.final_duration_min,
+                               final_a_entry_id=champion_id, final_b_entry_id=runner_up_id)
         db.add(guess)
     else:
+        guess.final_a_entry_id, guess.final_b_entry_id = champion_id, runner_up_id
         # Only overwrite sets when the client sent one: an older client
         # omitting the field must not erase an answer already given.
         if body.final_sets is not None:
