@@ -859,7 +859,7 @@ export default function ScheduleScreen() {
                   {list.map((e, i) => <MatchRow key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={past} {...rowColumns(list, past, screenW - 2 * S.sm - 2 * 8 - 2)} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} />)}
                 </View>
               )
-              : list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={openH2H} onHistory={openHist} onPredictors={openPredictors} onChampion={setChampion} key={e.id} e={e} inCourt={view === 'court'} />)}
+              : list.map(e => <EntryRow venueMode={venueMode} venueTz={venueTzOf(e)} onH2H={openH2H} onHistory={openHist} onPredictors={openPredictors} onChampion={setChampion} key={e.id} e={e} inCourt={view === 'court'} headed={grouped} />)}
           </View>
         ))}
       </View>
@@ -1234,7 +1234,7 @@ function MatchRow({ e, first, alt, tourBar, past, leftW, venueMode, venueTz, onH
   )
 }
 
-function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, onChampion, inCourt }) {
+function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, onChampion, inCourt, headed }) {
   /* The biggest thing that just happened to this match, or null — the
      site's escalating tiers, marking the CARD rather than a digit: a set
      belongs to the match. The arrival argument covers a result already in
@@ -1253,6 +1253,8 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, onCha
     : null
   const postponed = e.status === 'postponed'
   const carried = e.status === 'to_be_completed'
+  // The three states no segment implies — see the top row's note.
+  const stopped = suspended || postponed || carried
   /* The site's bottom-left line, through its own rule — see footTime, which is
      pages/Schedule.jsx's expression ported whole. It reads differently by
      status and by view, and every one of those readings is deliberate there:
@@ -1270,23 +1272,45 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, onCha
     <View style={s.edge}>
     <TierFx fx={fx} radius={14}>
     <Wrap style={[s.entry, live && s.entryLive]} onPress={openable ? () => onHistory(e) : undefined}>
-      <View style={s.entryTop}>
-        {/* The tour, named. A combined day lists the men's and women's US Open
-            as the same "US Open · R128" and nothing else separated them. */}
-        <TourBadge gender={e.gender} tour={e.tour} discipline={e.discipline} />
-        <Text style={[T.tiny, { color: C.faint, flex: 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-          {[e.tournament_name, e.round_label, e.discipline !== 'singles' ? 'Doubles' : null]
-            .filter(Boolean).join(' · ')}
-        </Text>
-        <Text style={[T.tiny, {
-          // The site's badge colours: amber for play that stopped, blue for a
-          // match carried to a later day, green for one on court.
-          color: suspended || postponed ? C.warn : carried ? C.info
-            : live ? C.greenLit : done ? C.faint : C.muted,
-        }]}>
-          {whenLabel(e)}
-        </Text>
-      </View>
+      {/* THE HEADING SAYS IT, SO THE CARD STOPS (owner, 2026-09-22: "remove
+          the top row of data, which is all redundant now"). Under a group
+          heading the tour, the tournament and the round are all printed above
+          the card, and the Completed/Live switch says which of those a card
+          is — so "WTA · Singapore Open · R1 · In progress" was the heading
+          read back four times.
+
+          NOT UNCONDITIONALLY, though. Headings only exist where `grouped` is
+          true — a past day, or the Completed and Live segments (see its
+          definition) — and the UPCOMING segment has none at all, so there the
+          card's own line is the only thing naming its tournament.
+
+          AND THE STATUS SURVIVES WHERE IT IS NOT IMPLIED. Of whenLabel's five
+          answers the switch covers two: Completed and In progress. Suspended,
+          Postponed and To be completed are the rain-delay states, they are
+          nobody's segment, and losing them would lose the only word on the
+          card saying play had stopped. */}
+      {(!headed || stopped) && (
+        <View style={s.entryTop}>
+          {/* The tour, named. A combined day lists the men's and women's US
+              Open as the same "US Open · R128" and nothing else separated
+              them — which is why this goes only where no heading carries it. */}
+          {!headed && <TourBadge gender={e.gender} tour={e.tour} discipline={e.discipline} />}
+          {!headed && (
+            <Text style={[T.tiny, { color: C.faint, flex: 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {[e.tournament_name, e.round_label, e.discipline !== 'singles' ? 'Doubles' : null]
+                .filter(Boolean).join(' · ')}
+            </Text>
+          )}
+          <Text style={[T.tiny, headed && s.entryTopAlone, {
+            // The site's badge colours: amber for play that stopped, blue for a
+            // match carried to a later day, green for one on court.
+            color: suspended || postponed ? C.warn : carried ? C.info
+              : live ? C.greenLit : done ? C.faint : C.muted,
+          }]}>
+            {whenLabel(e)}
+          </Text>
+        </View>
+      )}
 
       <MatchCard e={e} />
 
@@ -1777,4 +1801,6 @@ const s = StyleSheet.create({
   },
   entryLive: { borderColor: C.green },
   entryTop: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
+  // Alone on the line, it keeps the right edge the name used to push it to.
+  entryTopAlone: { flex: 1, textAlign: 'right' },
 })
