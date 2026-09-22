@@ -72,7 +72,7 @@ function finalLine(ctx) {
    playing time with the changeovers stripped out, so putting the right number
    back for the predicted length is the server's job — a multiply here would
    carry the history's break count instead (owner's correction, 2026-09-19). */
-const met = (n) => `over ${n} H2H ${n === 1 ? 'match' : 'matches'}`
+const met = (n) => `${n} H2H ${n === 1 ? 'match' : 'matches'}`
 const round1 = (n) => (n == null ? null : Math.round(n * 10) / 10)
 
 function rowsFor(ctx, which, sets) {
@@ -161,7 +161,9 @@ function Reference({ ctx, which, sets, unit, qualifier }) {
             <td className="fg-td-value">
               {value}{unit && <span className="fg-td-unit"> {unit}</span>}
             </td>
-            <td className="fg-td-note">{note}</td>
+            {/* "Over 82 finals" — the count is the SAMPLE the average was
+                taken over, said once here as "Average for" is. */}
+            <td className="fg-td-note">{note && `Over ${note}`}</td>
           </tr>
         ))}
       </tbody>

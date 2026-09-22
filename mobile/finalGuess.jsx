@@ -135,7 +135,13 @@ function StatTable({ rows, unit, qualifier }) {
           <Text style={s.tdValue}>
             {r.value}{unit ? <Text style={s.tdUnit}> {unit}</Text> : null}
           </Text>
-          <Text style={s.tdNote} numberOfLines={1}>{r.note || ''}</Text>
+          {/* "OVER 82 finals" (owner, 2026-09-22): the count is the SAMPLE the
+              average was taken over, and a bare "82 finals" reads as a fact
+              about the final rather than about the figure beside it. Said
+              here, once, for the same reason "Average for" is — see the
+              builders, which supply the count and the noun and no preposition
+              of their own. */}
+          <Text style={s.tdNote} numberOfLines={1}>{r.note ? `Over ${r.note}` : ''}</Text>
         </View>
       ))}
     </View>
@@ -266,7 +272,7 @@ function setsRows(data) {
     rows.push({ label: `${data.tier_label} finals on ${where}, past ${tier.years} years`,
                 value: String(tier.sets_per_match), note: `${tier.matches} finals` })
   }
-  const met = (n) => `over ${n} H2H ${n === 1 ? 'match' : 'matches'}`
+  const met = (n) => `${n} H2H ${n === 1 ? 'match' : 'matches'}`
   if (h?.on_surface) {
     rows.push({ label: `${a} v ${b} on ${(data.surface || '').toLowerCase()}`,
                 value: String(h.on_surface.sets_per_match), note: met(h.on_surface.matches) })
