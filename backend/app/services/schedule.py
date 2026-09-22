@@ -35,7 +35,7 @@ from typing import Optional
 
 from sqlalchemy import and_, delete, or_, select, update
 
-from app.services.sofascore_doubles import _sheet_surnames
+from app.services.sofascore_doubles import _sheet_people
 from app.models.schedule import (ScheduleChange, ScheduleDocument,
                                  ScheduleEntry, ScheduleEntryPlayer)
 from app.models.tournament import Draw, DrawEntry, Match
@@ -1083,7 +1083,10 @@ async def ingest_document(db, tournament, play_date: date, url: str,
                    ScheduleEntry.stage == 'qualifying',
                    ScheduleEntry.play_date >= play_date - timedelta(days=14),
                    ScheduleEntry.play_date < play_date))).scalars().all():
-        quali_names |= _sheet_surnames([row])
+        # Earlier qualifying days are often a FEED's rows ("Luka Pavlović"),
+        # judged here against a sheet's ("Luka PAVLOVIC FRA"): a join across
+        # sources, so both halves read names through join_surnames.
+        quali_names |= join_surnames([row])
 
     for m in matches:
         names_a = list(m.side_a)
@@ -1095,7 +1098,7 @@ async def ingest_document(db, tournament, play_date: date, url: str,
         stage, discipline = _classify(
             m, before_main=before_main, resolved=any(ids),
             seen_qualifying=bool(quali_names
-                                 & _sheet_surnames(names_a + names_b)))
+                                 & join_surnames(names_a + names_b)))
         key = _pairing_key(tournament.id, play_date, discipline, names_a, names_b, ids)
         per_court.setdefault(m.court or '', []).append(
             (m, stage, discipline, names_a, names_b, ids, key))
@@ -2505,6 +2508,35 @@ class SettledPlayer:
         self.draw_entry_id = draw_entry_id
 
 
+def join_surnames(raw_names) -> frozenset:
+    """One surname per person, in the spelling EVERY source agrees on — the
+    key for joining a result recorded by one source to a slot printed by
+    another.
+
+    NOT `_sheet_surnames`, which reads a name only the way the order of play
+    prints it. The row that records a result is often not a sheet row: Chengdu
+    2026-09-22's qualifying day was written by the Sofascore feed, so its Q1
+    results were stored as "Luka Pavlović" and "Petr Bar Biryukov", while the
+    next day's sheet printed the Q2 slots "Luka PAVLOVIC FRA" and "Petr BAR
+    BIRYUKOV". `_sheet_surnames` keeps the accent (pavlović ≠ pavlovic) and,
+    finding no capitals in the feed's spelling, falls back to its last word
+    ({biryukov} ≠ {bar, biryukov}). Both keys missed, so the serve path went on
+    offering "MULLER or PAVLOVIC vs BAR BIRYUKOV or ILAGAN" (doc 410) after both
+    feeders had finished, beside a Court 2 slot whose Ymer/Galarneau feeder,
+    spelled alike by both sources, had settled. Nothing errored: the stored
+    rows were honestly unresolved, and the law's own join used the same
+    reading, so it could not see the miss either.
+
+    `sofascore_doubles._sheet_people` is the reading that already agrees
+    across sources, because it was built to match a sheet to Sofascore: the
+    LAST capitalised token (else the last word), accents and punctuation
+    folded away. "Bar Biryukov" and "BAR BIRYUKOV" both end in biryukov;
+    "Pavlović" and "PAVLOVIC" both fold to pavlovic. Use this for every join
+    between rows two sources may have written, never `_sheet_surnames`.
+    """
+    return frozenset(p.surname for p in _sheet_people(list(raw_names)) if p.surname)
+
+
 def settled_sides_index(rows) -> dict:
     """{every surname in a finished match} -> that match's WINNING side's rows.
 
@@ -2512,14 +2544,17 @@ def settled_sides_index(rows) -> dict:
     and any stage — a result is a result, and filtering this by kind is what
     made the resolver need fixing once per kind. Doubles has no bracket row,
     so for a doubles slot this is the only record of who came through.
+
+    Keyed through `join_surnames`: the result row and the slot it settles are
+    routinely written by different sources (see there).
     """
     idx: dict = {}
     for r in rows:
         sides: dict = {}
         for p in r.players:
             sides.setdefault(p.side, []).append(p)
-        a = _sheet_surnames([p.raw_name for p in sides.get("a", [])])
-        b = _sheet_surnames([p.raw_name for p in sides.get("b", [])])
+        a = join_surnames([p.raw_name for p in sides.get("a", [])])
+        b = join_surnames([p.raw_name for p in sides.get("b", [])])
         if not a or not b:
             continue
         win = sides.get("a" if r.winner_side == "a" else "b", [])
@@ -2563,7 +2598,7 @@ def _as_settled_side(kept, win_rows) -> list:
         return [kept]
     if not all(_is_sheet_form(n) for n in names):
         return [kept]
-    if _sheet_surnames(names) != _sheet_surnames([kept.raw_name]):
+    if join_surnames(names) != join_surnames([kept.raw_name]):
         return [kept]
     return [SettledPlayer(kept.side, i, p.raw_name, p.nationality, p.draw_entry_id)
             for i, p in enumerate(win_rows, 1)]
@@ -2582,13 +2617,13 @@ def settle_from_result_rows(side_players, index) -> tuple:
     """
     if len(side_players) != 2:
         return side_players, False
-    teams = [_sheet_surnames([p.raw_name]) for p in side_players]
+    teams = [join_surnames([p.raw_name]) for p in side_players]
     if not all(teams):
         return side_players, False
     win_rows = index.get(frozenset(teams[0] | teams[1]))
     if not win_rows:
         return side_players, False
-    won = _sheet_surnames([p.raw_name for p in win_rows])
+    won = join_surnames([p.raw_name for p in win_rows])
     keep = [p for p, t in zip(side_players, teams) if t & won]
     # Exactly one of the two, or we have not identified anything.
     if len(keep) != 1:
