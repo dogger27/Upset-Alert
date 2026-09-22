@@ -10,6 +10,9 @@
 .fg-row { display: flex; align-items: center; gap: 0.8rem; }
 .fg-row input[type="range"] { flex: 1; accent-color: var(--green-500, #40916c); height: 28px; cursor: pointer; }
 .fg-value { min-width: 4.5rem; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.15rem; }
+/* The unit rides with the figure and stays quieter than it: the number is
+   what the eye compares down the column, the noun only says of what. */
+.fg-td-unit { font-size: 0.72rem; font-weight: 500; color: var(--text-muted); }
 .fg-ends { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; }
 .fg-ref { margin: 0.45rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; line-height: 1.35; color: var(--text); }
 .fg-ref li + li { margin-top: 0.15rem; }

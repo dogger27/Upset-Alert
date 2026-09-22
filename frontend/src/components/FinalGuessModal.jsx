@@ -102,7 +102,7 @@ function rowsFor(ctx, which, sets) {
     const where = q.tier_finals?.surface_scoped === false ? 'all surfaces' : surf
     const scale = (r) => (r?.aces_per_set == null ? null : round1(r.aces_per_set * sets))
     if (q.tier_finals?.aces_per_set != null) {
-      rows.push([`A ${sets}-set ${ctx.tier_label} final on ${where}, past ${q.tier_finals.years} years`,
+      rows.push([`a ${sets}-set ${ctx.tier_label} final on ${where}, past ${q.tier_finals.years} years`,
                  scale(q.tier_finals), `${q.tier_finals.matches} finals`])
     }
     if (q.champion_vs?.aces_per_set != null) {
@@ -118,11 +118,11 @@ function rowsFor(ctx, which, sets) {
   const where = q.tier_finals?.surface_scoped === false ? 'all surfaces' : surf
   const key = String(sets)
   if (q.tier_minutes_by_sets?.[key] != null) {
-    rows.push([`A ${sets}-set ${ctx.tier_label} final on ${where}, past ${q.tier_finals?.years ?? 5} years`,
+    rows.push([`a ${sets}-set ${ctx.tier_label} final on ${where}, past ${q.tier_finals?.years ?? 5} years`,
                fmtMinutes(q.tier_minutes_by_sets[key]), `${q.tier_finals?.matches ?? ''} finals`.trim()])
   }
   if (q.champion_on_surface?.by_sets?.[key] != null) {
-    rows.push([`A ${sets}-set ${a} match on ${surf}, past ${q.champion_on_surface.years} years`,
+    rows.push([`a ${sets}-set ${a} match on ${surf}, past ${q.champion_on_surface.years} years`,
                fmtMinutes(q.champion_on_surface.by_sets[key]),
                `${q.champion_on_surface.matches} matches`])
   }
@@ -133,7 +133,18 @@ function rowsFor(ctx, which, sets) {
   return rows
 }
 
-function Reference({ ctx, which, sets, unit }) {
+/* EVERY ROW IS AN AVERAGE, AND EVERY FIGURE CARRIES ITS UNIT (owner,
+   2026-09-22). The rows read as bare facts — "WTA 500 finals on hard, past 10
+   years … 2.4" — which is a count of finals as easily as an average per final,
+   and 2.4 of nothing in particular. The row says WHAT it is about; the one
+   word they all share is said once, here.
+
+   `unit` is the word after each figure, omitted where the figure already
+   reads as its own — "1h 46m" needs no noun after it. `qualifier` is the
+   column's own note, a different thing: it says the aces and minutes figures
+   are scaled to the set count just chosen, so it belongs above the column
+   rather than on every line of it. */
+function Reference({ ctx, which, sets, unit, qualifier }) {
   const rows = rowsFor(ctx, which, sets)
   if (!rows.length) {
     return <p className="fg-muted">{ctx?.champion?.name
@@ -142,11 +153,15 @@ function Reference({ ctx, which, sets, unit }) {
   }
   return (
     <table className="fg-table">
-      <thead><tr><th /><th>{unit}</th><th /></tr></thead>
+      {qualifier && <thead><tr><th /><th>{qualifier}</th><th /></tr></thead>}
       <tbody>
         {rows.map(([label, value, note]) => (
           <tr key={label}>
-            <td>{label}</td><td className="fg-td-value">{value}</td><td className="fg-td-note">{note}</td>
+            <td>Average for {label}</td>
+            <td className="fg-td-value">
+              {value}{unit && <span className="fg-td-unit"> {unit}</span>}
+            </td>
+            <td className="fg-td-note">{note}</td>
           </tr>
         ))}
       </tbody>
@@ -293,7 +308,7 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
                   <output className="fg-value" htmlFor="fg-aces">{aces}</output>
                 </div>
                 <div className="fg-ends"><span>0 · walkover</span><span>{acesMax} · the most in 12 months{record?.aces_record ? ` (${record.aces_record.player}, ${record.aces_record.tournament} ${record.aces_record.year})` : ''}</span></div>
-                <Reference ctx={ctx} which="aces" sets={sets} unit={`aces, ${sets} sets`} />
+                <Reference ctx={ctx} which="aces" sets={sets} unit="aces" qualifier={`${sets} sets`} />
               </section>
               <section className="fg-q">
                 <label className="fg-label" htmlFor="fg-min">How long will the final last?</label>
@@ -303,7 +318,8 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
                   <output className="fg-value" htmlFor="fg-min">{fmtMinutes(minutes)}<small>{minutes} min</small></output>
                 </div>
                 <div className="fg-ends"><span>0 · walkover</span><span>{fmtLong(durMax)} · the longest on {ctx.surface.toLowerCase()} in 12 months{record?.duration_record ? ` (${record.duration_record.tournament} ${record.duration_record.year})` : ''}</span></div>
-                <Reference ctx={ctx} which="minutes" sets={sets} unit={`${sets} sets`} />
+                {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
+                <Reference ctx={ctx} which="minutes" sets={sets} qualifier={`${sets} sets`} />
               </section>
               <Meetings ctx={ctx} />
               {ctx?.actual && (
