@@ -12,11 +12,12 @@
  * this stays inside the gesture library the draw already uses.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { getFinalGuess, putFinalGuess } from './api'
 import { leading } from './fontScale.js'
+import { ScrollPane } from './scrollPane'
 import { Sheet } from './sheet'
 import { Muted } from './ui'
 import { C, PICK, R, S, T, TOUR } from './theme'
@@ -422,7 +423,10 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
   return (
     <Sheet visible={visible} onClose={onClose} title="Standings Tiebreak Questions">
       {!data || sets == null || aces == null ? <Muted>Loading the history…</Muted> : (
-        <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={s.body}>
+        /* A PANE WITH A BAR ON IT, not a bare ScrollView (owner, 2026-09-22):
+           Back and Next sit under the reference block, and on a long question
+           they fall past the fold with nothing on screen to say so. */
+        <ScrollPane contentContainerStyle={s.body}>
           {page === 'intro' ? (
             <>
               <Text style={s.intro}>
@@ -533,7 +537,7 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               </Pressable>
             )}
           </View>
-        </ScrollView>
+        </ScrollPane>
       )}
     </Sheet>
   )

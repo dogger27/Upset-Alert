@@ -1,5 +1,16 @@
 /* THE TIEBREAK QUESTIONS — the modal shares the profile dialog's frame. */
 .fg-modal { width: min(520px, 100%); }
+/* THE SCROLLBAR STAYS ON THE SHEET (owner, 2026-09-22). Back and Next sit
+   under the reference block, and on a long question they fall past the fold
+   with nothing to say so. An overlay scrollbar — the default on macOS and on
+   phones — fades out and admits nothing; styling the scrollbar is what asks
+   for the classic, always-drawn one. Scoped to this dialog, so the profile
+   dialog it shares a frame with keeps the browser's own. */
+.fg-modal .profile-edit-form { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.fg-modal .profile-edit-form::-webkit-scrollbar { width: 8px; }
+.fg-modal .profile-edit-form::-webkit-scrollbar-track { background: transparent; }
+.fg-modal .profile-edit-form::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.fg-modal .profile-edit-form::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 .fg-intro { margin: 0 0 0.9rem; color: var(--text-muted); font-size: 0.9rem; line-height: 1.4; }
 .fg-muted { color: var(--text-muted); }
 /* The picked final: the loudest line in the dialog, since it names the match
