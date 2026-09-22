@@ -134,9 +134,17 @@ export const C = {
  * the other. This is that same +0.059 lift at the tint's own hue.
  */
 export const TOUR = {
+  /* `deep` is one step BELOW `bg`: a plate set into a cell already wearing the
+     tour, which is what the schedule's draw bar needs for its tier pill
+     (owner, 2026-09-22 — "the bg of the category pills should be a darker
+     colour of the blue / pink"). ATP's is the `plate` it already had, which
+     was already that step; WTA's `plate` equals its `bg`, so its deep step is
+     the one value here that is new. */
   M: { bg: '#1a2f4f', fg: '#7aa9ff', label: 'ATP', card: '#2c5081', plate: '#14243d', line: '#4d7ab5', text: '#8fb6ff',
+       deep: '#14243d',
        ink: '#e5ecf8', inkBody: '#c9d3e4', muted: '#c0cbe0', faint: '#aebad0', rule: '#466187' },
   F: { bg: '#3a1526', fg: '#ff8ab5', label: 'WTA', card: '#7d3352', plate: '#3a1526', line: '#b8567d', text: '#ffb3c6',
+       deep: '#280e1a',
        ink: '#f7e7eb', inkBody: '#e2ccd0', muted: '#dbbfc6', faint: '#ccafb5', rule: '#854d62' },
   // MIXED DOUBLES belongs to neither tour, so it takes neither tour's colour.
   // The unseeded chip's pair rather than a new one invented for it: a blend of

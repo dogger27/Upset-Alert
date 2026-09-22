@@ -37,11 +37,20 @@ export function eventTour(genders) {
  * line only if there is something to put on it, and a stray dash above a
  * tournament name reads as a missing number rather than an absent one.
  */
+/* A SLAM IS "2000" HERE (owner, 2026-09-22), not "GS". This pill sits in a row
+ * of 250s, 500s and 1000s, and those are ranking points — so the odd one out
+ * was the one printing a category where its neighbours printed a number. Only
+ * this word changes: categoryShort still answers "GS" everywhere a tier is a
+ * LABEL rather than one of a series (the tier badges, the headings).
+ */
+const SLAM_POINTS = '2000'
+
 export function tierWord(categories) {
   const seen = []
   for (const c of categories || []) {
     const short = categoryShort(c)
-    if (short && !seen.includes(short)) seen.push(short)
+    const word = short === 'GS' ? SLAM_POINTS : short
+    if (word && !seen.includes(word)) seen.push(word)
   }
   return seen.join('/')
 }

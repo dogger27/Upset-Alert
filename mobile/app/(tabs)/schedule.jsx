@@ -51,7 +51,7 @@ import { longRound } from '../../rounds'
 import { CourtRenameSheet, TournamentRenameSheet } from '../../rename'
 import { MatchMenu, actionsFor } from '../../matchMenu'
 import { ScoreHistorySheet } from '../../scoreHistory'
-import { C, R, S, T } from '../../theme'
+import { C, R, S, T, TOUR } from '../../theme'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title, eyebrowType } from '../../ui'
 
 /* The DEVICE's calendar date — the schedule's rule (the zone is the device).
@@ -717,7 +717,18 @@ export default function ScheduleScreen() {
                  tournament being shown wears its tour, one that is ticked off
                  goes muted. That is the only thing left saying so, so it is
                  the whole of the state. */
-              const tint = TOUR_BAR[eventTour(t.genders)]
+              /* THE TOUR'S OWN SET, not one colour (owner, 2026-09-22): the
+                 cell wears the tour's ground, the tier pill a step deeper
+                 into it, and the words the tour's light ink. theme.js keeps
+                 all three per tour — they are the same trio the tier badges
+                 and the draw screens use — so the bar joins the app's palette
+                 instead of carrying a pair of hexes of its own.
+
+                 A combined week belongs to neither tour and takes TOUR.X, the
+                 neutral this project already reaches for rather than blending
+                 blue and pink. */
+              const set = TOUR[eventTour(t.genders) === 'ATP' ? 'M'
+                : eventTour(t.genders) === 'WTA' ? 'F' : 'X']
               const tier = tierWord(t.categories)
               return (
                 /* TAP TOGGLES, HOLD ISOLATES — AND HOLDING THE LONE ONE SHOWS
@@ -736,6 +747,7 @@ export default function ScheduleScreen() {
                              ? 'Hold to show every tournament'
                              : 'Hold to show only this tournament'}
                            style={[s.eventCell, i > 0 && s.eventCellNext,
+                                   on && { backgroundColor: set.bg },
                                    !playing && s.eventIdle]}
                            accessibilityRole="button"
                            accessibilityState={{ selected: on }}
@@ -754,8 +766,10 @@ export default function ScheduleScreen() {
                        rather than lighter, so it reads as set INTO the row —
                        the same direction theme.js's surface ladder means by
                        `sunken`. */
-                    <View style={[s.eventTierPlate, !on && s.eventTierPlateOff]}>
-                      <Text style={[s.eventTier, { color: on ? (tint || C.greenBright) : C.faint },
+                    <View style={[s.eventTierPlate,
+                                  on ? { backgroundColor: set.deep || set.bg, borderColor: set.line || C.borderOn }
+                                     : s.eventTierPlateOff]}>
+                      <Text style={[s.eventTier, { color: on ? (set.text || set.fg) : C.faint },
                                     { fontSize: pillSize * PILL_TIER_RATIO }]}
                             numberOfLines={1} ellipsizeMode="clip">
                         {tier}
@@ -769,7 +783,7 @@ export default function ScheduleScreen() {
                       SHORT name. The full name stays the spoken label, so
                       nothing is lost to a screen reader. */}
                   <Text style={[s.eventName,
-                                { color: on ? (tint || C.greenBright) : C.muted,
+                                { color: on ? (set.ink || set.fg) : C.muted,
                                   fontSize: pillSize }]}
                         numberOfLines={1} ellipsizeMode="clip">
                     {t.short || t.name}
@@ -1454,10 +1468,12 @@ const SUB = eyebrowType({ small: true, color: C.faint })
 const TOURN = eyebrowType({ size: 23, color: C.clayLight })
 const TOURN_SMALL = eyebrowType({ size: 18, color: C.clayLight })
 
-/* THE TOUR PAIR, used in the two places this screen names a tour by colour:
-   every row's gender bar, and the tournament pills (owner, 2026-09-21). One
-   pair, so a pink pill and the pink bars beneath it are the same pink. It
-   outlived the ATP/WTA chips it was written for. */
+/* THE TOUR PAIR, for every row's gender bar — a 3pt stripe on the card's edge,
+   which wants one saturated colour rather than a palette. The draw bar above
+   used to share it and now reads theme.js's full TOUR set instead (owner,
+   2026-09-22), because a cell that wears a ground, a plate and ink needs three
+   values that were chosen together. It outlived the ATP/WTA chips it was
+   written for, and the bar it was named after. */
 const TOUR_BAR = { ATP: '#2563eb', WTA: '#db2777' }
 
 /* THE TOURNAMENT PILLS' GEOMETRY, in one place. fitPillSize solves for a text
@@ -1821,7 +1837,13 @@ const s = StyleSheet.create({
      (feedback_dynamic_type_lineheight). */
   eventCell: {
     flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: PILL_PAD, paddingVertical: 4,
+    paddingHorizontal: PILL_PAD,
+    /* A LITTLE MORE ABOVE THE PILL THAN BELOW THE NAME (owner, 2026-09-22:
+       "a tiny bit more room between the category pill and the top border").
+       The pill is a bordered box and the name is bare text, so equal padding
+       does not read as equal air — the border arrives 3pt sooner than the
+       glyphs do. */
+    paddingTop: 7, paddingBottom: 4,
   },
   // The only line between two draws, and only on cells after the first, so
   // the bar's own left edge is not doubled.
