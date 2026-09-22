@@ -20,7 +20,7 @@ import { Bump } from './fx'
 import { useFlashOnChange } from './scoreFx'
 import { leading } from './fontScale.js'
 import { endedWith, parseSet, scoreSets, setCount, setWon, winnerSideOf } from './score'
-import { isLive, isSuspended, pointOf, servingSide, sideDrawRank, sideEntryType, sideFlags, sideName, sideSeed } from './schedule'
+import { isLive, isSuspended, pointOf, servingSide, sideDrawRank, sideEntryType, sideFlags, sideIsAlternatives, sideName, sideSeed } from './schedule'
 import { C, S, T } from './theme'
 import { setsScale } from './scoreFit'
 
@@ -110,7 +110,7 @@ export function MatchCard({ e, scale = 1, badges = true, round = null }) {
             {!doubles && <FlagSlot codes={sideFlags(e.players, side)} slots={flagSlots} />}
             <View style={s.nameWrap}>
             <PlayerName
-              name={sideName(e.players, side)}
+              name={sideName(e.players, side, sideIsAlternatives(e, side))}
               doubles={doubles}
               flags={doubles ? sideFlags(e.players, side) : null}
               /* 1.27x rather than bodyMed's 1.4: tight enough to pull the two

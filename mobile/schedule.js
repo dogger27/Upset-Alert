@@ -12,14 +12,36 @@
  */
 import { properName, sheetName } from './names.js'
 
-export function sideName(players, side) {
+/* TWO NAMES ON A SIDE MEAN ONE OF TWO THINGS, and they are not the same
+ * thing. A doubles side is a PAIRING — both play, and a scoreboard joins them
+ * with a slash. A singles side the sheet could not settle is a CHOICE: the
+ * qualifier feeding it has not been played, so the sheet prints both and one
+ * of them will turn up.
+ *
+ * Everything assumed the first. Hangzhou's 23 September Center Court slot is
+ * "Fajing SUN CHN or [7] Matthew DELLAVEDOVA AUS" (is_tbd, tbd_side 'b'), and
+ * it was joined with the doubles slash, shortened by the name ladder until
+ * only one surname survived, and drawn beside BOTH candidates' flags — so it
+ * read as one singles player with two nationalities, which is what the owner
+ * saw and asked about (2026-09-21). Two flags was the honest half; the name
+ * was the lie.
+ */
+export function sideName(players, side, alternatives = false) {
   const ps = (players || []).filter(p => p.side === side)
   if (!ps.length) return 'TBD'
   // entry_name is proper case; `name` is the sheet's string — a seed in
   // brackets, the surname shouting, the IOC code last — so it is stripped of
-  // that furniture before the name ladder ever sees it. Doubles has two per
-  // side, joined the way a scoreboard does.
-  return ps.map(p => p.entry_name || properName(sheetName(p.name).name) || 'TBD').join(' / ')
+  // that furniture before the name ladder ever sees it.
+  return ps.map(p => p.entry_name || properName(sheetName(p.name).name) || 'TBD')
+    .join(alternatives ? ' or ' : ' / ')
+}
+
+
+/* Whether this side of this row is a choice rather than a pairing — the
+   server's own answer (tbd_side names the unsettled side, 'ab' for both), not
+   a guess from how many players turned up. */
+export function sideIsAlternatives(e, side) {
+  return !!e && e.discipline === 'singles' && !!e.tbd_side && e.tbd_side.includes(side)
 }
 
 /* The flag codes for a side, in the order the names are joined — so doubles
