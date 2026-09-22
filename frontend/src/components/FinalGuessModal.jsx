@@ -110,7 +110,7 @@ function rowsFor(ctx, which, sets) {
                  met(q.champion_vs.matches)])
     }
     if (q.champion_on_surface?.aces_per_set != null) {
-      rows.push([`all ${sets}-set ${a} matches on ${surf}`, scale(q.champion_on_surface),
+      rows.push([`${sets}-set ${a} matches on ${surf}`, scale(q.champion_on_surface),
                  `${q.champion_on_surface.matches} matches`])
     }
     return rows
@@ -123,7 +123,7 @@ function rowsFor(ctx, which, sets) {
                fmtMinutes(q.tier_minutes_by_sets[key]), `${q.tier_finals?.matches ?? ''} finals`.trim()])
   }
   if (q.champion_on_surface?.by_sets?.[key] != null) {
-    rows.push([`all ${sets}-set ${a} matches on ${surf}`,
+    rows.push([`recent ${sets}-set ${a} matches on ${surf}`,
                fmtMinutes(q.champion_on_surface.by_sets[key]),
                `${q.champion_on_surface.matches} matches`])
   }
