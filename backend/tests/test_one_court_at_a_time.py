@@ -20,7 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.services.schedule import one_court_at_a_time            # noqa: E402
 from app.services.schedule_invariants import (                    # noqa: E402
-    player_on_two_courts, rest_slot_ahead_of_its_match)
+    player_on_two_courts, rest_slot_ahead_of_its_match,
+    rest_slot_without_its_rest)
 
 T = datetime(2026, 9, 18)
 
@@ -218,6 +219,63 @@ def test_law_waits_for_nobody_behind_a_walkover():
              discipline='singles')
     assert rest_slot_ahead_of_its_match([s, wo]) == []
 
+
+
+# Singapore 2026-09-23 (document 441), UTC: both doubles partners in singles on
+# CENTER COURT first. The rest was taken from Chwalinska's match alone (the
+# earliest), and the windows never met, so the doubles sat 19 minutes after
+# Krejcikova's singles was expected to end.
+SG = datetime(2026, 9, 23)
+SG_EARLY = _row(1422, 'CENTER COURT', 'Not before 1:00 PM', 'not_before',
+                'printed', SG + timedelta(hours=5), 105,
+                [_p('b', '[5] Maja CHWALINSKA POL', 5996)], discipline='singles')
+SG_LATE = _row(1437, 'CENTER COURT', 'Not before 2:30 PM', 'not_before',
+               'estimated', SG + timedelta(hours=6, minutes=54), 105,
+               [_p('b', 'Barbora KREJCIKOVA CZE', 5991)], discipline='singles')
+SG_DOUBLES = _row(1428, 'COURT 1', 'After suitable rest', 'after_event',
+                  'estimated', SG + timedelta(hours=8, minutes=58), 80,
+                  [_p('a', 'Maja CHWALINSKA POL', 5996),
+                   _p('a', 'Barbora KREJCIKOVA CZE', 5991),
+                   _p('b', 'Erin ROUTLIFFE NZL'), _p('b', 'Aldila SUTJIADI INA')])
+SG_DAY = [SG_EARLY, SG_LATE, SG_DOUBLES]
+
+
+def test_rest_is_from_every_match_of_theirs_ahead_of_it():
+    edges = set()
+    one_court_at_a_time(SG_DAY, {r.id: _span(r) for r in SG_DAY}, edges)
+    assert edges == {(1437, 1428)}
+
+
+def test_law_convicts_a_rest_slot_that_leaves_no_rest():
+    # The two older laws were both blind to it.
+    assert player_on_two_courts(SG_DAY) == []
+    assert rest_slot_ahead_of_its_match(SG_DAY) == []
+    hits = rest_slot_without_its_rest(SG_DAY)
+    assert [(r.id, o.id) for r, o, _ in hits] == [(1428, 1437)]
+
+
+def test_law_acquits_the_rest_slot_once_floored():
+    rested = _row(1428, 'COURT 1', 'After suitable rest', 'after_event',
+                  'estimated', SG_LATE.expected_start_at
+                  + timedelta(minutes=105 + 45), 80, SG_DOUBLES.players)
+    assert rest_slot_without_its_rest([SG_EARLY, SG_LATE, rested]) == []
+
+
+def test_law_rests_nobody_from_a_match_after_it():
+    # The partner's evening singles again: it starts after the doubles.
+    early = _row(1, 'CENTRAL', 'Starting at 1:00 PM', 'fixed', 'printed',
+                 _at(16), 105, [_p('a', 'Mary STOIANA USA', 5948)],
+                 discipline='singles')
+    late = _row(2, 'CENTRAL', 'Not before 7:00 PM', 'not_before', 'printed',
+                _at(22), 105, [_p('a', 'Vendula VALDMANNOVA CZE', 5932)],
+                discipline='singles')
+    d = _row(3, 'QUADRA 1', 'After suitable rest', 'after_event', 'estimated',
+             _at(18, 30), 80, DOUBLES.players)
+    assert rest_slot_without_its_rest([early, late, d]) == []
+    edges = set()
+    one_court_at_a_time([early, late, d],
+                        {r.id: _span(r) for r in (early, late, d)}, edges)
+    assert edges == set()
 
 if __name__ == '__main__':
     for name, fn in list(globals().items()):

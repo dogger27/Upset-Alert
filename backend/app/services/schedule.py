@@ -3592,10 +3592,24 @@ def one_court_at_a_time(rows, spans: dict, edges: set,
         if not others:
             continue
         target = min(others, key=lambda o: (spans[o.id][0], o.id))
-        if (r.id, target.id) in edges:
-            continue
-        if sr[0] < spans[target.id][1] + rest:
-            edges.add((target.id, r.id))
+        # ...and so does every other match of its players that the chain
+        # already starts AHEAD of it: that player comes to this row second as
+        # well. Singapore 2026-09-23 (doc 441): CHWALINSKA / KREJCIKOVA "After
+        # suitable rest" on COURT 1, both of them in singles on CENTER COURT
+        # first — Chwalinska "Not before 1:00 PM", Krejcikova "Not before
+        # 2:30 PM". The rest was measured from Chwalinska's match alone, the
+        # earliest, which it cleared by two hours. The overlap test below only
+        # fires on windows that MEET, so the page put the doubles at "~5:00 PM",
+        # 19 minutes after Krejcikova's singles was expected to end. A match
+        # starting after this row (the partner's evening singles) is still not
+        # one the rest is for.
+        waits_for = [target] + [o for o in others
+                                if o is not target and spans[o.id][0] < sr[0]]
+        for o in waits_for:
+            if (r.id, o.id) in edges:
+                continue
+            if sr[0] < spans[o.id][1] + rest:
+                edges.add((o.id, r.id))
 
     seen = set()
     for ids in by_key.values():

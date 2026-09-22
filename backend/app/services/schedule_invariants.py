@@ -720,6 +720,77 @@ def rest_slot_ahead_of_its_match(rows) -> list[tuple]:
     return out
 
 
+# How long "suitable" is, as the law reads it: the tightest gap ever measured
+# between a rest-worded doubles and its player's singles on another court was
+# Dolehide's 50 minutes (Guadalajara 2026-09-14); 45 leaves the estimate room
+# to err early. Stated here rather than imported from schedule, so the chain
+# and the law can disagree.
+_LAW_REST_MIN = 45
+
+
+def rest_slot_without_its_rest(rows) -> list[tuple]:
+    """(rest row, the match it follows, the person) wherever a slot worded
+    "after (suitable) rest" is expected to start less than `_LAW_REST_MIN`
+    after the expected END of a match one of its players begins earlier on
+    another court.
+
+    Singapore 2026-09-23 (document 441): CHWALINSKA / KREJCIKOVA "After
+    suitable rest" on COURT 1, both in singles on CENTER COURT before it. The
+    chain rested the doubles from Chwalinska's 1:00 PM match only — the
+    earliest — and put it at "~5:00 PM", 19 minutes after Krejcikova's
+    2:55 PM singles was expected to end. `rest_slot_ahead_of_its_match`
+    passed it (the doubles came after both singles), and so did
+    `player_on_two_courts` (the windows never met).
+
+    Both rows still to come: a match in play has a remaining time the law
+    cannot read. Exempt as in `rest_slot_ahead_of_its_match`: a start the sheet
+    fixed, another rest-worded row, and a rest row whose player has an earlier
+    match on its own court (the rest is for that one, and the court's chain
+    already spaces it).
+    """
+    def pending(r):
+        return not (r.started_at or r.completed_at or r.winner_side
+                    or r.live_scores_json or r.status in ("live", "completed"))
+
+    def people(r):
+        open_sides = (r.tbd_side or "ab") if r.is_tbd else ""
+        out = {}
+        for p in r.players or []:
+            if p.side in open_sides or _names_nobody(p.raw_name or ""):
+                continue
+            key = _law_person(p.raw_name)
+            if key:
+                out[key] = p.raw_name
+        return out
+
+    who = {r.id: people(r) for r in rows}
+    out = []
+    for r in rows:
+        start = _naive_utc(r.expected_start_at)
+        if (not _LAW_REST_RE.search(r.start_note or "") or not pending(r)
+                or (r.start_type == "fixed" and r.expected_source == "printed")
+                or start is None):
+            continue
+        mine = [(o, name) for key, name in who[r.id].items()
+                for o in rows if o.id != r.id and key in who[o.id]]
+        if any((o.court or "") == (r.court or "")
+               and (o.court_order or 0) < (r.court_order or 0) for o, _ in mine):
+            continue
+        seen = set()
+        for o, name in mine:
+            o_start = _naive_utc(o.expected_start_at)
+            if (o.id in seen or (o.court or "") == (r.court or "")
+                    or _LAW_REST_RE.search(o.start_note or "") or not pending(o)
+                    or not o.estimated_duration_min or o_start is None
+                    or o_start >= start):
+                continue
+            end = o_start + _timedelta(minutes=o.estimated_duration_min)
+            if start - end < _timedelta(minutes=_LAW_REST_MIN - 1):
+                seen.add(o.id)
+                out.append((r, o, name))
+    return out
+
+
 async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     """Every violation in one tournament-day. Empty list = lawful."""
     # `populate_existing`, because the law runs on what the day ACTUALLY
@@ -2226,6 +2297,16 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
              f"{(_naive_utc(first.started_at) or _naive_utc(first.expected_start_at)):%H:%M} UTC) "
              f"that the rest is from")
 
+    # 2026-09-23, Singapore doc 441 — see rest_slot_without_its_rest.
+    for r, first, name in rest_slot_without_its_rest(rows):
+        flag("rest_slot_without_its_rest", r,
+             f"{r.court!r} #{r.court_order} is printed {r.start_note!r} but "
+             f"expected at {_naive_utc(r.expected_start_at):%H:%M} UTC, less "
+             f"than {_LAW_REST_MIN} min after {name!r}'s match on "
+             f"{first.court!r} (entry {first.id}, "
+             f"{_naive_utc(first.expected_start_at):%H:%M} UTC + "
+             f"{first.estimated_duration_min} min) is expected to end")
+
     # 2026-09-19, Korea Open doc 345: the day's two 11:00 AM Q2 slots came
     # from the WTA feed (tour WTA) and its two "Time TBC" slots from the PDF,
     # which names no tour on a single-tour sheet (NULL). Every name, court and
@@ -2388,12 +2469,13 @@ def check_parse(meta, match_count: int | None = None,
 # on settled state, so a real contradiction is still caught — just not blamed
 # on the ingest that was about to fix it. Same lesson as the two-transaction
 # window the sweep itself had to learn.
-# `expected_undercuts_printed_floor` and `player_on_two_courts` read the same
-# half-written estimate.
+# `expected_undercuts_printed_floor`, `player_on_two_courts` and the two rest
+# laws read the same half-written estimate.
 INGEST_DEFERRED = frozenset({"expected_contradicts_printed",
                              "expected_undercuts_printed_floor",
                              "player_on_two_courts",
-                             "rest_slot_ahead_of_its_match"})
+                             "rest_slot_ahead_of_its_match",
+                             "rest_slot_without_its_rest"})
 
 
 async def check_and_log(db, tournament, play_date, *,
