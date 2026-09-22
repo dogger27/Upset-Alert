@@ -1,6 +1,7 @@
 /* node matchLine.test.mjs */
 import assert from 'node:assert/strict'
 import { matchLine, sideSurnames } from './matchLine.js'
+import { sideIsAlternatives, sideName } from './schedule.js'
 
 const P = (side, entry_name) => ({ side, entry_name })
 const singles = (a, b, extra = {}) => ({ discipline: 'singles', round_label: 'R128', status: 'scheduled',
@@ -54,4 +55,50 @@ assert.equal(l.names, 'Keys vs Korneeva'); assert.equal(l.score, '7-5 3-2')
 
 // A side not yet known.
 assert.equal(matchLine(singles('Madison Keys', undefined, { players: [P('a', 'Madison Keys')] })).names, 'Keys vs TBD')
+
+/* ── A CHOICE IS NOT A PAIRING ────────────────────────────────────────────
+ *
+ * When the qualifier feeding a slot has not been played, the sheet prints both
+ * candidates and the server records both with tbd_side naming the unsettled
+ * side. Hangzhou's 23 September Center Court slot was "Fajing SUN CHN or [7]
+ * Matthew DELLAVEDOVA AUS", and every renderer treated it as a DOUBLES pair:
+ * joined with a slash, cut to six letters, and drawn beside both candidates'
+ * flags — so it read as one singles player with two nationalities (owner,
+ * 2026-09-21: "Why do players in that bottom match have 2 flags each, for a
+ * singles match?").
+ */
+const alts = { discipline: 'singles', round_label: 'Q', status: 'scheduled',
+  tbd_side: 'b',
+  players: [P('a', 'Bernard Tomić'), P('b', 'Fajing Sun'), P('b', 'Matthew Dellavedova')] }
+
+assert.equal(sideIsAlternatives(alts, 'b'), true)
+assert.equal(sideIsAlternatives(alts, 'a'), false)
+// The surnames stay WHOLE: the six-letter cut is for a pair sharing a row with
+// a score, and "Sun or Dellav" reads as a misprint.
+assert.equal(sideSurnames(alts.players, 'b', true), 'Sun or Dellavedova')
+assert.equal(matchLine(alts).names, 'Tomić vs Sun or Dellavedova')
+// The full names, for the card.
+assert.equal(sideName(alts.players, 'b', true), 'Fajing Sun or Matthew Dellavedova')
+
+// A REAL DOUBLES PAIR is untouched — slash, and the six-letter cut.
+const pair = { discipline: 'doubles', round_label: 'R16', status: 'scheduled',
+  players: [P('a', 'Marie Bouzková'), P('a', 'Sara Sorribes Tormo'),
+            P('b', 'Su-Wei Hsieh'), P('b', 'Jelena Ostapenko')] }
+assert.equal(sideIsAlternatives(pair, 'a'), false)
+assert.equal(sideName(pair.players, 'a'), 'Marie Bouzková / Sara Sorribes Tormo')
+// surname() takes the last token, so "Sorribes Tormo" is "Tormo" — under the
+// six-letter cut and left whole.
+assert.equal(sideSurnames(pair.players, 'a'), 'Bouzko/Tormo')
+
+// tbd_side 'ab' means BOTH sides are choices.
+const both = { ...alts, tbd_side: 'ab' }
+assert.equal(sideIsAlternatives(both, 'a'), true)
+assert.equal(sideIsAlternatives(both, 'b'), true)
+
+// No flag, no change: a singles row with one player a side is untouched, and a
+// DOUBLES row is never a choice however its tbd_side reads.
+assert.equal(sideIsAlternatives(singles('A B', 'C D'), 'a'), false)
+assert.equal(sideIsAlternatives({ ...pair, tbd_side: 'ab' }, 'a'), false)
+assert.equal(sideIsAlternatives(null, 'a'), false)
+
 console.log('ok — matchLine')

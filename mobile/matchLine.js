@@ -7,7 +7,7 @@
  * Everything is derived through the card's own helpers — sideName for the
  * furniture-stripped names, winnerSide for who won, scoreLine for the sets —
  * so the line and the card can never disagree about a match. */
-import { sideName, winnerSide } from './schedule.js'
+import { sideIsAlternatives, sideName, winnerSide } from './schedule.js'
 import { scoreLine, scoreSets } from './score.js'
 import { surname } from './scoring.js'
 import { shortRound } from './rounds.js'
@@ -18,16 +18,21 @@ import { shortRound } from './rounds.js'
    the whole surname. */
 const DOUBLES_LETTERS = 6
 
-export function sideSurnames(players, side) {
-  const full = sideName(players, side)
+export function sideSurnames(players, side, alternatives = false) {
+  const full = sideName(players, side, alternatives)
   if (full === 'TBD') return 'TBD'
+  /* A CHOICE KEEPS ITS SURNAMES WHOLE. The six-letter cut is for a doubles
+     PAIR sharing a row with a score; "Sun or Dellav" reads as a misprint,
+     where "Sun or Dellavedova" reads as what it is. */
+  if (alternatives) return full.split(' or ').map(surname).join(' or ')
   const names = full.split(' / ').map(surname)
   if (names.length < 2) return names[0]
   return names.map(n => n.slice(0, DOUBLES_LETTERS)).join('/')
 }
 
 export function matchLine(e) {
-  const a = sideSurnames(e.players, 'a'), b = sideSurnames(e.players, 'b')
+  const a = sideSurnames(e.players, 'a', sideIsAlternatives(e, 'a'))
+  const b = sideSurnames(e.players, 'b', sideIsAlternatives(e, 'b'))
   const won = e.status === 'completed' ? winnerSide(e) : null
   const decided = won === 'a' || won === 'b'
   // The winner on the left once decided; the sheet's order until then.
