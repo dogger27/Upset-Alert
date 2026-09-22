@@ -15,6 +15,7 @@ same order less explicitly. That is enough to place a match on a court in
 sequence, which is what the page renders.
 """
 
+import re
 import logging
 from datetime import date, datetime
 from typing import Optional
@@ -30,11 +31,52 @@ _ROUND_NAMES = {
     "round of 128": "R128", "qualification round 1": "Q1",
     "qualification round 2": "Q2", "qualification round 3": "Q3",
     "qualification": "Q",
-    # The LAST qualifying round, whichever number that is: Q3 at a Slam, Q2 at
-    # a tour event. Mapping it to a number would be right half the time, and
-    # the round plays no part in identifying a match here, so it stays generic.
+    # The LAST qualifying round, when nothing says which number it is. The
+    # feed does not: "Qualification Final" carries `round: 250`, a sentinel
+    # rather than a number, where "Qualification Round 1" carries `round: 1`.
+    # normalize_day counts the season's rounds and rewrites this name to the
+    # number it is (see qualifying_final_round) — this is the answer only when
+    # that count cannot be made.
     "qualification final": "Q",
 }
+
+# "Qualification Round 4" is not a round any tour plays, but reading the number
+# rather than listing three of them means the map cannot run out.
+_QUAL_ROUND_RE = re.compile(r"^qualification round (\d+)$")
+_QUAL_SLUG_RE = re.compile(r"^qualification-round-(\d+)$")
+
+
+def round_token(name: Optional[str]) -> Optional[str]:
+    """The app's short round token for one of Sofascore's round names."""
+    key = (name or "").strip().lower()
+    m = _QUAL_ROUND_RE.match(key)
+    return f"Q{m.group(1)}" if m else _ROUND_NAMES.get(key)
+
+
+def qualifying_final_round(events: list[dict]) -> Optional[int]:
+    """Which Qn the season's "Qualification Final" actually is.
+
+    COUNTED, BECAUSE THE FEED WILL NOT SAY. Sofascore numbers the early
+    qualifying rounds and then calls the last one "Qualification Final" with
+    `round: 250` — a sentinel. The number is one past the highest numbered
+    round the season has: Chengdu runs Qualification Round 1 and a Final, so
+    the Final is Q2; a Slam runs 1 and 2 and a Final, so its Final is Q3.
+
+    None when it cannot be counted — no final in the window, or a final with
+    no numbered round beside it (a fetch that caught only the last day). The
+    caller then leaves the generic "Q" rather than guessing, because a wrong
+    round number is worse than a vague one: it names a match that was never
+    played.
+    """
+    best, saw_final = 0, False
+    for e in events or []:
+        slug = ((e.get("roundInfo") or {}).get("slug") or "").strip().lower()
+        m = _QUAL_SLUG_RE.match(slug)
+        if m:
+            best = max(best, int(m.group(1)))
+        elif slug == "qualification-final":
+            saw_final = True
+    return best + 1 if (saw_final and best) else None
 
 # Live-score fields are stripped before the day's bytes are hashed: the feed
 # re-serialises them constantly and every point would read as a revision.
@@ -127,12 +169,30 @@ def _names(team: dict) -> tuple[list, list]:
 
 def normalize_day(events: list[dict], day: date,
                   venue_tz: Optional[str] = None) -> bytes:
+    """One day's events, as the bytes the ingest parses and hashes.
+
+    THE QUALIFYING FINAL IS NUMBERED HERE, not in the parser, because only
+    this function sees the whole season. A day's document holds that day's
+    events alone, so the Final's day has nothing in it to count from — the
+    round it follows was played yesterday. Counting here and writing the
+    answer into the document also keeps the document self-describing: a day
+    that means Q2 says Q2, and the hash that guards it covers the claim.
+    """
     import json
+    qual_final = qualifying_final_round(events)
     keep = []
     for e in events:
         if play_date_of(e, venue_tz) != day:
             continue
-        keep.append({k: e.get(k) for k in _KEEP if e.get(k) is not None})
+        row = {k: e.get(k) for k in _KEEP if e.get(k) is not None}
+        ri = row.get("roundInfo")
+        if (qual_final and isinstance(ri, dict)
+                and (ri.get("slug") or "").strip().lower() == "qualification-final"):
+            # A COPY, never the caller's dict: these events are fetched once
+            # and normalised per day, so mutating one would stamp every other
+            # day's document with it too.
+            row["roundInfo"] = {**ri, "name": f"Qualification Round {qual_final}"}
+        keep.append(row)
     keep.sort(key=lambda x: (str(((x.get("venue") or {}).get("name")) or ""),
                              x.get("startTimestamp") or 0, x.get("id") or 0))
     return json.dumps(keep, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -156,7 +216,7 @@ def parse_sofa_day(doc: bytes, venue_tz: Optional[str] = None,
             court=court,
             time=hhmm,
             tour="ATP",
-            round=_ROUND_NAMES.get(rname),
+            round=round_token(rname),
             discipline=discipline,
             # Sofascore's times are ALL estimates once a court is under way, and
             # it never says which are fixed. Marking them all estimated is the
