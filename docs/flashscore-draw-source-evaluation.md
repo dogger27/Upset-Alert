@@ -556,3 +556,86 @@ Wikidata (confirmed: `draw_size` post hoc only, no bracket).
 | Does Sportradar's `bracket_number` survive an unplayed draw? | Reported ~1,000-query trial (**that figure is from a search summary, not verified**). Low priority — it has no bye field either way. |
 | Whether any wrapper's own terms permit redistributing derived draw shape | **Could not confirm.** Needs the wrapper's terms read in full — and for Apify, the actor author's terms as well as Apify's. |
 | `ws.protennislive.com/…/GetOOPXML.aspx` — does a legacy XML draw feed still exist? | Appears in 2017-era third-party code; **could not confirm** within the 3-request budget for that host. One `HEAD`, if 5.4's PDF parsing ever proves painful. |
+
+---
+
+# Re-examination, 2026-09-23
+
+The owner: *"Do a deep dive about how we could use it for draw information. This
+is planning only. You've previously advised against it. I need to be sure."*
+No Flashscore or Livesport host was contacted for this pass either. Everything
+new below comes from our own cache, our own database, or the code.
+
+## The answer got simpler, not more finely balanced
+
+**Flashscore and Tennis Explorer are the same company.** The
+`tennisexplorer.com` pages sitting in `/data/te-cache` right now carry
+`<meta name="author" content="LiveSport s.r.o." />` and load their ads from
+`content.livesportmedia.eu` and `ads.livesportmedia.eu`. LiveSport s.r.o. is
+Flashscore's owner — the entity whose terms §3 quotes.
+
+So the §3 framing ("the data is there and the only route is the one we may not
+use") was true but incomplete. We are *already reading a LiveSport draw
+bracket*, from a host that serves our server IP with no challenge, cached an
+hour, keyed on the `te_slug` our own player table stores. Flashscore is the same
+company's tennis data behind Akamai, with a year-less slug and no identity in
+our schema.
+
+That turns the decision from a trade-off into a subtraction: **nothing is gained,
+and something working is put at risk.** An `x-fsign` scraper on one LiveSport
+property, from the one egress IP this app has, is a reputation event at the
+company that serves our ATP brackets. The 2026-09-21 survey weighed the egress
+risk against Sofascore; the risk that actually matters is to Tennis Explorer.
+
+## What has shipped since, and what it measures
+
+| | then (2026-09-21) | now |
+|---|---|---|
+| ATP draw with no Wikipedia article | nothing — the outage that opened the survey | `te_draw.py`, 28/32 slots identical, 24/24 `te_slug` equal, complete at −2 days |
+| WTA draw | Wikipedia | `wta_draw.py` — the tour's own JSON; byes are explicit lines, seeds, entry types, IOC nationality; `drawInfo: null` until published |
+| seed + entry type without a new source | suspected in `cuptrees.teamSeed` (§5.5) | confirmed, and read |
+| who may stamp a release | Wikipedia only | the tour's sheet and TE first, Wikipedia the fallback (`f438b961`) |
+
+Coverage today: of 111 2026 draws, 106 are still Wikipedia-authored, 3 are the
+WTA sheet's and 2 are TE's — the new sources take a draw only as it refreshes,
+and they started two days ago. Where they authored, the fields are right: 8 of 8
+seeds each, and byes on 28 of the 34 28-draws (the other six are unreleased).
+
+## Steelman, and why each leg fails
+
+1. *"Flashscore's `HI`/`AI` gives seed and entry type in one place."* So does the
+   WTA sheet (`Seed`, `EntryType`), TE's bracket (`Name [seed]`, `[WC]`, `[Q]`)
+   and Sofascore's `teamSeed`. Three sources, all already read. Flashscore's own
+   form is the *worst* of the four: one parenthesised string that fuses a seed
+   with `(RET.)`, so `"(RET.) (28)"` reads as a seed to a naive parser.
+2. *"It has qualifying and doubles brackets, which we do not hold."* True, and
+   they are also in payloads we already fetch: the WTA document carries `LS`
+   singles, `LD` doubles and `RS` qualifying, and `wta_draw.event_for` reads only
+   `LS`. A qualifying bracket is a field selector, not a vendor.
+3. *"It is faster than Wikipedia."* Measured on four releases by the follow-up
+   brief of 2026-09-22: the tour's sheet and TE publish inside the same hour as
+   Wikipedia, and Sofascore's tree is never earlier. Nothing in the survey shows
+   Flashscore ahead of those, and its day feed is a rolling −7…+1 days, so a draw
+   released two days out is not in it at all.
+4. *"A managed wrapper keeps our IP clean."* Still true, and still useless: the
+   wrappers do not expose the fields (§3). That gap has not moved.
+5. *"A bye on a 28-draw is the one thing we cannot express."* It was. The WTA
+   sheet states byes as explicit lines and TE prints the literal `bye`; both are
+   in the writer now, and the database shows byes recorded on 28 of 34 28-draws.
+   Flashscore's bye, by contrast, remains **unverified** — the only published
+   fixture is a Slam draw, which has none.
+
+## What would change the answer
+
+Named so this does not have to be re-litigated from feel:
+
+- **Tennis Explorer stops publishing ATP brackets, or starts challenging our
+  IP.** Then the ATP leg needs a replacement — and the first call is
+  `api.protennislive.com`'s operator feed or the ATP's own sheet (§5.4), not the
+  same company's harder property.
+- **LiveSport offers a licensed feed in writing.** That is the only door to
+  Flashscore that is not a terms breach, and it would arrive with an identity
+  map, which is the real work. Worth a single email if the owner ever wants it;
+  their B2B arm is reachable at livesportmedia.eu.
+- **A draw appears that none of the four sources has.** No instance yet. If one
+  comes, record it — a named miss is what a source decision should turn on.
