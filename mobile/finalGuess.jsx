@@ -106,19 +106,35 @@ export function ValueSlider({ value, min = 0, max = 1, onChange, disabled, acces
    stated once in its head, and the sample size trailing faint. Three numbers
    are shown so they can be COMPARED, and prose bullets made the reader parse
    each one to do it. */
-function StatTable({ rows, unit }) {
+/* EVERY ROW IS AN AVERAGE, AND EVERY FIGURE CARRIES ITS UNIT (owner,
+ * 2026-09-22). The rows read as bare facts — "WTA 500 finals on hard, past 10
+ * years … 2.4" — which is a count of finals as easily as an average per final,
+ * and 2.4 of nothing in particular. The builders below say WHAT each row is
+ * about; the one word they all share is said once, here.
+ *
+ * `unit` is the word after each figure — sets, aces — and is omitted where the
+ * figure already reads as its own unit: "1h 46m" needs no noun after it.
+ * `qualifier` is the column's own note, which is a different thing: it says
+ * the aces and minutes figures are scaled to the set count the reader just
+ * chose, and belongs above the column rather than on every line of it.
+ */
+function StatTable({ rows, unit, qualifier }) {
   if (!rows.length) return null
   return (
     <View style={s.table}>
-      <View style={s.tableHead}>
-        <View style={{ flex: 1 }} />
-        <Text style={s.tableUnit}>{unit}</Text>
-        <View style={s.sampleCol} />
-      </View>
+      {qualifier ? (
+        <View style={s.tableHead}>
+          <View style={{ flex: 1 }} />
+          <Text style={s.tableUnit}>{qualifier}</Text>
+          <View style={s.sampleCol} />
+        </View>
+      ) : null}
       {rows.map((r, i) => (
         <View key={r.label} style={[s.tr, i > 0 && s.trRule]}>
-          <Text style={s.tdLabel} numberOfLines={2}>{r.label}</Text>
-          <Text style={s.tdValue}>{r.value}</Text>
+          <Text style={s.tdLabel} numberOfLines={2}>Average for {r.label}</Text>
+          <Text style={s.tdValue}>
+            {r.value}{unit ? <Text style={s.tdUnit}> {unit}</Text> : null}
+          </Text>
           <Text style={s.tdNote} numberOfLines={1}>{r.note || ''}</Text>
         </View>
       ))}
@@ -271,7 +287,7 @@ function acesRows(data, sets) {
   const rows = []
   const scale = (r) => (r?.aces_per_set == null ? null : round1(r.aces_per_set * sets))
   if (q.tier_finals?.aces_per_set != null) {
-    rows.push({ label: `A ${sets}-set ${data.tier_label} final on ${where}, past ${q.tier_finals.years} years`,
+    rows.push({ label: `a ${sets}-set ${data.tier_label} final on ${where}, past ${q.tier_finals.years} years`,
                 value: String(scale(q.tier_finals)), note: `${q.tier_finals.matches} finals` })
   }
   if (q.champion_vs?.aces_per_set != null) {
@@ -300,12 +316,12 @@ function minutesRows(data, sets) {
      prediction's (owner's correction, 2026-09-19). */
   const tierMins = q.tier_minutes_by_sets?.[key]
   if (tierMins != null) {
-    rows.push({ label: `A ${sets}-set ${data.tier_label} final on ${where}, past ${q.tier_finals?.years ?? 5} years`,
+    rows.push({ label: `a ${sets}-set ${data.tier_label} final on ${where}, past ${q.tier_finals?.years ?? 5} years`,
                 value: fmtMinutes(tierMins), note: `${q.tier_finals?.matches ?? ''} finals`.trim() })
   }
   const champMins = q.champion_on_surface?.by_sets?.[key]
   if (champMins != null) {
-    rows.push({ label: `A ${sets}-set ${a} match on ${surf}, past ${q.champion_on_surface.years} years`,
+    rows.push({ label: `a ${sets}-set ${a} match on ${surf}, past ${q.champion_on_surface.years} years`,
                 value: fmtMinutes(champMins),
                 note: `${q.champion_on_surface.matches} matches` })
   }
@@ -436,7 +452,8 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               <Ends max={acesMax} rec={rec?.aces_record} what="the most in 12 months" />
               {/* Scaled to the sets just chosen, which is why that question
                   comes first (owner, 2026-09-19). */}
-              <StatTable rows={acesRows(data, sets)} unit={`aces, ${sets} sets`} />
+              <StatTable rows={acesRows(data, sets)} unit="aces"
+                         qualifier={`${sets} sets`} />
             </View>
           ) : null}
 
@@ -450,7 +467,8 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               <ValueSlider value={minutes} min={0} max={durMax} onChange={setMinutes}
                            disabled={locked} accessibilityLabel="Length of the final" />
               <Ends max={fmtLong(durMax)} rec={rec?.duration_record} what="the longest in 12 months" />
-              <StatTable rows={minutesRows(data, sets)} unit={`${sets} sets`} />
+              {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
+              <StatTable rows={minutesRows(data, sets)} qualifier={`${sets} sets`} />
               <Meetings data={data} />
               {!data.guess && data.default ? (
                 <Text style={s.default}>
@@ -683,6 +701,9 @@ const s = StyleSheet.create({
   // Room for '1h 44m' without squeezing the label beside it.
   /* The numeric spine: one width, right-aligned, tabular figures. Three
      numbers in a column can be compared without being read. */
+  // The unit rides with the figure and stays quieter than it: the number is
+  // what the eye is comparing down the column, the noun only says of what.
+  tdUnit: { ...T.tiny, color: C.muted, fontVariant: [] },
   tdValue: {
     ...T.score, color: C.ink, minWidth: 62, textAlign: 'right',
     fontVariant: ['tabular-nums'],
