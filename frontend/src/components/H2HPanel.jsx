@@ -278,9 +278,18 @@ function FormBox({ m, boxKey, openKey, onOpen }) {
       </span>
       {pos && openKey === boxKey && createPortal(
         <div className="h2h-form-popup" style={{ position: 'fixed', left: pos.x, top: pos.y - 8, transform: 'translate(-50%, -100%)' }}>
-          <div className="h2h-form-popup-event">{[m.event, m.round].filter(Boolean).join(' · ')}</div>
+          {/* WHAT KIND OF MATCH IT WAS (2026-09-23). The form line now comes
+              from Tennis Explorer's whole-ladder history, so a square can be a
+              Challenger, a Futures or a doubles result — and a reader comparing
+              two players has to know which. Said only when it is not an
+              ordinary tour singles match: the common case needs no label. */}
+          <div className="h2h-form-popup-event">
+            {[m.event, m.round, m.level && m.level !== 'tour' ? m.level.toUpperCase() : null,
+              m.doubles ? 'doubles' : null].filter(Boolean).join(' · ')}
+          </div>
           <div className="h2h-form-popup-row"><span>vs</span><strong>{m.opponent}</strong></div>
-          <div className="h2h-form-popup-row"><span>Score</span><strong><ScoreLine score={m.score} /></strong></div>
+          <div className="h2h-form-popup-row"><span>Score</span>
+            <strong>{m.score ? <ScoreLine score={m.score} /> : 'walkover'}</strong></div>
           <div className="h2h-form-popup-row"><span>Date</span><strong>{fmtFormDate(m.date)}</strong></div>
         </div>,
         document.body

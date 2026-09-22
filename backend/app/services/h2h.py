@@ -343,7 +343,29 @@ async def get_player_form(
     only matches that happened strictly before it are considered — otherwise
     the H2H popup for an old draw would show the player's CURRENT form,
     including results that happened long after that historical match.
+
+    TENNIS EXPLORER FIRST, OUR OWN TABLES AFTER (owner, 2026-09-23: "Form
+    across the whole ladder"). This query can only see draws this app has
+    scraped — tour main draws — so a qualifier, a Challenger regular or anyone
+    whose month was Futures arrived with an EMPTY form line, which is the
+    reader's first question about a name they do not know. TE's player page is
+    the whole ladder in one request: Challengers, Futures, qualifying and
+    doubles, with the real played date, the surface, the winner and the score.
+    See services/te_form for why TE and not Sofascore.
+
+    The fallback is not decoration: TE can be unreachable, a slug can be one
+    it does not know, and a player with no matches there still has ours.
     """
+    from app.services import te_form
+
+    try:
+        rows = await te_form.fetch_form(te_slug, limit=limit, before=before_date)
+    except Exception as exc:                          # never at the panel's cost
+        logger.debug("TE form unavailable for %s: %s", te_slug, exc)
+        rows = []
+    if rows:
+        return rows
+
     from app.models.rankings import TePlayer
     from app.models.tournament import Draw, DrawEntry, Match
 
