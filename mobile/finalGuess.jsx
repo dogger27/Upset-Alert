@@ -20,7 +20,7 @@ import { leading } from './fontScale.js'
 import { ScrollPane } from './scrollPane'
 import { Sheet } from './sheet'
 import { Muted } from './ui'
-import { C, PICK, R, S, T, TOUR } from './theme'
+import { C, R, S, T, TOUR } from './theme'
 import { useApi } from './useApi'
 import { tiebreakVisible } from './scoring'
 
@@ -178,61 +178,6 @@ function Plate({ value, sub }) {
     <View style={s.plate}>
       <Text style={s.plateValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{value}</Text>
       {sub ? <Text style={s.plateSub} numberOfLines={1}>{sub}</Text> : null}
-    </View>
-  )
-}
-
-/* THE MEETINGS, AS A RESULTS STRIP (owner, 2026-09-19).
-   The question a reader has about a head-to-head is "did my pick beat this
-   person?", so each meeting leads with a W or an L from the CHAMPION's point
-   of view — in the bracket's own pick colours, which already mean "your pick
-   came off" everywhere else in this app.
-   Sackmann's score is written from the winner's side, so the score is printed
-   winner-first and the W/L chip says whose side that is. The aces pair is
-   champion-first to match the chip. */
-function Meetings({ data }) {
-  const h = data?.h2h
-  if (!h?.matches?.length) return null
-  const a = surname(data?.champion?.name)
-  return (
-    <View style={s.section}>
-      <View style={s.sectionHead}>
-        <Text style={s.sectionTitle}>When they have met</Text>
-        <View style={s.sectionRule} />
-        <Text style={s.record}>{h.champion_wins}–{h.opponent_wins}</Text>
-      </View>
-      {h.matches.map((m, i) => (
-        <View key={`${m.date}-${i}`} style={s.meet}>
-          <View style={[s.wl, m.champion_won ? s.wlWon : s.wlLost]}>
-            <Text style={[s.wlText, { color: m.champion_won ? PICK.correct.border : PICK.wrong.border }]}>
-              {m.champion_won ? 'W' : 'L'}
-            </Text>
-          </View>
-          <View style={s.meetBody}>
-            <Text style={s.meetWhen} numberOfLines={1}>
-              <Text style={s.meetYear}>{m.year}</Text>
-              {`  ${[m.tournament, m.round].filter(Boolean).join('  ')}`}
-              {m.surface ? `  ${m.surface.toLowerCase()}` : ''}
-            </Text>
-            <Text style={s.meetScore} numberOfLines={1}>
-              {m.score}
-              {m.minutes ? <Text style={s.meetTime}>{`   ${fmtLong(m.minutes)}`}</Text> : null}
-            </Text>
-          </View>
-          <View style={s.meetAces}>
-            <Text style={s.meetAcesN}>
-              {m.champion_aces ?? '–'}<Text style={s.meetAcesDash}> – </Text>{m.opponent_aces ?? '–'}
-            </Text>
-            <Text style={s.meetAcesLabel}>aces</Text>
-          </View>
-        </View>
-      ))}
-      {h.total > h.shown ? (
-        <Text style={s.more}>{`The ${h.shown} most recent of ${h.total}`}</Text>
-      ) : null}
-      {/* One short line, because the chip and the champion-first ace pair are
-          nearly self-evident — this only has to name whose side they are. */}
-      <Text style={s.meetKey} numberOfLines={1}>{`Read from ${a}’s side`}</Text>
     </View>
   )
 }
@@ -494,7 +439,6 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               <Ends max={fmtLong(durMax)} what="12 month max" zero="a walkover" />
               {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
               <StatTable rows={minutesRows(data, sets)} />
-              <Meetings data={data} />
               {!data.guess && data.default ? (
                 <Text style={s.default}>
                   {`Leave these alone and you hold ${data.tour} ${(data.surface || '').toLowerCase()}’s ${data.default.year} average: `}
@@ -768,35 +712,11 @@ const s = StyleSheet.create({
   tdNote: { ...T.tiny, color: C.faint, flexShrink: 1 },
 
   /* ── A section heading: title, rule, and a number on the end ───────────── */
-  section: { gap: S.xs },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
-  sectionTitle: { ...T.h2, color: C.ink },
-  sectionRule: { flex: 1, height: 1, backgroundColor: C.border },
-  record: { ...T.score, color: C.muted, fontVariant: ['tabular-nums'] },
 
   /* ── One meeting ───────────────────────────────────────────────────────── */
-  meet: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingVertical: 6 },
   /* W or L from the CHAMPION's side, in the bracket's own pick colours. */
-  wl: {
-    width: 26, height: 26, borderRadius: R.sm, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  wlWon: { backgroundColor: PICK.correct.bg, borderColor: PICK.correct.border },
-  wlLost: { backgroundColor: PICK.wrong.bg, borderColor: PICK.wrong.border },
-  wlText: { ...T.eyebrow, fontSize: 13 },
-  meetBody: { flex: 1, gap: 0 },
-  meetWhen: { ...T.tiny, color: C.faint },
-  meetYear: { ...T.tiny, color: C.muted },
-  meetScore: { ...T.smallMed, color: C.ink },
-  meetTime: { ...T.tiny, color: C.faint },
-  meetAces: { alignItems: 'flex-end' },
-  meetAcesN: { ...T.score, color: C.ink, fontVariant: ['tabular-nums'] },
-  meetAcesDash: { color: C.faint },
-  meetAcesLabel: { ...T.tiny, color: C.faint, marginTop: -3 },
-  more: { ...T.tiny, color: C.faint, paddingTop: 2 },
   /* Which number belongs to whom, said once at the bottom rather than on
      every row. */
-  meetKey: { ...T.tiny, color: C.faint, paddingTop: S.xs },
 
   /* ── The tail ──────────────────────────────────────────────────────────── */
   default: { ...T.small, color: C.muted },
