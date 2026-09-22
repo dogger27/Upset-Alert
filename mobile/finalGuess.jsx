@@ -124,24 +124,33 @@ function StatTable({ rows, unit, qualifier }) {
     <View style={s.table}>
       {qualifier ? (
         <View style={s.tableHead}>
-          <View style={{ flex: 1 }} />
           <Text style={s.tableUnit}>{qualifier}</Text>
-          <View style={s.sampleCol} />
         </View>
       ) : null}
+      {/* TWO LINES, NOT THREE COLUMNS (owner, 2026-09-22). The description is
+          the longest thing here and it was sharing a row with a number column
+          and a sample column, so it wrapped to two lines on every row while
+          two thirds of the width sat empty beside it. Given the full width it
+          reads on one line, and the figure and its sample go underneath —
+          which is also their real relationship: they are both about the
+          sentence above them.
+
+          "OVER 82 finals": the count is the SAMPLE the average was taken
+          over, and a bare "82 finals" reads as a fact about the final rather
+          than about the figure. Said here, once, for the same reason "Average
+          for" is — the builders supply the count and the noun and no
+          preposition of their own. */}
       {rows.map((r, i) => (
         <View key={r.label} style={[s.tr, i > 0 && s.trRule]}>
           <Text style={s.tdLabel} numberOfLines={2}>Average for {r.label}</Text>
-          <Text style={s.tdValue}>
-            {r.value}{unit ? <Text style={s.tdUnit}> {unit}</Text> : null}
-          </Text>
-          {/* "OVER 82 finals" (owner, 2026-09-22): the count is the SAMPLE the
-              average was taken over, and a bare "82 finals" reads as a fact
-              about the final rather than about the figure beside it. Said
-              here, once, for the same reason "Average for" is — see the
-              builders, which supply the count and the noun and no preposition
-              of their own. */}
-          <Text style={s.tdNote} numberOfLines={1}>{r.note ? `Over ${r.note}` : ''}</Text>
+          <View style={s.trFigures}>
+            <Text style={s.tdValue}>
+              {r.value}{unit ? <Text style={s.tdUnit}> {unit}</Text> : null}
+            </Text>
+            {r.note ? (
+              <Text style={s.tdNote} numberOfLines={1}>Over {r.note}</Text>
+            ) : null}
+          </View>
         </View>
       ))}
     </View>
@@ -719,22 +728,25 @@ const s = StyleSheet.create({
   /* ── The evidence, as a table ──────────────────────────────────────────── */
   table: { marginTop: S.xs },
   tableHead: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm, paddingBottom: 2 },
-  tableUnit: { ...T.tiny, color: C.muted, minWidth: 62, textAlign: 'right' },
-  sampleCol: { width: 62 },
-  tr: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingVertical: 4 },
+  tableUnit: { ...T.tiny, color: C.muted, flex: 1, textAlign: 'right' },
+  /* A ROW IS TWO LINES NOW: the description across the full width, then the
+     figure and the sample it was taken over. */
+  tr: { gap: 1, paddingVertical: 5 },
   trRule: { borderTopWidth: 1, borderTopColor: C.border },
-  tdLabel: { ...T.small, color: C.inkBody, flex: 1 },
+  // Baseline-aligned, so the small sample sits on the figure's own line
+  // rather than floating at the middle of its height.
+  trFigures: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm },
+  tdLabel: { ...T.small, color: C.inkBody },
   // Room for '1h 44m' without squeezing the label beside it.
   /* The numeric spine: one width, right-aligned, tabular figures. Three
      numbers in a column can be compared without being read. */
   // The unit rides with the figure and stays quieter than it: the number is
   // what the eye is comparing down the column, the noun only says of what.
   tdUnit: { ...T.tiny, color: C.muted, fontVariant: [] },
-  tdValue: {
-    ...T.score, color: C.ink, minWidth: 62, textAlign: 'right',
-    fontVariant: ['tabular-nums'],
-  },
-  tdNote: { ...T.tiny, color: C.faint, width: 62, textAlign: 'right' },
+  // No fixed width and no right alignment any more: the figures lead their
+  // own line, so they line up down the left edge on their own.
+  tdValue: { ...T.score, color: C.ink, fontVariant: ['tabular-nums'] },
+  tdNote: { ...T.tiny, color: C.faint, flexShrink: 1 },
 
   /* ── A section heading: title, rule, and a number on the end ───────────── */
   section: { gap: S.xs },
