@@ -2004,6 +2004,10 @@ async def refresh_shape(tournament: Draw, db: AsyncSession) -> dict:
         DrawEntry.draw_id == tournament.id))).scalars().all()
     if not entries:
         report["error"] = "no entries — that is a bootstrap, not a refresh"
+        # SAID AS A FLAG, not only in the sentence: the refresh loop acts on
+        # this — it is the one decline that means "another door may open" —
+        # and a caller should never have to read an error message to find out.
+        report["needs_bootstrap"] = True
         return report
 
     shape, source, ids = await _shape_from_sources(
@@ -2107,6 +2111,34 @@ async def bootstrap_draw(tournament: Draw, db: AsyncSession) -> dict:
     if shape is None:
         report["error"] = "no source has a complete bracket for this draw yet"
         return report
+
+    # THE CHECK THAT REPLACES THE FIELD, for the source that finds a draw BY
+    # NAME. `refresh_shape` can demand 90% agreement with the players it
+    # already holds; a draw with nothing holds nothing, and Tennis Explorer
+    # identifies an event by its city or its name — "a name is not an
+    # identity" (te_draw.match_tournament, and the whole reason Sofascore
+    # refuses to resolve one without corroboration).
+    #
+    # So the bracket must be the one a field of our draw_size plays in: the
+    # same geometry test Sofascore's own field-less identity uses, imported
+    # rather than restated so the two can never drift. The WTA sheet is keyed
+    # by the tour's own event id — no name is guessed, and a disagreement
+    # there would mean OUR draw_size is stale, which must not hold up a
+    # release. Sofascore checks itself, inside resolve_without_field.
+    if source == "tennisexplorer":
+        from app.services.sofascore import _geometry_agrees
+        if not _geometry_agrees(tournament.draw_size, shape.bracket_size):
+            report["error"] = (
+                f"tennisexplorer's bracket of {shape.bracket_size} is not the one a "
+                f"{tournament.draw_size}-player draw plays in — not building from it")
+            await app_log(
+                "warning", "draws",
+                f"Tennis Explorer's bracket for {tournament.year} {tournament.name} "
+                f"({tournament.gender}) is a {shape.bracket_size} against our "
+                f"draw_size {tournament.draw_size} — refusing to build a draw we "
+                f"cannot corroborate", report,
+                dedup_key=f"te_geometry_{tournament.id}", dedup_hours=24)
+            return report
 
     parsed = shape_to_parsed(shape)
     await _do_scrape(tournament, db, parsed=parsed)
