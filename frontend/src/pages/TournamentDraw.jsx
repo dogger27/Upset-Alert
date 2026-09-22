@@ -157,8 +157,8 @@ function TournamentDraw() {
   const [picks, setPicks] = useState({})
   // THE TIEBREAK QUESTIONS (owner, 2026-09-18): asked once, the first time
   // this bracket names its champion, and open from the bar any time after.
-  const [finalGuessOpen, setFinalGuessOpen] = useState(null)   // null | 'entered' | 'edit'
-  const finalGuessAsked = useRef(false)
+  // null | 'edit'. 'entered' went with the auto-popup (owner, 2026-09-22).
+  const [finalGuessOpen, setFinalGuessOpen] = useState(null)
   const [otherPicks, setOtherPicks] = useState({})
   // 'combined' (labelled "Picks" in the switcher) is the default; 'live'
   // shows BracketView with actual results only, no predictions. The old
@@ -666,13 +666,12 @@ function TournamentDraw() {
       qc.invalidateQueries({ queryKey: ['predictions', id] })
       // The finalists may have changed: the reference figures follow them.
       qc.invalidateQueries({ queryKey: finalGuessKey(id) })
-      const maxRound = Math.max(0, ...(data?.matches || []).map(m => m.round_number))
-      const finalIds = new Set((data?.matches || []).filter(m => m.round_number === maxRound).map(m => m.id))
-      const namedChampion = (rows || []).some(p => finalIds.has(p.match_id) && p.predicted_winner_id != null)
-      if (namedChampion && !finalGuessAsked.current && finalGuess.data && !finalGuess.data.guess && !finalGuess.data.locked) {
-        finalGuessAsked.current = true
-        setFinalGuessOpen('entered')
-      }
+      /* NO AUTO-POPUP (owner, 2026-09-22: "do not auto-popup the tiebreaker
+         criteria when a user enters the draw"). Naming a champion used to
+         throw the dialog open over the bracket, once per visit — a modal
+         answering a question nobody had asked, at the moment they were busy
+         picking. The bar under the header is the way in, it is always there,
+         and it goes red when the answers stop matching the picks. */
     },
     onError: (err) => {
       reportSaveFailure(err)
