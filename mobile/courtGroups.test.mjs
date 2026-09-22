@@ -74,6 +74,39 @@ test('a qualifying seed ranks below every main-draw seed (Chengdu 2026-09-23)', 
     row(6, 17, 'Chengdu Open', 'COURT 3', 1, [null, null]),
   ])
   /* The sheet's order: the show court with the main-draw [8] first, then the
-     qualifying courts by THEIR seeds, then an unseeded main-draw court. */
-  assert.deepEqual(g.map(x => x.court), ['CENTER COURT', 'COURT 1', 'COURT 2', 'COURT 3'])
+     qualifying courts by THEIR seeds. COURT 3 is not on Chengdu's sheet; this
+     case first asserted it LAST, and Hangzhou's real sheet printed the
+     reverse (below) — an unseeded main-draw court comes before every court
+     holding only qualifying. */
+  assert.deepEqual(g.map(x => x.court), ['CENTER COURT', 'COURT 3', 'COURT 1', 'COURT 2'])
+})
+
+test('an unseeded main-draw match ranks above every qualifying seed (Hangzhou 2026-09-23, doc 421)', () => {
+  const q = (id, court, court_order, seeds) =>
+    ({ ...row(id, 39, 'Hangzhou Open', court, court_order, seeds), stage: 'qualifying' })
+  const m = (id, court, court_order) =>
+    ({ ...row(id, 39, 'Hangzhou Open', court, court_order, [null, null]), stage: 'main' })
+  const g = courtGroups([
+    q(1397, 'CENTER COURT', 1, [2, 8]),
+    q(1416, 'CENTER COURT', 2, [3, null, 7]),
+    m(1398, 'CENTER COURT', 3),
+    m(1399, 'CENTER COURT', 4),
+    q(1415, 'COURT 1', 1, [4, 6]),
+    q(1418, 'COURT 1', 2, [1, 5]),
+  ])
+  /* The sheet prints CENTER COURT first: it has the day's two R32s. Ranking
+     an unseeded player at NO_SEED let COURT 1's qualifying [1] outrank them. */
+  assert.deepEqual(g.map(x => x.court), ['CENTER COURT', 'COURT 1'])
+  assert.deepEqual(g[0].list.map(e => e.id), [1397, 1416, 1398, 1399])
+})
+
+test('a qualifying player with no seed still ranks nothing', () => {
+  const q = (id, court, seeds) =>
+    ({ ...row(id, 39, 'Hangzhou Open', court, 1, seeds), stage: 'qualifying' })
+  const g = courtGroups([
+    q(1, 'COURT 2', [null, null]),
+    q(2, 'COURT 2', [null, null]),
+    q(3, 'COURT 1', [9, null]),
+  ])
+  assert.deepEqual(g.map(x => x.court), ['COURT 1', 'COURT 2'])
 })
