@@ -261,3 +261,98 @@ def test_an_empty_year_falls_back_to_all_time_rather_than_a_dead_slider():
     got = ceilings(c, "wta", "Hard", 3, today=date(2026, 9, 19))
     assert got["aces_max"] == 31 and got["duration_max_min"] == 316
     assert got["aces_record"]["year"] == "2016"
+
+
+# ── the duration track ends at the length being predicted ────────────────
+
+def _dur_db():
+    """A hard-court best-of-three record with one real match of each length,
+    and every shape of junk that used to be able to end the track."""
+    import sqlite3
+    c = sqlite3.connect(":memory:")
+    c.execute("""CREATE TABLE tml_matches (tour, tourney_name, tourney_date, surface, tourney_level, best_of,
+                 winner_id, loser_id, winner_name, loser_name, score, minutes, w_ace, l_ace)""")
+    c.executemany("INSERT INTO tml_matches VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+        # The real ends: the longest completed two-setter and three-setter.
+        ("wta", "Zhuhai", "2024-09-20", "Hard", "500", 3, "1", "2", "Long", "Match",
+         "7-6(11) 7-6(4)", 172, 3, 2),
+        ("wta", "Beijing", "2024-10-01", "Hard", "1000", 3, "3", "4", "Longer", "Still",
+         "6-7(4) 7-5 7-5", 255, 4, 1),
+        # Shorter, so neither should win its end.
+        ("wta", "Doha", "2025-02-01", "Hard", "1000", 3, "5", "6", "Short", "Brief",
+         "6-4 6-4", 90, 4, 2),
+        # JUNK 1: a straight-sets win that cannot have taken three and a half
+        # hours. Inside the format's 400-minute cap, impossible per set.
+        ("wta", "Sao Paulo", "2025-03-01", "Hard", "250", 3, "7", "8", "Bad", "Row",
+         "6-2 6-3", 219, 1, 1),
+        # JUNK 2: a retirement, whose minutes outlast the sets it records.
+        ("wta", "Indian Wells", "2025-03-10", "Hard", "1000", 3, "9", "10", "Ret", "Ired",
+         "6-4 6-6 RET", 189, 2, 2),
+        # JUNK 3: outside the window entirely.
+        ("wta", "Ancient", "2019-01-01", "Hard", "1000", 3, "11", "12", "Old", "News",
+         "7-6(2) 7-6(2)", 178, 2, 2),
+        # Another surface: must not answer a hard-court question.
+        ("wta", "Madrid", "2025-05-01", "Clay", "1000", 3, "13", "14", "Clay", "Court",
+         "7-6(0) 6-3", 170, 1, 1),
+    ])
+    return c
+
+
+def test_the_track_ends_at_the_longest_match_of_that_length():
+    """The owner's rule: "the max length of a 2-set match on hard over the
+    past 3 years", not the longest match of any length."""
+    from app.services.history.final_stats import duration_by_sets
+    maxima, records = duration_by_sets(_dur_db(), "wta", "Hard", 3, today=date(2026, 9, 23))
+    assert maxima == {"2": 172, "3": 255}
+    assert records["2"]["tournament"] == "Zhuhai"
+    assert records["3"]["score"] == "6-7(4) 7-5 7-5"
+
+
+def test_an_impossible_two_setter_does_not_end_the_track():
+    """"6-2 6-3 in 219 minutes" is inside the format's 400-minute cap and is
+    still not a match anybody played. Thirteen rows in the real record sit
+    above 90 minutes a set and every one is a fault."""
+    from app.services.history.final_stats import duration_by_sets
+    maxima, _ = duration_by_sets(_dur_db(), "wta", "Hard", 3, today=date(2026, 9, 23))
+    assert maxima["2"] == 172, "the junk row won the two-set end"
+
+
+def test_a_retirement_is_not_an_example_of_a_length():
+    """Its minutes are real and its set count is partial — an hour and a half
+    of one match recorded as two sets."""
+    from app.services.history.final_stats import duration_by_sets
+    _maxima, records = duration_by_sets(_dur_db(), "wta", "Hard", 3, today=date(2026, 9, 23))
+    assert "RET" not in records["2"]["score"]
+
+
+def test_three_years_back_and_no_further():
+    from app.services.history.final_stats import DURATION_CEILING_YEARS, duration_by_sets
+    assert DURATION_CEILING_YEARS == 3
+    maxima, _ = duration_by_sets(_dur_db(), "wta", "Hard", 3, today=date(2026, 9, 23))
+    assert maxima["2"] != 178, "a 2019 match is not the past three years"
+
+
+def test_the_surface_being_played_is_the_one_that_answers():
+    from app.services.history.final_stats import duration_by_sets
+    maxima, _ = duration_by_sets(_dur_db(), "wta", "Hard", 3, today=date(2026, 9, 23))
+    assert maxima["2"] != 170, "a clay match ended the hard-court track"
+
+
+def test_a_set_count_this_surface_has_no_example_of_falls_back():
+    """A best-of-five on a surface that has none in three years still needs an
+    end, or the control has no range at all."""
+    from app.services.history.final_stats import duration_by_sets
+    c = _dur_db()
+    c.execute("""INSERT INTO tml_matches VALUES
+        ('wta','Slam','2025-01-20','Clay','G',5,'20','21','Five','Setter',
+         '6-4 6-4 6-7(2) 6-7(3) 7-5',300,5,4)""")
+    maxima, _ = duration_by_sets(c, "wta", "Hard", 5, today=date(2026, 9, 23))
+    assert maxima.get("5") == 300, "no hard-court five-setter, so the format's own longest"
+
+
+def test_the_ceilings_payload_carries_the_per_length_ends():
+    from app.services.history.final_stats import ceilings
+    out = ceilings(_dur_db(), "wta", "Hard", 3, today=date(2026, 9, 23))
+    assert out["duration_max_by_sets"] == {"2": 172, "3": 255}
+    assert out["duration_ceiling_years"] == 3
+    assert out["duration_max_min"] > 0, "the any-length end stays as the fallback"

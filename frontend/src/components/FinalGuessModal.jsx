@@ -195,7 +195,12 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
   const [aces, setAces] = useState(null)
   const [minutes, setMinutes] = useState(null)
   const acesMax = Math.max(1, ctx?.ceilings?.aces_max || 0)
-  const durMax = Math.max(1, ctx?.ceilings?.duration_max_min || 0)
+  /* The end of the duration track is the longest match of the length being
+     predicted — see mobile/finalGuess.jsx, where the rule is written out. It
+     moves with the sets answer, and the old any-length end is the fallback. */
+  const durMax = Math.max(1, ctx?.ceilings?.duration_max_by_sets?.[String(sets)]
+                             || ctx?.ceilings?.duration_max_min || 0)
+  const durYears = ctx?.ceilings?.duration_ceiling_years || 3
   const bestOf = ctx?.best_of || 3
 
   // Seed the sliders once the context arrives: the saved answers, else a
@@ -211,7 +216,12 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
     if (ctx.default) { setAces(ctx.default.aces); setMinutes(ctx.default.minutes); return }
     setAces(Math.round(acesMax / 4))
     setMinutes(Math.round(durMax / 3))
-  }, [ctx, acesMax, durMax])
+  }, [ctx, acesMax, durMax])     // eslint-disable-line react-hooks/exhaustive-deps
+
+  // An answer cannot outlive its scale: the ceiling moves with the set count.
+  useEffect(() => {
+    setMinutes(m => (m == null ? m : Math.min(m, durMax)))
+  }, [durMax])
 
   const save = useMutation({
     mutationFn: () => putFinalGuess(tournamentId, {
@@ -314,7 +324,7 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
                   {/* "12 month max", not "the longest on hard in 12 months
                       (Ningbo 2025)" (owner, 2026-09-22): three lines to say
                       what the number beside them already says. */}
-                  <span className="fg-ends-max">{fmtMinutes(durMax)} · 12 month max</span>
+                  <span className="fg-ends-max">{fmtMinutes(durMax)} · {sets}-set max, {durYears} yrs</span>
                 </div>
                 {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
                 <Reference ctx={ctx} which="minutes" sets={sets} />

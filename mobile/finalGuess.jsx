@@ -315,7 +315,18 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const acesMax = Math.max(1, data?.ceilings?.aces_max || 0)
-  const durMax = Math.max(1, data?.ceilings?.duration_max_min || 0)
+  /* THE END OF THE TRACK IS THE LONGEST MATCH OF THE LENGTH BEING PREDICTED
+     (owner, 2026-09-23): "the max length of a 2-set match on hard over the
+     past 3 years. Instead of currently which is: ANY number of sets over 1
+     year." So it MOVES with the first question's answer — a reader who says
+     two sets is not handed a scale whose far end is a five-setter, a number
+     their own answer has already ruled out.
+
+     The old any-length end stays as the fallback, for the set count history
+     has no completed example of. */
+  const durMax = Math.max(1, data?.ceilings?.duration_max_by_sets?.[String(sets)]
+                             || data?.ceilings?.duration_max_min || 0)
+  const durYears = data?.ceilings?.duration_ceiling_years || 3
   const options = setChoices(data?.best_of || 3)
 
   /* THE ANSWERS OPEN ON THE DEFAULT — what this bracket is taken to have said
@@ -336,6 +347,14 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
     setAces(Math.round(acesMax / 4))
     setMinutes(Math.round(durMax / 3))
   }, [data, acesMax, durMax])     // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* AN ANSWER CANNOT OUTLIVE ITS SCALE. The duration ceiling moves with the
+     set count, so a reader who answers three sets, slides to four hours and
+     goes back to change the first question would otherwise hold a number the
+     new track cannot show — saved, and silently past its own end. */
+  useEffect(() => {
+    setMinutes(m => (m == null ? m : Math.min(m, durMax)))
+  }, [durMax])
 
   // A fresh open starts at the beginning rather than wherever it was left.
   useEffect(() => { if (visible) { setStep(0); setError(null) } }, [visible])
@@ -443,7 +462,7 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
                   third line on an end that is already two (owner, 2026-09-22). */}
               <Scale value={minutes} max={durMax} maxLabel={fmtMinutes(durMax)} onChange={setMinutes}
                      disabled={locked} label="Length of the final"
-                     what="12 month max" zero="a walkover" />
+                     what={`${sets}-set max, ${durYears} yrs`} zero="a walkover" />
               {/* No unit: fmtMinutes already reads as one ("1h 46m"). */}
               <StatTable rows={minutesRows(data, sets)} />
               {!data.guess && data.default ? (
