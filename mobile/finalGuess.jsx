@@ -18,7 +18,7 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-nativ
 import { getFinalGuess, putFinalGuess } from './api'
 import { leading } from './fontScale.js'
 import { Sheet } from './sheet'
-import { Card, Muted, Title } from './ui'
+import { Muted } from './ui'
 import { C, PICK, R, S, T, TOUR } from './theme'
 import { useApi } from './useApi'
 import { tiebreakVisible } from './scoring'
@@ -523,41 +523,90 @@ function Ends({ max, rec, what }) {
   )
 }
 
-export function FinalGuessCard({ tournamentId, enabled, onOpen, refreshKey }) {
-  const ctx = useApi(enabled ? `final-guess:${tournamentId}:card:${refreshKey || 0}` : null, () => getFinalGuess(tournamentId), { enabled: !!enabled })
+/* THE WAY IN, ALWAYS ON SCREEN (owner, 2026-09-22): "move the button to
+ * access the tiebreaker data to be a bar above the round selector, always
+ * visible in the draw view. Just like the PWA."
+ *
+ * It was a Card rendered INSIDE the bracket, after the final-round match — so
+ * reaching the tiebreak questions meant scrolling to the end of the draw, and
+ * on a 32 bracket that is four rounds away from where anyone is picking. The
+ * web has had it as a bar under the header all along; this is the same object,
+ * in the same place relative to the round strip.
+ *
+ * RED WHEN THE ANSWERS NO LONGER DESCRIBE THE PICKED FINAL. `stale` is the
+ * server's answer, comparing the final these answers were saved for against
+ * the one the bracket now predicts (models/final_guess.answers_are_stale) —
+ * not a timestamp, and not "have you opened it", because opening changes
+ * nothing about answers that are for the wrong two players. Saving clears it.
+ *
+ * Border and label only, never a red fill: this sits above the round strip on
+ * every visit, and a solid red bar across the draw reads as a broken screen
+ * rather than as one thing needing a look.
+ */
+export function FinalGuessBar({ tournamentId, enabled, onOpen, refreshKey }) {
+  const ctx = useApi(enabled ? `final-guess:${tournamentId}:bar:${refreshKey || 0}` : null,
+                     () => getFinalGuess(tournamentId), { enabled: !!enabled })
   const data = ctx.data
   // Hidden until the draw is open for picks, or this bracket has answered
   // (owner, 2026-09-18) — scoring.tiebreakVisible.
   if (!enabled || !tiebreakVisible(data)) return null
   const g = data.guess
+  const stale = !!data.stale
+  const answers = g
+    ? [g.final_sets ? `${g.final_sets} sets` : null,
+       `${g.final_aces} aces`, fmtMinutes(g.final_duration_min)].filter(Boolean).join(' · ')
+    : data.default
+      ? `Holding the average: ${[data.default.sets ? `${data.default.sets} sets` : null,
+           `${data.default.aces} aces`, fmtMinutes(data.default.minutes)].filter(Boolean).join(' · ')}`
+      : (data.locked ? 'No answers given' : 'Answer the three questions about the final')
   return (
     <Pressable onPress={onOpen} accessibilityRole="button"
-               accessibilityLabel="Standings tiebreak questions: your answers about the final">
-      <Card>
-        <View style={s.cardRow}>
-          <View style={{ flex: 1 }}>
-            {/* ONE LINE AND THE ANSWERS, nothing more (owner, 2026-09-19).
-                The picked final and the sentence about ties belong to the
-                sheet — "only visible once you click in" — because this card
-                sits in the draw between match groups, and a four-line panel
-                there is reading matter in the way of the bracket. */}
-            <Title>Standings Tiebreak Questions</Title>
-            <Muted>{g
-              ? [g.final_sets ? `${g.final_sets} sets` : null,
-                 `${g.final_aces} aces`, fmtMinutes(g.final_duration_min)].filter(Boolean).join(' · ')
-              : data.default
-                ? `Holding the average: ${[data.default.sets ? `${data.default.sets} sets` : null,
-                     `${data.default.aces} aces`, fmtMinutes(data.default.minutes)].filter(Boolean).join(' · ')}`
-                : (data.locked ? 'No answers given' : 'Answer the three questions about the final')}</Muted>
-          </View>
-          {data.actual ? <Muted>final: {data.actual.final_aces} · {fmtMinutes(data.actual.final_duration_min)}</Muted> : null}
-        </View>
-      </Card>
+               style={({ pressed }) => [s.bar, stale && s.barStale, pressed && s.barDown]}
+               accessibilityLabel={
+                 'Standings tiebreak questions: your answers about the final'
+                 + (stale ? ' — given for a different final' : '')}>
+      {stale ? (
+        <View style={s.staleTag}><Text style={s.staleTagText}>!</Text></View>
+      ) : null}
+      <View style={s.barText}>
+        <Text style={[s.barLabel, stale && s.barLabelStale]} numberOfLines={1}>
+          STANDINGS TIEBREAK QUESTIONS
+        </Text>
+        <Text style={s.barValue} numberOfLines={1}>{answers}</Text>
+      </View>
+      {data.actual ? (
+        <Text style={s.barActual} numberOfLines={1}>
+          final: {data.actual.final_aces} · {fmtMinutes(data.actual.final_duration_min)}
+        </Text>
+      ) : null}
     </Pressable>
   )
 }
 
+
 const s = StyleSheet.create({
+  /* Edge to edge under the header, like the strip below it. */
+  bar: {
+    flexDirection: 'row', alignItems: 'center', gap: S.sm,
+    marginHorizontal: -S.lg, paddingHorizontal: S.lg, paddingVertical: 6,
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.border,
+    backgroundColor: C.card,
+  },
+  barDown: { backgroundColor: C.raised },
+  barStale: { borderColor: C.bad },
+  barText: { flex: 1, minWidth: 0 },
+  barLabel: { ...T.tiny, color: C.muted, letterSpacing: 0.6 },
+  barLabelStale: { color: C.bad },
+  barValue: { ...T.smallMed, color: C.ink },
+  barActual: { ...T.tiny, color: C.faint, flexShrink: 0 },
+  /* A GLYPH, not an icon: it survives whatever the icon font does, and the
+     circle is drawn by the view rather than by the character. */
+  staleTag: {
+    width: leading(17), height: leading(17), borderRadius: leading(17) / 2,
+    backgroundColor: C.bad, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  staleTagText: { fontFamily: 'Archivo_700Bold', fontSize: 11, color: C.bg },
+
   track: { height: 36, justifyContent: 'center' },
   rail: { position: 'absolute', left: KNOB / 2, right: KNOB / 2, height: 4, borderRadius: 2, backgroundColor: C.border },
   fill: { position: 'absolute', left: KNOB / 2, height: 4, borderRadius: 2, backgroundColor: C.greenLit },
@@ -683,5 +732,4 @@ const s = StyleSheet.create({
   btnQuietText: { ...T.bodyMed, color: C.ink },
 
   /* ── The card on the draw page (outside the drawer) ────────────────────── */
-  cardRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
 })
