@@ -62,7 +62,7 @@ def test_both_halves_of_a_pair_carry_the_pair_s_seed():
 
 # ── The field's order ─────────────────────────────────────────────────────
 
-def test_a_seed_is_its_own_place():
+def test_the_seeds_lead_the_field_in_seed_order():
     places = qualifying_places({"a": (1, 60), "b": (2, 99), "c": (None, 70)})
     assert places["a"] == 1 and places["b"] == 2
 
@@ -154,3 +154,43 @@ def test_a_seed_is_a_change_the_fingerprint_can_see():
     seeded = Match(court="Court 1", side_a=["Muller A."], side_b=["Pavlovic L."],
                    seeds_a=["2"], seeds_b=[None])
     assert fp([bare]) != fp([seeded])
+
+
+def test_a_field_of_sixteen_numbers_one_to_sixteen_however_few_seeds_are_known():
+    """Hangzhou 2026-09-22 arrived with one of its sixteen marked — the [7].
+    Numbering the unseeded on from the highest KNOWN seed put fifteen players
+    into places 8 to 22 in a field of sixteen, which is a badge that cannot be
+    true."""
+    field = {f"p{i}": (None, 300 + i) for i in range(15)}
+    field["seeded"] = (7, 120)
+    places = qualifying_places(field)
+    assert places["seeded"] == 1, "the only seed known leads the field"
+    assert sorted(places.values()) == list(range(1, 17))
+
+
+def test_a_full_set_of_seeds_numbers_exactly_as_a_bracket_does():
+    """Where every seed is known the two rules agree: eight seeds take 1-8 and
+    the rest follow at 9."""
+    field = {f"s{i}": (i, 50 + i) for i in range(1, 9)}
+    field.update({f"u{i}": (None, 200 + i) for i in range(8)})
+    places = qualifying_places(field)
+    assert [places[f"s{i}"] for i in range(1, 9)] == list(range(1, 9))
+    assert places["u0"] == 9 and places["u7"] == 16
+
+
+def test_the_field_s_seed_dresses_a_row_the_source_did_not_mark():
+    """A seeding belongs to the player in the draw, not to the day. The feed
+    marked Bernard Tomić as Hangzhou's [3] on his second-round row and not on
+    his first, and the same player in the same field cannot be seeded on
+    Tuesday and unseeded on Monday."""
+    from app.routers.schedule import _player_out
+    out = _player_out(_player("Bernard Tomić"), {}, {}, {}, {}, False,
+                      qual_rank=3, qual_seed=3)
+    assert out.seed == 3
+
+
+def test_the_row_s_own_mark_still_leads_the_field_s():
+    from app.routers.schedule import _player_out
+    out = _player_out(_player("Bernard Tomić", "5"), {}, {}, {}, {}, False,
+                      qual_rank=3, qual_seed=3)
+    assert out.seed == 5
