@@ -2143,12 +2143,34 @@ def check_parse(meta, match_count: int | None = None,
     # NOT ONE match came back wearing a round, which is the reading being
     # broken rather than a sheet that labels some of its slots and not others.
     # Measured over the 285-file corpus: zero.
+    #
+    # 2026-09-22, Chengdu doc 408: "QUALIFYING FINAL" over four boxes, read by
+    # nothing, and this check stayed silent — because the count was taken with
+    # the READER's regex, so a spelling the reader did not know was not counted
+    # either. The count now uses its own wider reading (_HEADER_SHAPED_RE);
+    # over the 376 archived sheets that moved it on doc 408 alone.
     headers = (meta or {}).get('round_headers')
     if headers and rounds is not None and not any(rounds):
         out.append({
             "code": "printed_round_dropped", "entry_id": None, "court": None,
             "detail": f"the sheet prints {headers} event header(s) stating a "
-                      f"round and the parse kept none — see _EVENT_HEADER_RE",
+                      f"round and the parse kept none — see _EVENT_HEADER_RE "
+                      f"and _QUALI_HEADER_RE",
+        })
+
+    # The same loss, box by box. `printed_round_dropped` is quiet by design
+    # while ANY match wears a round, so a sheet mixing boxes whose round was
+    # read ("R32") with boxes whose header was not ("QUALIFYING FINAL") hides
+    # the second kind behind the first — doc 408 would have, had its main-draw
+    # boxes printed a token. This one names each header a box printed and
+    # neither reader took. Measured over the 376 archived sheets with the fix:
+    # zero (before it: doc 408's four).
+    for court, text in (meta or {}).get('unread_headers') or []:
+        out.append({
+            "code": "printed_round_unread", "entry_id": None, "court": court,
+            "detail": f"{court or '?'}: the box prints {text!r} and no reader "
+                      f"took it, so its row has no printed round — teach "
+                      f"oop_parser._event_header the spelling",
         })
 
     # 2026-09-19, Singapore Open doc 291: the layout wrapped Kai Ning Chanya

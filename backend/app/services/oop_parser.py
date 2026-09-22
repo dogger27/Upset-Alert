@@ -105,6 +105,37 @@ _ROUND_WORD_RE = re.compile(
 _EVENT_HEADER_RE = re.compile(
     r'^(?:(?:ATP|WTA|ITF)\s+)*(?P<disc>singles|doubles|mixed)\s+'
     r'(?P<round>(?:(?:semi|quarter)[-\s]?)?finals?|round\s+of\s+\d{1,3})$', re.I)
+# THE QUALIFYING HEADER. Chengdu's Wednesday sheet (2026-09-23, doc 408)
+# printed "QUALIFYING FINAL" over each of its four qualifying boxes — the first
+# of the 376 archived sheets to spell a qualifying round out — and every one
+# was dropped unread: _EVENT_HEADER_RE wants a discipline word first, so the
+# line fell through to the unplaceable words and the four rows published with
+# no round beside a sheet that states one. The stage survived only because
+# _classify could INFER qualifying from the players — the fallback a sheet
+# that says so exists to spare us.
+#
+# Never through _round_token: "QUALIFYING FINAL" ends in the word FINAL, and
+# read that way it is the tournament's final. The last QUALIFYING round is
+# "Q", whichever number it is — Q2 at a tour event, Q3 at a Slam — the token
+# sofa_schedule gives Sofascore's "Qualification Final" and mobile/rounds.js
+# gives a bare "qualifying", so a feed and this sheet agree on the same row.
+_QUALI_HEADER_RE = re.compile(
+    r'^(?:(?:ATP|WTA|ITF)\s+)*(?:(?P<disc>singles|doubles)\s+)?qualifying\s*[-–:]?\s*'
+    r'(?:(?P<final>finals?)|round\s*(?P<n>\d))$', re.I)
+# What `round_headers` COUNTS — deliberately wider than what the two readers
+# above accept. The count used to be taken with _EVENT_HEADER_RE itself, so a
+# header spelled in a way the reader did not know was invisible to the count
+# as well, and `printed_round_dropped` (check_parse) — the alarm for exactly
+# this — was blind to doc 408 by construction. A whole line built only of event
+# words and a round word; the readers are measured against it, never the
+# other way round. An event word is required, not just a tour: "ATP FINALS" is
+# the year-end event's advertisement (wta/2026_1106), not a box's header.
+_HEADER_SHAPED_RE = re.compile(
+    r"^(?:(?:ATP|WTA|ITF)\s+)*"
+    r"(?:(?:men'?s|women'?s|singles|doubles|mixed|qualifying|qualification|"
+    r"main\s+draw)[\s\-–:]+)+"
+    r"(?:(?:semi|quarter)[-\s]?finals?|finals?|round\s*(?:of\s+)?\d{1,3}|"
+    r"(?:first|second|third|1st|2nd|3rd)\s+round)$", re.I)
 
 
 def _round_token(text):
@@ -130,9 +161,20 @@ def _round_token(text):
 
 
 def _event_header(text):
-    """-> (discipline, round token) when this whole line is an event header."""
-    m = _EVENT_HEADER_RE.match((text or '').strip())
-    return (m.group('disc').lower(), _round_token(m.group('round'))) if m else None
+    """-> (discipline, round token) when this whole line is an event header.
+
+    The discipline is None when the header states none ("QUALIFYING FINAL"):
+    _apply_header then has no shape to check and takes the round alone.
+    """
+    text = (text or '').strip()
+    m = _EVENT_HEADER_RE.match(text)
+    if m:
+        return m.group('disc').lower(), _round_token(m.group('round'))
+    q = _QUALI_HEADER_RE.match(text)
+    if q:
+        disc = q.group('disc').lower() if q.group('disc') else None
+        return disc, ('Q' if q.group('final') else f"Q{q.group('n')}")
+    return None
 
 # IOC codes as the tours print them, plus the ISO variants that turn up in
 # their place (DEU for Germany, and RUS/BLR which persist on some sheets
@@ -635,7 +677,11 @@ def parse_pdf(pdf_bytes):
             # country, so they were dropped instead of joining the name as its
             # nationality. (court, name above, code). See check_parse's
             # `nationality_code_unknown`.
-            'orphan_codes': []}
+            'orphan_codes': [],
+            # Header-shaped lines (_HEADER_SHAPED_RE) that a box printed and
+            # neither reader took, so they sit among its unplaceable words.
+            # (court, text). See check_parse's `printed_round_unread`.
+            'unread_headers': []}
     matches = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         meta['pages'] = len(pdf.pages)
@@ -692,7 +738,7 @@ def parse_pdf(pdf_bytes):
             # number. Footer lines are already gone above.
             meta['vs_lines'] += sum(1 for _y, _m, t in cells if VS_RE.match(_clean(t)))
             meta['round_headers'] += sum(
-                1 for _y, _m, t in cells if _EVENT_HEADER_RE.match(_clean(t)))
+                1 for _y, _m, t in cells if _HEADER_SHAPED_RE.match(_clean(t)))
             meta['slot_markers'] += sum(
                 1 for _y, _m, t in cells if _slot_of(_clean(t)))
 
@@ -725,6 +771,8 @@ def parse_pdf(pdf_bytes):
                                           meta['orphan_codes'])
 
     settle_meridiems(matches)
+    meta['unread_headers'] = [(m.court, t) for m in matches for t in m.rejected
+                              if _HEADER_SHAPED_RE.match(t)]
     if not matches and meta['reason'] is None:
         meta['reason'] = 'no matches found'
     return matches, meta
@@ -870,7 +918,9 @@ def _apply_header(match):
     # answers from the header once it is set, which would make this circular.
     shape = 'doubles' if (match._side_size('a') > 1
                           or match._side_size('b') > 1) else 'singles'
-    if (discipline if discipline != 'mixed' else 'doubles') != shape:
+    # A header naming no discipline ("QUALIFYING FINAL") states no shape to
+    # contradict, so it is taken for its round alone.
+    if discipline and (discipline if discipline != 'mixed' else 'doubles') != shape:
         return
     match.discipline = match.discipline or discipline
     match.round = match.round or round_token
@@ -938,7 +988,7 @@ def _slot_head(pre):
     for text, _alt in reversed(pre):
         if not (ROUND_RE.match(text) or TOUR_RE.match(text)
                 or _STATUS_TOKEN_RE.match(text) or DISC_RE.fullmatch(text)
-                or _EVENT_HEADER_RE.match(text)
+                or _event_header(text)
                 or _is_continuation(text)
                 or (SCORE_RE.match(text) and re.search(r'\d', text))
                 # A placeholder is the inside of a match box like a name is:
