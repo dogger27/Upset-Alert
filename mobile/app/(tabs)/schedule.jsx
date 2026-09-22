@@ -1520,7 +1520,7 @@ const PILL_TIER_RATIO = 0.8   // the tier line, relative to the name
    one 1pt separator between cells, so a cell's chrome is its padding plus that
    line — no gaps any more: the line IS the gap (owner, 2026-09-22). */
 const PILL_PAD = 6
-const PILL_CHROME = PILL_PAD * 2 + 1
+const PILL_CHROME = PILL_PAD * 2 + 2   // the padding, plus the 2pt divider
 
 const s = StyleSheet.create({
   /* FAR LESS AIR AROUND A COURT NAME (owner, 2026-09-17): the group's
@@ -1816,7 +1816,22 @@ const s = StyleSheet.create({
   events: {
     flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'stretch',
     marginHorizontal: -S.lg,
-    borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.border,
+    /* THE RULES ARE THE BAR'S STRUCTURE, so they are drawn at the weight the
+       app keeps for a firm division rather than a hairline (owner, 2026-09-22:
+       "thicker, and a suitable colour").
+
+       C.border (#253430) is a hair above the page and vanished against it once
+       the cells took a colour of their own. C.borderLit (#4e625b) is the token
+       theme.js reserves for "an edge that has to carry a card on a field
+       almost its own colour" — which is this exactly — and it is what the day
+       strip directly above and the round strip below already rule themselves
+       with, so the three read as one stack rather than three unrelated bands.
+
+       2pt, the step schedule.jsx already uses between two match cards, and the
+       SAME weight inside and out: a bar whose outer rule is heavier than its
+       dividers reads as a box holding four things, where this is one ruled
+       band divided into four. */
+    borderTopWidth: 2, borderBottomWidth: 2, borderColor: C.borderLit,
   },
   /* A BAR, NOT A ROW OF BUTTONS (owner, 2026-09-22): "only a line separating
      each draw", with the same line closing it top and bottom. Edge to edge,
@@ -1846,8 +1861,9 @@ const s = StyleSheet.create({
     paddingTop: 7, paddingBottom: 4,
   },
   // The only line between two draws, and only on cells after the first, so
-  // the bar's own left edge is not doubled.
-  eventCellNext: { borderLeftWidth: 1, borderLeftColor: C.border },
+  // the bar's own left edge is not doubled. Same weight and colour as the
+  // bar's own rules — see above.
+  eventCellNext: { borderLeftWidth: 2, borderLeftColor: C.borderLit },
   /* THE TIER'S PLATE: rounded, bordered, and darker INSIDE than the bar it
      sits on (owner, 2026-09-22). `sunken` is theme.js's own word for below
      the page on its surface ladder, so "set into" is the app's term rather
