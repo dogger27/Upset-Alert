@@ -122,11 +122,15 @@ function StatTable({ rows, unit, qualifier }) {
   if (!rows.length) return null
   return (
     <View style={s.table}>
-      {qualifier ? (
-        <View style={s.tableHead}>
-          <Text style={s.tableUnit}>{qualifier}</Text>
-        </View>
-      ) : null}
+      {/* THE BLOCK SAYS WHAT IT IS (owner, 2026-09-22). Under a question and
+          its answer sat a run of sentences with numbers, and nothing said they
+          were evidence rather than more of the question. The title takes the
+          left, where reading starts; the column's note keeps the right it
+          already had, so one line carries both. */}
+      <View style={s.tableHead}>
+        <Text style={s.tableTitle}>Reference data</Text>
+        {qualifier ? <Text style={s.tableUnit}>{qualifier}</Text> : null}
+      </View>
       {/* TWO LINES, NOT THREE COLUMNS (owner, 2026-09-22). The description is
           the longest thing here and it was sharing a row with a number column
           and a sample column, so it wrapped to two lines on every row while
@@ -142,13 +146,20 @@ function StatTable({ rows, unit, qualifier }) {
           preposition of their own. */}
       {rows.map((r, i) => (
         <View key={r.label} style={[s.tr, i > 0 && s.trRule]}>
-          <Text style={s.tdLabel} numberOfLines={2}>Average for {r.label}</Text>
+          {/* "Avg", not "Average" (owner, 2026-09-22): the word is on every
+              row and the description after it is the part that differs. The
+              colon is what makes the figure below read as this sentence's
+              answer rather than as the next line. */}
+          <Text style={s.tdLabel} numberOfLines={2}>Avg for {r.label}:</Text>
           <View style={s.trFigures}>
             <Text style={s.tdValue}>
               {r.value}{unit ? <Text style={s.tdUnit}> {unit}</Text> : null}
             </Text>
+            {/* BRACKETED AND SET FURTHER OFF (owner, 2026-09-22): the sample
+                is an aside about the figure, not a second figure, and at a
+                small gap the two read as one phrase. */}
             {r.note ? (
-              <Text style={s.tdNote} numberOfLines={1}>Over {r.note}</Text>
+              <Text style={s.tdNote} numberOfLines={1}>(Over {r.note})</Text>
             ) : null}
           </View>
         </View>
@@ -727,15 +738,21 @@ const s = StyleSheet.create({
 
   /* ── The evidence, as a table ──────────────────────────────────────────── */
   table: { marginTop: S.xs },
-  tableHead: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm, paddingBottom: 2 },
-  tableUnit: { ...T.tiny, color: C.muted, flex: 1, textAlign: 'right' },
+  tableHead: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm,
+               paddingBottom: 3, marginTop: S.xs },
+  tableTitle: { ...T.smallMed, color: C.muted },
+  tableUnit: { ...T.tiny, color: C.faint, flex: 1, textAlign: 'right' },
   /* A ROW IS TWO LINES NOW: the description across the full width, then the
      figure and the sample it was taken over. */
   tr: { gap: 1, paddingVertical: 5 },
   trRule: { borderTopWidth: 1, borderTopColor: C.border },
   // Baseline-aligned, so the small sample sits on the figure's own line
   // rather than floating at the middle of its height.
-  trFigures: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm },
+  // THE ANSWER SITS UNDER ITS QUESTION (owner, 2026-09-22): the indent is
+  // what makes the figure belong to the sentence above rather than start a
+  // new one.
+  trFigures: { flexDirection: 'row', alignItems: 'baseline', gap: S.lg,
+               paddingLeft: S.md },
   tdLabel: { ...T.small, color: C.inkBody },
   // Room for '1h 44m' without squeezing the label beside it.
   /* The numeric spine: one width, right-aligned, tabular figures. Three

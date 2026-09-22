@@ -162,17 +162,28 @@ function Reference({ ctx, which, sets, unit, qualifier }) {
        A list rather than a table, because with the columns gone there is no
        grid left to be a table OF. */
     <div className="fg-refs">
-      {qualifier && <p className="fg-refs-note">{qualifier}</p>}
+      {/* The block says what it is: under a question and its answer sat a run
+          of sentences with numbers, and nothing said they were evidence. The
+          title takes the left, where reading starts; the column's note keeps
+          the right it already had. */}
+      <div className="fg-refs-head">
+        <p className="fg-refs-title">Reference data</p>
+        {qualifier && <p className="fg-refs-note">{qualifier}</p>}
+      </div>
       {rows.map(([label, value, note]) => (
         <div className="fg-ref" key={label}>
-          <p className="fg-ref-label">Average for {label}</p>
+          {/* "Avg", not "Average": the word is on every row and what follows
+              it is the part that differs. The colon is what makes the figure
+              below read as this sentence's answer rather than a new line. */}
+          <p className="fg-ref-label">Avg for {label}:</p>
           <p className="fg-ref-figures">
             <span className="fg-td-value">
               {value}{unit && <span className="fg-td-unit"> {unit}</span>}
             </span>
-            {/* "Over 82 finals" — the count is the SAMPLE the average was
-                taken over, said once here as "Average for" is. */}
-            {note && <span className="fg-td-note">Over {note}</span>}
+            {/* "(Over 82 finals)" — the count is the SAMPLE the average was
+                taken over, said once here as "Avg for" is. Bracketed because
+                it is an aside about the figure, not a second figure. */}
+            {note && <span className="fg-td-note">(Over {note})</span>}
           </p>
         </div>
       ))}
