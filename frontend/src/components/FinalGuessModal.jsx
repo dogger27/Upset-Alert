@@ -332,8 +332,20 @@ export function FinalGuessBar({ tournamentId, enabled, onOpen }) {
   const { data: ctx } = useFinalGuess(tournamentId, enabled)
   if (!enabled || !tiebreakVisible(ctx)) return null
   const g = ctx.guess
+  /* RED WHEN THE ANSWERS NO LONGER DESCRIBE THE PICKED FINAL (owner,
+     2026-09-22). `stale` is the server's answer, not a guess from a timestamp:
+     it compares the final these answers were saved for against the one the
+     bracket now predicts (models/final_guess.answers_are_stale). Opening the
+     dialog does not clear it — SAVING does, because re-reading answers that
+     are about the wrong two players changes nothing. */
   return (
-    <button type="button" className="fg-bar" onClick={onOpen}>
+    <button type="button" className={`fg-bar${ctx.stale ? ' fg-bar--stale' : ''}`}
+            onClick={onOpen}
+            title={ctx.stale ? 'Your answers were given for a different final' : undefined}
+            aria-label={ctx.stale
+              ? 'Standings tiebreak questions — your answers were given for a different final'
+              : undefined}>
+      {ctx.stale && <span className="fg-bar-stale-tag" aria-hidden="true">!</span>}
       {/* ONE LINE AND THE ANSWERS (owner, 2026-09-19). The picked final and the
           sentence about ties live in the dialog — "only visible once you click
           in" — so this stays the quiet way in that it was. */}

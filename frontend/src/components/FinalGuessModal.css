@@ -24,6 +24,19 @@
           margin: 0.4rem 0 0.6rem; padding: 0.55rem 0.8rem; border-radius: 10px; border: 1px solid var(--border);
           background: var(--surface-card); color: var(--text); cursor: pointer; }
 .fg-bar:hover { border-color: var(--green-500, #40916c); }
+/* ANSWERED FOR A DIFFERENT FINAL (owner, 2026-09-22). The bar is the only way
+   in now that nothing pops up, so it has to carry the news itself. Red on the
+   border and the label rather than a red FILL: this sits under the header on
+   every visit, and a solid red bar across the page reads as a site error
+   rather than as one thing needing a look. The "!" is a glyph, not an icon
+   font, so it survives with images or icons blocked. */
+.fg-bar--stale { border-color: var(--danger); }
+.fg-bar--stale:hover { border-color: var(--danger); }
+.fg-bar--stale .fg-bar-label { color: var(--danger); }
+.fg-bar-stale-tag { display: inline-flex; align-items: center; justify-content: center;
+                    width: 1.05rem; height: 1.05rem; border-radius: 50%; flex: none;
+                    background: var(--danger); color: #fff; font-size: 0.72rem;
+                    font-weight: 800; line-height: 1; align-self: center; }
 .fg-bar-label { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
 .fg-bar-value { font-weight: 700; }
 .fg-bar-value--ask { font-weight: 600; color: var(--green-500, #40916c); }

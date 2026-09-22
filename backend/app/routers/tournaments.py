@@ -3034,16 +3034,34 @@ class FinalGuessIn(_BaseModel):
 
 def predicted_finalists(picks: dict, matches: list, num_rounds: int) -> tuple[Optional[int], Optional[int]]:
     """(champion entry id, runner-up entry id) as the user's own bracket has
-    them: the final's pick, and the semi-final pick that is not the champion."""
+    them: the two SEMI-FINAL picks are the final, and the final's pick is the
+    champion — but only if it is one of those two.
+
+    THE FINAL'S PICK ALONE IS NOT THE CHAMPION. This read `picks[final]` and
+    trusted it, so a reader who changed an earlier pick — sending their old
+    champion out in the quarters — still had that player named as the champion
+    in the tiebreak questions, because the row for the final still said so
+    (owner, 2026-09-22: "the tiebreaker popup doesn't update the finalists to
+    reflect their changes"). It could even report a champion who appears in
+    neither semi-final, which is not a bracket anybody picked.
+
+    The semis are the authority on WHO the final is, because they are the last
+    round whose two winners are the final's two slots. The final's own pick
+    only decides WHICH of them lifts the trophy, and an answer that names
+    neither is not an answer yet: champion comes back None, and the dialog
+    already knows to say "Pick your champion in the draw".
+
+    Deliberately not a full bracket projection. The two semi picks are the
+    narrowest thing that makes the pair coherent, and a projection would make
+    this endpoint re-derive what the client already draws.
+    """
     by = {(m.round_number, m.match_number): m for m in matches if not getattr(m, "is_bye", False)}
+    semis = [picks.get(by[k].id) for k in ((num_rounds - 1, 1), (num_rounds - 1, 2)) if k in by]
+    finalists = [w for w in semis if w is not None]
     final = by.get((num_rounds, 1))
-    champion = picks.get(final.id) if final else None
-    runner_up = None
-    for k in (1, 2):
-        sf = by.get((num_rounds - 1, k))
-        w = picks.get(sf.id) if sf else None
-        if w is not None and w != champion:
-            runner_up = w
+    picked = picks.get(final.id) if final else None
+    champion = picked if picked in finalists else None
+    runner_up = next((w for w in finalists if w != champion), None) if champion else None
     return champion, runner_up
 
 

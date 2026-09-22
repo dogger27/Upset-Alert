@@ -80,7 +80,12 @@ def test_the_finalists_come_off_the_users_own_bracket():
     ms = [NS(id=1, round_number=1, match_number=1), NS(id=2, round_number=1, match_number=2),
           NS(id=3, round_number=2, match_number=1)]
     assert predicted_finalists({1: 11, 2: 22, 3: 11}, ms, 2) == (11, 22)
-    assert predicted_finalists({1: 11, 2: 22}, ms, 2) == (None, 22)       # no final pick yet
+    # NO FINAL PICK YET IS NO RUNNER-UP EITHER (changed 2026-09-22). This used
+    # to answer (None, 22): the champion unknown, and one of the two finalists
+    # named the runner-up anyway — arbitrarily, since 11 had an equal claim.
+    # Every figure downstream is the CHAMPION's, so a runner-up without one is
+    # useless as well as invented.
+    assert predicted_finalists({1: 11, 2: 22}, ms, 2) == (None, None)
     assert predicted_finalists({}, ms, 2) == (None, None)
 
 
