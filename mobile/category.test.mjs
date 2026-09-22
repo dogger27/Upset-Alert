@@ -56,7 +56,12 @@ test('the tour label names the tour, never the gender', () => {
 test('one tier, said once', () => {
   assert.equal(tierWord(['ATP 250']), '250')
   assert.equal(tierWord(['WTA 1000']), '1000')
-  assert.equal(tierWord(['Grand Slam']), 'GS')
+  /* A SLAM READS "2000" HERE (owner, 2026-09-22), not "GS": this pill sits in
+     a row of 250s, 500s and 1000s, which are ranking points, so a category
+     word was the odd one out. categoryShort is untouched — it still answers
+     "GS" everywhere a tier is a LABEL rather than one of a series. */
+  assert.equal(tierWord(['Grand Slam']), '2000')
+  assert.equal(categoryShort('Grand Slam'), 'GS')
   // Both halves of a combined week at the same tier: still one number.
   assert.equal(tierWord(['ATP 250', 'ATP 250']), '250')
 })
