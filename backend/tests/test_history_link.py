@@ -82,3 +82,78 @@ def test_names_agree_knows_a_long_form_from_a_different_person():
     assert not names_agree("Luciano Darderi", "Alexander Bublik")
     assert not names_agree("Xinyu Wang", "Xiyu Wang") or names_agree("Xinyu Wang", "Xiyu Wang")  # decided by ratio; both tolerable
     assert not names_agree("", "Somebody")
+
+
+# ── one person under two TML ids ─────────────────────────────────────────────
+# The rows are production's tml_players as they stood on 2026-09-22, when the
+# linkage warned "NEW: conflicts" for Ku Yeon-woo: (id, name, ioc, first, n).
+TML = {
+    "220454": ("220454", "Yeon Woo Ku", "KOR", "2023-04-11", 7),
+    "327252": ("327252", "Yeonwoo Ku", "KOR", "2026-09-21", 1),
+    "269265": ("269265", "Mary Stoiana", "USA", "2026-02-23", 7),
+    "223168": ("223168", "Mary Stoiana", "USA", "2026-08-30", 1),
+    "333132": ("333132", "Mika Stojsavljevic", "GBR", "2026-06-08", 1),
+    "261963": ("261963", "Mika Stojsavljevic", "GBR", "2024-10-21", 4),
+    "222034": ("222034", "Reese Brantmeier", "USA", "2026-08-30", 1),
+    "329512": ("329512", "Reese Brantmeier", "", "2026-07-27", 1),
+    "201533": ("201533", "Shuai Zhang", "CHN", "2006-09-25", 539),
+    "200035": ("200035", "Shuai Zhang", "CHN", "1994-04-18", 314),
+    "311779": ("311779", "Shuai Zhang", "CHN", "2026-06-08", 3),
+    "900001": ("900001", "Anna Smith", "GBR", "2025-01-01", 2),
+    "900002": ("900002", "Anna Smith", "USA", "2025-06-01", 2),
+}
+
+
+def test_a_given_name_in_two_tokens_is_the_name_in_one():
+    from app.services.history.link import same_tml_name
+    assert same_tml_name("Yeon Woo Ku", "Yeonwoo Ku")
+    assert same_tml_name("Ku Yeon Woo", "Yeonwoo Ku")          # surname first
+    assert same_tml_name("Ku Yeon-woo", "Yeon Woo Ku")
+    assert same_tml_name("Mary Stoiana", "Mary Stoiana")
+    assert not same_tml_name("Yeon Woo Ku", "Yeonwoo Kim")
+    assert not same_tml_name("Soyeon Park", "Sohyun Park")
+    assert not same_tml_name("", "Yeonwoo Ku")
+
+
+def test_two_small_ids_of_one_name_merge_into_the_bigger():
+    from app.services.history.link import stub_and_real
+    s = lambda a, b, aliases=None: stub_and_real(a, b, TML.get, aliases or {})
+    # Every conflict the linkage reported that night but Zhang's, in the
+    # order it met them: our player holds `a`, the match showed `b`.
+    assert s("220454", "327252") == ("327252", "220454")      # Ku, 7 and 1, split and joined
+    assert s("269265", "223168") == ("223168", "269265")      # Stoiana, 7 and 1
+    assert s("333132", "261963") == ("333132", "261963")      # Stojsavljevic, 1 and 4: she moves
+    # 1 and 1: the id seen first is canonical, whichever side we hold.
+    assert s("222034", "329512") == s("329512", "222034") == ("222034", "329512")
+
+
+def test_the_old_one_stub_one_career_merge_still_holds():
+    from app.services.history.link import stub_and_real
+    assert stub_and_real("201533", "311779", TML.get, {}) == ("311779", "201533")
+    assert stub_and_real("311779", "201533", TML.get, {}) == ("311779", "201533")
+
+
+def test_two_careers_or_two_countries_are_a_question_for_a_human():
+    from app.services.history.link import stub_and_real
+    assert stub_and_real("201533", "200035", TML.get, {}) is None   # 539 and 314 matches
+    assert stub_and_real("900001", "900002", TML.get, {}) is None   # GBR and USA
+    assert stub_and_real("220454", "999999", TML.get, {}) is None   # an id TML does not list
+
+
+def test_a_merge_already_recorded_stands_however_the_counts_move():
+    from app.services.history.link import stub_and_real
+    grown = dict(TML, **{"327252": ("327252", "Yeonwoo Ku", "KOR", "2026-09-21", 40)})
+    # She now plays as the new id and it has overtaken the old one; the alias
+    # written the first night is kept rather than reversed (a reverse row
+    # swaps the two ids in every rating) or turned into a conflict.
+    assert stub_and_real("220454", "327252", grown.get, {"327252": "220454"}) == ("327252", "220454")
+    assert stub_and_real("327252", "220454", grown.get, {"327252": "220454"}) == ("327252", "220454")
+    # Both already folded into a third id: they resolve to it.
+    assert stub_and_real("333132", "444444", TML.get, {"333132": "261963", "444444": "261963"}) == ("444444", "261963")
+
+
+def test_a_merge_across_an_alias_compares_the_canonical_ids():
+    from app.services.history.link import stub_and_real
+    # Our player holds Zhang's stub's canonical; the match shows the second
+    # career. The comparison is of the two canonical rows, both careers.
+    assert stub_and_real("311779", "200035", TML.get, {"311779": "201533"}) is None

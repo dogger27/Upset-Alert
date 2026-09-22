@@ -25,13 +25,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.rankings import TePlayer
 from app.models.tournament import Draw, DrawEntry, Match, Tournament
 from app.services.history import db as hdb
-from app.services.history.tml import name_key, name_keys
+from app.services.history.tml import name_key, name_keys, name_tokens
 
 logger = logging.getLogger(__name__)
 
 ROUND_BY_FROM_END = {0: "F", 1: "SF", 2: "QF", 3: "R16", 4: "R32", 5: "R64", 6: "R128"}
 FUZZY_MIN = 0.88          # SequenceMatcher ratio on folded full names, the backup's bar
 PAIR_WINDOW_DAYS = 10     # a tournament's TML date sits within this of our start_date
+STUB_MAX = 10             # past this many matches a TML id is a career, not a stub
 
 # The same event under two names. TML prints the venue or the city where we
 # print the sponsor's or the country's name; a word in common is the usual
@@ -235,6 +236,59 @@ def _tml_players(conn, tour: str) -> list[tuple]:
     return conn.execute("SELECT player_id, name, name_key, last_date FROM tml_players WHERE tour = ?", (tour,)).fetchall()
 
 
+def same_tml_name(a: str, b: str) -> bool:
+    """TML's two spellings of one person's name. The folded keys agree, or the
+    name reads the same with its spaces closed up: TML files Ku Yeon-woo as
+    "Yeon Woo Ku" in one year and "Yeonwoo Ku" in the next, and a given name
+    in two tokens never has the key of one in one (2026-09-22). Read in the
+    name's own order and with the surname carried to either end, so a
+    surname-first "Ku Yeon Woo" still meets "Yeonwoo Ku"."""
+    if name_keys(a) & name_keys(b):
+        return True
+
+    def solid(name):
+        t = name_tokens(name)
+        return {"".join(t), "".join(t[-1:] + t[:-1]), "".join(t[1:] + t[:1])} if t else set()
+
+    return bool(solid(a) & solid(b))
+
+
+def stub_and_real(a: str, b: str, row_of, aliases: dict) -> Optional[tuple[str, str]]:
+    """(stub, canonical) when TML ids `a` and `b`, both met by ONE of our
+    players, are one person; None when that is a question for a human.
+
+    `row_of(id)` is the tml_players row as (player_id, name, ioc, first_date,
+    n_matches); `aliases` is the tour's alias_id -> canonical_id, which is
+    what the rating pass reads, one hop.
+
+    A STUB NEED NOT HAVE A TWIN WITH A CAREER. This asked for one side under
+    STUB_MAX matches and the other over it, so a player TML only knows from a
+    handful of tour matches could never be merged: Mary Stoiana (7 and 1),
+    Mika Stojsavljevic (1 and 4), Reese Brantmeier (1 and 1) and Ku Yeon-woo
+    (7 and 1) sat in the report as conflicts, and each new one was the
+    linkage's NEW warning (2026-09-22). Two ids of one name and one country,
+    both played as the same person in our draws, are that person; the one
+    with more matches is canonical. Two ids that each have a career are left
+    as a conflict — that is two players, or TML's mistake, and not ours to
+    guess."""
+    ra, rb = aliases.get(a, a), aliases.get(b, b)
+    # ALREADY DECIDED. A merge recorded on an earlier night stands however the
+    # counts have moved since: a stub that grows past STUB_MAX would otherwise
+    # turn back into a conflict, and one overtaking its twin would write the
+    # reverse row and swap the two ids in every rating.
+    if ra == rb:
+        return (b if b != ra else a), ra
+    ha, hb = row_of(ra), row_of(rb)
+    if not (ha and hb) or not same_tml_name(ha[1], hb[1]):
+        return None
+    if ha[2] and hb[2] and ha[2] != hb[2]:
+        return None
+    if (ha[4] or 0) > STUB_MAX and (hb[4] or 0) > STUB_MAX:
+        return None
+    real, stub = sorted((ha, hb), key=lambda r: (-(r[4] or 0), r[3] or "9999", r[0]))
+    return stub[0], real[0]
+
+
 def _name_words(s: str) -> set:
     return set(name_key(s).split())
 
@@ -434,6 +488,9 @@ async def link_draws(db: AsyncSession, draw_ids: Optional[list[int]] = None) -> 
         for p in te_rows:
             if p.tml_player_id:
                 taken[(("wta" if p.gender == "F" else "atp"), p.tml_player_id)] = p.id
+        aliases: dict = {}
+        for t, a, c in conn.execute("SELECT tour, alias_id, canonical_id FROM tml_aliases"):
+            aliases.setdefault(t, {})[a] = c
 
         def _assign(te: TePlayer, tour: str, tml_id: str, method: str, our_name: str = "") -> bool:
             if te.tml_player_id == tml_id:
@@ -443,22 +500,35 @@ async def link_draws(db: AsyncSession, draw_ids: Optional[list[int]] = None) -> 
                 # The same name under a stub id: TML's duplicate, merged here —
                 # whichever of the two ids is the stub becomes the alias of the
                 # other, so it does not matter which tournament was read first.
-                if have and saw and have[2] == saw[2]:
-                    def _n(pid):
-                        r = conn.execute("SELECT n_matches FROM tml_players WHERE tour=? AND player_id=?", (tour, pid)).fetchone()
-                        return r[0] if r else 0
-                    n_have, n_saw = _n(te.tml_player_id), _n(tml_id)
-                    if n_saw <= 10 < n_have or n_have <= 10 < n_saw:
-                        stub, real = (tml_id, te.tml_player_id) if n_saw <= 10 else (te.tml_player_id, tml_id)
+                tour_aliases = aliases.setdefault(tour, {})
+                pair = stub_and_real(te.tml_player_id, tml_id,
+                                     lambda pid: conn.execute(
+                                         "SELECT player_id, name, ioc, first_date, n_matches FROM tml_players "
+                                         "WHERE tour=? AND player_id=?", (tour, pid)).fetchone(),
+                                     tour_aliases) if have and saw else None
+                holder = pair and taken.get((tour, pair[1]))
+                # Never onto an id another of our players holds: that is two
+                # of our rows claiming one person, which a merge would hide.
+                if pair and not (holder and holder != te.id):
+                    stub, real = pair
+                    if tour_aliases.get(stub) != real:
+                        # One hop is all the rating reads, so whatever pointed
+                        # at the stub now points at the canonical id too.
                         with conn:
                             conn.execute("INSERT OR IGNORE INTO tml_aliases (tour, alias_id, canonical_id, reason) VALUES (?,?,?,?)",
                                          (tour, stub, real, f"same name via our draw ({method})"))
-                        report["aliases"] += 1
-                        if te.tml_player_id == stub:
-                            taken.pop((tour, stub), None)
-                            te.tml_player_id, te.tml_link = real, method
-                            taken[(tour, real)] = te.id
-                        return False
+                            conn.execute("UPDATE tml_aliases SET canonical_id=? WHERE tour=? AND canonical_id=?",
+                                         (real, tour, stub))
+                        for k, v in list(tour_aliases.items()):
+                            if v == stub:
+                                tour_aliases[k] = real
+                        tour_aliases[stub] = real
+                    report["aliases"] += 1
+                    if te.tml_player_id != real:
+                        taken.pop((tour, te.tml_player_id), None)
+                        te.tml_player_id, te.tml_link = real, method
+                        taken[(tour, real)] = te.id
+                    return False
                 report["conflicts"].append({"te_player_id": te.id, "name": te.name_display or te.name_raw,
                                             "have": te.tml_player_id, "saw": tml_id, "via": method, "entry": our_name})
                 return False
