@@ -171,9 +171,47 @@ async def _refresh_active_tournaments(force_refresh: bool = False) -> None:
                 else:
                     await db.rollback()
                     t = await db.get(Draw, t_id)
-                    await _do_scrape(t, db, force_refresh=force_refresh)
-                    await db.commit()
-                    logger.info("Refreshed %s %s (%s)", t.year, t_name, t.gender)
+                    # AND THE SAME SOURCES CAN RELEASE A DRAW, not only dress
+                    # one already released (owner, 2026-09-23, on the
+                    # follow-up brief's recommendation).
+                    #
+                    # refresh_shape keeps a draw that HAS a field current, and
+                    # the bootstrap builds one that has none — but the
+                    # bootstrap was only ever reached from the branch below
+                    # where WIKIPEDIA HAS NO PAGE. So a draw with a page and
+                    # no field, which is every draw in the days before its
+                    # release, went to Wikipedia and Wikipedia stamped the
+                    # release. Measured over four releases (Korea, Chengdu,
+                    # Hangzhou and Korea's qualifiers): the tour's own sheet
+                    # and Tennis Explorer publish within the same hour, and
+                    # there is nothing to be gained by waiting for the
+                    # article.
+                    #
+                    # Wikipedia is still the fallback four lines down, so a
+                    # draw can be released no later than it is today; and the
+                    # release itself — the stamp, its revert, the cooldown,
+                    # the email, the pick lock — is the writer's, unchanged,
+                    # whichever source handed it the field.
+                    built = 0
+                    if shaped.get("needs_bootstrap"):
+                        await _try_bootstrap(t_id)
+                        # _try_bootstrap owns its own session, so the field it
+                        # wrote is read back rather than assumed, and this
+                        # session's copy of the draw is expired: the release it
+                        # may just have stamped is not in the object we hold.
+                        built = (await db.execute(
+                            select(func.count()).select_from(DrawEntry).where(
+                                DrawEntry.draw_id == t_id))).scalar() or 0
+                        await db.rollback()
+                        t = await db.get(Draw, t_id)
+                        await db.refresh(t)
+                        if built:
+                            logger.info("Built %s %s (%s) before Wikipedia: %d entrants",
+                                        t.year, t_name, t.gender, built)
+                    if not built:
+                        await _do_scrape(t, db, force_refresh=force_refresh)
+                        await db.commit()
+                        logger.info("Refreshed %s %s (%s)", t.year, t_name, t.gender)
 
                 # Prefetch H2H and DOB for any new matchups/players (uses own sessions)
                 from app.services.h2h import prefetch_h2h_for_draw
