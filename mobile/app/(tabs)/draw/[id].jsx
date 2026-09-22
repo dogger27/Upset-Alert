@@ -26,7 +26,7 @@ import {
 import { showToast } from '../../../toast'
 import { useAuth } from '../../../auth'
 import { H2HSheet } from '../../../h2h'
-import { FinalGuessCard, FinalGuessSheet } from '../../../finalGuess'
+import { FinalGuessBar, FinalGuessSheet } from '../../../finalGuess'
 import { useLiveUpdates } from '../../../live'
 import { ScoreHistorySheet, entryFromMatch } from '../../../scoreHistory'
 import { PredictorsSheet } from '../../../predictors'
@@ -168,21 +168,19 @@ export default function DrawScreen() {
      refetch, a sheet opening, and the landing's own commit, right when the
      scrub had just come to rest (owner: "some lag", 2026-09-09). Everything
      it closes over is memoised on the data or a state setter. */
-  /* THE FINAL'S OWN ROUND. The champion sits in a round of its own (the
-     trophy tab), so the last round that holds a real match is the final. */
-  const finalRound = useMemo(() => {
-    let best = 0
-    for (const [n, ms] of rounds) for (const m of (ms || [])) if (!m.champion && n > best) best = n
-    return best
-  }, [rounds])
-  /* NOTHING POPS UP WHEN A CHAMPION IS NAMED (owner, 2026-09-18: the button
-     sits below the final, "the user needs to scroll to the final to even see
-     it", and "if the user does not click it, then they automatically just
-     choose the default"). The site still opens its dialog on the save that
-     first names a champion; that predates the instruction above, and on a
-     phone it would be a sheet over a bracket the reader is in the middle of
-     filling in. So the card below the final is the only way in here, and a
-     bracket that never taps it holds last year's average. */
+  /* NOTHING POPS UP WHEN A CHAMPION IS NAMED (owner, 2026-09-18, and the site
+     joined this app on 2026-09-22 when the owner asked for its auto-popup to
+     go too). A sheet thrown over a bracket the reader is in the middle of
+     filling in answers a question nobody asked.
+
+     The way in is FinalGuessBar above the round strip — always on screen,
+     which is the other half of that instruction: the card used to sit below
+     the final, so "the user needs to scroll to the final to even see it", and
+     a bracket that never reached it held last year's average without ever
+     being shown the choice. The bar goes red when the answers stop describing
+     the picked final.
+
+     `finalRound` went with the card: it existed only to place it. */
 
   /* Everything a tap needs, read at TAP time rather than closed over.
      handlePick has to be stable: renderRow is memoised on it, and every
@@ -271,13 +269,9 @@ export default function DrawScreen() {
                     onPredictors={setPredictors} onShowScore={setScoreMatch}
                     onPick={handlePick}
                     standout={standoutIds.has(m.id)} />
-        {!viewing && m.round_number === finalRound ? (
-          <FinalGuessCard tournamentId={Number(id)} enabled refreshKey={finalGuessKey}
-                          onOpen={() => setFinalGuessOpen(true)} />
-        ) : null}
       </>
     )
-  ), [B, drawRanks, roundIdx, zone, standoutIds, finalRound, viewing, id, finalGuessKey, handlePick])
+  ), [B, drawRanks, roundIdx, zone, standoutIds, handlePick])
 
   // Follows the live round until the user picks one, then stays put — moving
   // the screen under someone because a match finished elsewhere is worse than
@@ -409,6 +403,14 @@ export default function DrawScreen() {
             <Ionicons name="hand-left-outline" size={leading(13)} color={C.greenLit} />
             <Text style={s.hintText} numberOfLines={1}>Tap a player to pick them to win</Text>
           </View>
+        )}
+
+        {/* ABOVE THE ROUND SELECTOR, ALWAYS (owner, 2026-09-22). It used to be
+            a card inside the bracket, after the final-round match — four
+            rounds away from where anyone is picking on a 32 draw. */}
+        {!viewing && (
+          <FinalGuessBar tournamentId={Number(id)} enabled refreshKey={finalGuessKey}
+                         onOpen={() => setFinalGuessOpen(true)} />
         )}
 
         {/* Every round on one line, and a scrub along it to move between
