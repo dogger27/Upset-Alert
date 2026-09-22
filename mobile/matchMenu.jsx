@@ -31,6 +31,7 @@
 import { useState } from 'react'
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { FitText } from './cards'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { hideFromLockScreen, showMatchOnLockScreen, useShowingOnLockScreen } from './liveactivity'
 import { isAvailable as lockScreenAvailable } from './modules/live-activity'
@@ -163,6 +164,22 @@ export function MatchMenu({ target, onClose, onH2H, onPredictors, onHistory }) {
                   numberOfLines={1}>
               {[tint.label, e.tournament_name, line.round].filter(Boolean).join('  ·  ')}
             </Text>
+            {/* THE COURT, ON ITS OWN LINE UNDER THE TOURNAMENT (owner,
+                2026-09-22). The header's job is to prove which match you are
+                holding, and on a day where one tournament has four courts the
+                two names are not always enough to tell — so the place is part
+                of the identification. Quiet, because it is the last thing you
+                check and never the first.
+
+                Only when there is one: a draw-screen match carries no court,
+                and an empty line under the eyebrow would read as a failure to
+                load one. The alias an admin set is already in this field, the
+                server having resolved it (display_court). */}
+            {e.court ? (
+              <Text style={s.court} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                {String(e.court).toUpperCase()}
+              </Text>
+            ) : null}
             <Text style={s.names} numberOfLines={2}>{line.names}</Text>
             {line.score ? <Text style={s.score}>{line.score}</Text> : null}
           </View>
@@ -182,7 +199,16 @@ export function MatchMenu({ target, onClose, onH2H, onPredictors, onHistory }) {
                   <Ionicons name={a.icon} size={22} color={tint.text} />
                 </View>
                 <View style={s.labels}>
-                  <Text style={s.label}>{a.label}</Text>
+                  {/* ONE LINE, ALWAYS (owner, 2026-09-22). "Remove from Lock
+                      Screen" wrapped to two and pushed its own hint down the
+                      row, so one command was a head taller than the rest and
+                      the card stopped reading as a set. FitText shrinks it to
+                      the width it has instead — measured from the font's own
+                      metrics, no ellipsis, which is this project's rule for
+                      text that must not be cut. The floor is 13pt: below that
+                      a 17pt row's label stops matching its neighbours more
+                      than a wrap did. */}
+                  <FitText style={s.label} min={13}>{a.label}</FitText>
                   <Text style={s.hint} numberOfLines={1}>{a.hint}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={C.faint} />
@@ -214,6 +240,8 @@ const s = StyleSheet.create({
   // The match, named the way the app names things: condensed display face,
   // the score in the scoreboard's green under it.
   head: { alignItems: 'center', gap: 2, paddingHorizontal: S.xs },
+  // Between the tinted eyebrow and the match-up, and quieter than both.
+  court: { ...T.tiny, color: C.faint, textAlign: 'center', letterSpacing: 0.5 },
   names: {
     fontFamily: 'SairaCondensed_700Bold', fontSize: 25, lineHeight: leading(29),
     color: C.ink, textAlign: 'center',
