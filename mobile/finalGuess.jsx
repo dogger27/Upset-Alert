@@ -379,7 +379,13 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
                 by the questions which follow.
               </Text>
               <View style={s.hero}>
-                <Text style={s.heroLabel}>Your current prediction for the final:</Text>
+                {/* WHAT THE PAIR IS FOR, not just what it is (owner,
+                    2026-09-22). "Your current prediction for the final" named
+                    the pair and left the reader to work out why a tiebreak
+                    sheet was showing it. */}
+                <Text style={s.heroLabel}>
+                  Reference data will be provided to you based on your predicted champion (and finalist):
+                </Text>
                 {champ ? (
                   <View style={s.heroNames}>
                     <Text style={[s.champ, { color: tint.text }]} numberOfLines={1}

@@ -251,7 +251,7 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
           {/* The bracket's own answer to "which final?", so the two questions
               below are about a match the reader can see named. */}
           <p className="fg-intro">
-            Your current prediction for the final:
+            Reference data will be provided to you based on your predicted champion (and finalist):
             <strong className="fg-final">{finalLine(ctx) || 'No champion picked yet'}</strong>
           </p>
           {ctx && !ctx.guess && ctx.default && (
