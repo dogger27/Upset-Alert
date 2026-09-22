@@ -309,8 +309,9 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
     """One day's schedule from the feeds: {url, bytes, parser, count, atp, wta,
     sources} ready for ingest_document, None when no feed has a row,
     {"declined": why, ...} when the feeds have the day but cannot state it
-    (see `declined`), or {"unfed": why} when nothing answered and a draw had
-    no feed to ask at all — the caller then gives the day to the PDF."""
+    (see `declined`), {"thin": why, ...} when they hold less of it than the
+    sheet already stored, or {"unfed": why} when nothing answered and a draw
+    had no feed to ask at all — the caller then gives the day to the PDF."""
     from app.services import schedule_shadow, wta_feed
 
     event_id = await schedule_shadow.wta_event_id(db, tournament.id, draws)
@@ -387,11 +388,18 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
     # 2026-09-19: WTA and Sofascore rows for one final, document 327 counted
     # 3 for a 2-match day) refused the WTA's correct day on every tick after,
     # and kept Sofascore's "Est. 17:00" over the printed "Not before 5:00 PM".
+    #
+    # AND IT SAYS SO, because leaving the day to the sheet is a decision, not
+    # a feed that had nothing. Hangzhou 2026-09-23: Sofascore held the five
+    # singles, the sheet six (a doubles Sofascore had not placed yet); this
+    # returned None, and the PDF fallback reported "no feed had a schedule"
+    # as a warning when the feed was up and had the day.
     if (sheet_count and len(matches) < sheet_count
             and not accounts_for(await _stored_slots(db, tournament.id, day), matches)):
         logger.info("feeds have %d of %s %s's %d matches; leaving the day alone",
                     len(matches), tournament.name, day, sheet_count)
-        return None
+        return {"thin": f"the feeds hold {len(matches)} of the sheet's {sheet_count} matches",
+                "count": len(matches), "sources": sources}
     reason = declined(meta)
     if reason:
         # THE ROUNDS SURVIVE THE DECLINE. A day is declined for want of COURTS

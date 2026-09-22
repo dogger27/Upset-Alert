@@ -597,8 +597,18 @@ async def _ingest_feed_days(tournament, draws, feed_days: dict, venue_tz) -> Non
 
 
 def _pdf_fallback_note(tournament, pdf_date, declined_days: dict,
-                       unfed_days: dict) -> tuple[str, str, str]:
+                       unfed_days: dict, thin_days: Optional[dict] = None
+                       ) -> tuple[str, str, str]:
     """(level, message, dedup key) for a day the PDF filled in, by why."""
+    thin_days = thin_days or {}
+    if pdf_date in thin_days:
+        # INFO: the feeds had the day, only less of it than the sheet already
+        # stored — a doubles Sofascore has not placed yet, a match it dropped
+        # — so the sheet keeps it (schedule_feeds: a thin day never replaces
+        # a fuller one). Hangzhou 2026-09-23 warned as a feed gap for this.
+        return ("info",
+                f"{tournament.name} {pdf_date}: {thin_days[pdf_date]}; the PDF filled in",
+                f"pdf_thin_{tournament.id}")
     if pdf_date in declined_days:
         # INFO, not a warning: the WTA publishes every sheet's "Followed By"
         # matches unordered until they are played, so this is the ordinary
@@ -693,6 +703,7 @@ async def refresh_order_of_play() -> int:
             declined_days: dict = {}
             declined_rounds: dict = {}
             unfed_days: dict = {}
+            thin_days: dict = {}
             if tournament.name not in _SLAM_FEEDS:
                 for day_ in (today - timedelta(days=1), today,
                              today + timedelta(days=1), today + timedelta(days=2)):
@@ -711,6 +722,10 @@ async def refresh_order_of_play() -> int:
                         declined_rounds[day_] = fd.get("rounds") or {}
                     elif fd and fd.get("unfed"):
                         unfed_days[day_] = fd["unfed"]
+                    elif fd and fd.get("thin"):
+                        # Not a feed day: the sheet keeps it. Recorded only
+                        # so the note says why, as for declined and unfed.
+                        thin_days[day_] = fd["thin"]
                     elif fd:
                         feed_days[day_] = fd
             if feed_days:
@@ -878,7 +893,7 @@ async def refresh_order_of_play() -> int:
                                             tournament.name, pdf_date, named)
                     if not (ingested or {}).get("skipped"):
                         level, msg, key = _pdf_fallback_note(
-                            tournament, pdf_date, declined_days, unfed_days)
+                            tournament, pdf_date, declined_days, unfed_days, thin_days)
                         await app_log(level, "order_of_play", msg,
                                       dedup_key=key, dedup_hours=24)
                 except Exception as exc:

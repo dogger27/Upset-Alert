@@ -233,3 +233,47 @@ def test_only_a_day_every_feed_could_have_supplied_warns():
     assert _pdf_fallback_note(t, day, {}, {date(2026, 9, 23): "x"}) == (
         "warning", "Chengdu Open 2026-09-22: no feed had a schedule; the PDF filled in",
         "pdf_fallback_17")
+
+
+def test_a_thin_feed_day_says_so_rather_than_passing_as_a_feed_gap(monkeypatch):
+    """Hangzhou 2026-09-23: Sofascore held the day's five singles, the stored
+    sheet six (a doubles Sofascore had not placed). The thin-day guard rightly
+    left the day to the sheet — but returned None, the same answer as a feed
+    that had nothing, and the PDF fallback warned "no feed had a schedule"
+    (system_logs, 10:32 UTC). The decision now says what it was."""
+    from app.services import schedule_feeds, schedule_shadow
+
+    async def six(*_a, **_k):
+        return 6
+
+    async def no_names(*_a, **_k):
+        return {}
+
+    async def stored(*_a, **_k):
+        return [("singles", {"shelton", "alcaraz"}), ("doubles", {"sun", "te", "tomic", "dellavedova"})]
+
+    monkeypatch.setattr(schedule_feeds, "_sheet_match_count", six)
+    monkeypatch.setattr(schedule_shadow, "court_names", no_names)
+    monkeypatch.setattr(schedule_feeds, "_stored_slots", stored)
+    rows = [_sofa(a, b, "Center Court", 10 + i, 0) for i, (a, b) in enumerate(
+        [("Ben Shelton", "Carlos Alcaraz"), ("Taro Daniel", "Yibing Wu"),
+         ("Zhizhen Zhang", "Juncheng Shang"), ("Alex Bolt", "Adam Walton"),
+         ("Hugo Gaston", "Bu Yunchaokete")])]
+    part = {"disc": "singles", "tour": "ATP", "doc": json.dumps(rows)}
+    got = _feed_day([_draw("M")], monkeypatch, sofa_rows=[part])
+    assert got == {"thin": "the feeds hold 5 of the sheet's 6 matches",
+                   "count": 5, "sources": ["sofa:100"]}
+    assert "bytes" not in got                     # never mistaken for a feed day
+
+
+def test_a_thin_day_the_pdf_filled_in_is_a_note_not_a_warning():
+    from app.services.order_of_play import _pdf_fallback_note
+    t = SimpleNamespace(id=39, name="Hangzhou Open")
+    day = date(2026, 9, 23)
+    level, msg, key = _pdf_fallback_note(
+        t, day, {date(2026, 9, 24): "6 row(s) with no court"}, {},
+        {day: "the feeds hold 5 of the sheet's 6 matches"})
+    assert (level, key) == ("info", "pdf_thin_39")
+    assert msg == "Hangzhou Open 2026-09-23: the feeds hold 5 of the sheet's 6 matches; the PDF filled in"
+    # Another day thin says nothing about this one.
+    assert _pdf_fallback_note(t, day, {}, {}, {date(2026, 9, 24): "x"})[0] == "warning"
