@@ -48,31 +48,32 @@ export function relativeDayWord(iso, todayIso) {
 }
 
 
-/* THE WIDEST WORD THE RIGHT SLOT WILL HOLD over the days on offer.
+/* EVERY WORD THE RIGHT SLOT MIGHT HOLD over the days on offer.
  *
- * The slot is sized by its content, so the rule between it and the chips
- * moved every time the word did — "Today" out to "Sep 15" and back as the
- * reader swiped, which is a line jumping sideways under their thumb (owner,
+ * The slot is sized by its content, so the rule between it and the chips moved
+ * every time the word did — "Today" out to "Sep 15" and back as the reader
+ * swiped, which is a line jumping sideways under their thumb (owner,
  * 2026-09-22). Sizing it to the widest word the CURRENT RANGE can show pins
  * the rule until the range itself changes.
  *
- * Returns the label, not a width: the caller owns the font, and a test can
- * then assert which word was chosen without measuring anything.
+ * RETURNS THE WORDS, NOT THE WIDEST. The first version picked by CHARACTER
+ * COUNT, which happens to agree with the font on today's vocabulary — every
+ * "Sep NN" measures 45.6pt at 14pt bold, so the longest string is also the
+ * widest. It is still the wrong question to ask: a locale that writes "1 Sep"
+ * and "11 Sep", or any word with an i or an l in it, breaks the agreement,
+ * and nothing would report that it had. Only the font knows, the font belongs
+ * to the caller, so the caller measures. A test can still assert exactly
+ * which words a range offers without measuring anything.
  *
  * `active` is included because the slot shows the CHOSEN day, and that day is
  * not always in `dates` — a day with no sheet still says which day it is.
  */
-export function widestDayWord(dates, todayIso, shortDateOf, active = null) {
-  const words = []
+export function dayWords(dates, todayIso, shortDateOf, active = null) {
+  const out = []
   for (const iso of [...(dates || []), active]) {
     if (!iso) continue
-    words.push(relativeDayWord(iso, todayIso) ?? shortDateOf(iso))
+    const word = relativeDayWord(iso, todayIso) ?? shortDateOf(iso)
+    if (word && !out.includes(word)) out.push(word)
   }
-  if (!words.length) return ''
-  // Longest by CHARACTERS is not longest by pixels, but it is the right
-  // shortlist: the caller measures the one this returns, and every candidate
-  // here is either a fixed word or "Mmm D" / "Mmm DD", so the character count
-  // and the width agree except between two same-length strings — where the
-  // difference is a point or two and the padding covers it.
-  return words.reduce((a, b) => (b.length > a.length ? b : a))
+  return out
 }

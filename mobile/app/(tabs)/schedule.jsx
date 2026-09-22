@@ -37,7 +37,7 @@ import { useChoosableTournaments } from '../../choosableTournaments'
 import { DayStrip } from '../../DayStrip'
 import { SWIPE_PX, SWIPE_VX, swipeStep } from '../../swipeDay'
 import { beginSwipe, endSwipe, unlessSwiping } from '../../swipeGuard'
-import { dayLabels, relativeDayWord, widestDayWord } from '../../dayLabels'
+import { dayLabels, dayWords, relativeDayWord } from '../../dayLabels'
 import { holdSelection, rowInTournaments } from '../../scheduleRows'
 import { eventTour, tierWord } from '../../category'
 import { MatchCard } from '../../scorecard'
@@ -518,12 +518,25 @@ export default function ScheduleScreen() {
     return [{ key: 'all', list: dense ? startedFirst(chrono) : chrono }]
   }, [visible, view, grouped, dense])
 
-  /* The widest the right slot has to be, in points. dayLabels picks the word;
-     this measures it, because the font is the screen's to know. */
+  /* THE WIDEST THE RIGHT SLOT HAS TO BE, in points.
+
+     THE SLACK IS WHAT WAS MISSING. "Sep 20" wrapped onto two lines (owner,
+     2026-09-22) because the slot was sized to the exact measurement: 45.6pt
+     of text in 46pt of room. The advance tables carry no KERNING — measure.js
+     says so and leaves it "covered by the caller's margin" — so the real
+     drawn string is a point or two wider than the sum, and a slot with no
+     margin is a slot the text wraps out of. fitPillSize keeps slack for
+     exactly this and I did not copy it here. Four points, once.
+
+     MEASURED BY WIDTH, NOT BY CHARACTER COUNT, which is a separate fix rather
+     than the cause: on today's vocabulary the two agree, because every
+     "Sep NN" comes out 45.6pt. They stop agreeing the moment a locale writes
+     "11 Sep", and nothing would have reported that it had. */
   const rightSlotW = useMemo(() => {
-    const word = widestDayWord(dates.data?.dates || [], today(), shortDate, date)
-    if (!word) return undefined
-    return Math.ceil(textWidth(word, 'Archivo_700Bold', 14)) + S.md + S.lg
+    const words = dayWords(dates.data?.dates || [], today(), shortDate, date)
+    if (!words.length) return undefined
+    const widest = Math.max(...words.map(w => textWidth(w, 'Archivo_700Bold', 14)))
+    return Math.ceil(widest) + 4 + S.md + S.lg
   }, [dates.data, date])
 
   const refetch = () => { day.refetch(); dates.refetch() }
@@ -567,7 +580,15 @@ export default function ScheduleScreen() {
                   below counts the same matches and does it per segment, so
                   this was the number said twice — and it was the taller of
                   the slot's two lines that made the rule beside it move. */}
-              <Text style={s.todayDate}>{relativeDayWord(date, today()) ?? shortDate(date)}</Text>
+              {/* ONE LINE, CENTRED IN THE SLOT (owner, 2026-09-22: it was
+                  justified right, and wrapping). numberOfLines is the
+                  guarantee rather than the layout's good behaviour: the slot
+                  is sized to hold the widest word this range can show, and if
+                  that arithmetic is ever wrong again the date must still be a
+                  date on one line. */}
+              <Text style={s.todayDate} numberOfLines={1}>
+                {relativeDayWord(date, today()) ?? shortDate(date)}
+              </Text>
             </View>
           )}
         />
@@ -1578,8 +1599,8 @@ const s = StyleSheet.create({
   arrowOff: { opacity: 0.3 },
   /* The date in the strip's right slot: bold, no lineHeight (the slot
      centres it; lineHeight sinks caps on iOS), the count tucked under. */
-  today: { alignItems: 'flex-end' },
-  todayDate: { fontFamily: 'Archivo_700Bold', fontSize: 14, color: C.ink },
+  today: { alignItems: 'center', alignSelf: 'stretch' },
+  todayDate: { fontFamily: 'Archivo_700Bold', fontSize: 14, color: C.ink, textAlign: 'center' },
 
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start', paddingVertical: 4 },
   chip: { borderRadius: R.pill, borderWidth: 1, borderColor: C.border, backgroundColor: C.card, paddingHorizontal: 10, paddingVertical: 5 },

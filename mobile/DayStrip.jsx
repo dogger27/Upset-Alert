@@ -230,7 +230,10 @@ const s = StyleSheet.create({
      centres whatever it holds. */
   right: {
     position: 'absolute', top: 0, bottom: 0, right: 0,
-    justifyContent: 'center', alignItems: 'flex-end',
+    // Centred, not right-justified: the slot is as wide as the widest word
+    // the range can show, so the word it holds today sits in the middle of
+    // that space rather than hugging the screen's edge (owner, 2026-09-22).
+    justifyContent: 'center', alignItems: 'center',
     paddingLeft: S.md, paddingRight: S.lg,
     backgroundColor: '#12262a', borderLeftWidth: 1, borderLeftColor: C.borderLit,
   },
