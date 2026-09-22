@@ -412,15 +412,29 @@ class Draw(Base):
         # "Active" while every remaining pick could still be changed — a label
         # contradicting the buttons underneath it.
         #
-        # picks_locked_at is the one fact that settles it, and draw_lock_state
-        # stamps it the moment every first-round match has STARTED (the
-        # owner's rule — see _r1_all_started). Until then the draw is open,
-        # whatever the date says, and anyone entering gets the favourite
-        # filled in for every match already frozen.
+        # picks_locked_at is the one fact that settles PICKING, and
+        # draw_lock_state stamps it the moment every first-round match has
+        # STARTED (the owner's rule — see _r1_all_started).
+        #
+        # BUT IT IS THE WRONG FACT FOR THE BUCKET. "Open" and "Active" say
+        # what the DRAW is doing, not what the buttons allow, and under this
+        # rule alone a draw that was plainly under way still read Open: 2026
+        # Singapore had TEN of its sixteen first-round matches already decided
+        # and sat in Open, because two of the sixteen had not started (owner,
+        # 2026-09-22). Every R1 match starting is the last pick freezing, which
+        # can be a day and a half after the first ball.
+        #
+        # So the draw leaves Open when PLAY BEGINS, and `status` is that
+        # observation: the results pipeline stamps "active" off a main-draw
+        # match being under way or done, never off the calendar. The picking
+        # rule is untouched — picks_locked_at still gates what is editable, and
+        # anyone entering an Active progressive draw still gets the favourite
+        # filled in for every match already frozen. The two facts simply stop
+        # being the same fact.
         if (self.pick_lock_mode == "r1_progressive"
                 and not self.picks_locked_at
                 and self.draw_released_direct_at
-                and self.status != "completed"):
+                and self.status not in ("active", "completed")):
             return "open"
 
         # A draw that hasn't started yet can never be "active" or "completed",
