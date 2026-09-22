@@ -344,9 +344,15 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
     setSets(g?.final_sets ?? d?.sets ?? fallbackSets)
     if (g) { setAces(g.final_aces); setMinutes(g.final_duration_min); return }
     if (d) { setAces(d.aces); setMinutes(d.minutes); return }
-    setAces(Math.round(acesMax / 4))
-    setMinutes(Math.round(durMax / 3))
-  }, [data, acesMax, durMax])     // eslint-disable-line react-hooks/exhaustive-deps
+    // READ OFF `data`, NOT OFF THE DERIVED CEILINGS. This effect SETS the set
+    // count, and `durMax` is now derived FROM it — so listing durMax here made
+    // the wizard un-answerable: tapping 3 sets moved durMax, which re-ran this
+    // effect, which seeded the set count back to 2 (owner, 2026-09-23: "It's
+    // not letting me change from 2 sets to 3 sets"). The seeding runs once per
+    // draw, which is all it ever meant to do — feedback_effect_reseeds_on_refetch.
+    setAces(Math.round(Math.max(1, data.ceilings?.aces_max || 0) / 4))
+    setMinutes(Math.round(Math.max(1, data.ceilings?.duration_max_min || 0) / 3))
+  }, [data])     // eslint-disable-line react-hooks/exhaustive-deps
 
   /* AN ANSWER CANNOT OUTLIVE ITS SCALE. The duration ceiling moves with the
      set count, so a reader who answers three sets, slides to four hours and

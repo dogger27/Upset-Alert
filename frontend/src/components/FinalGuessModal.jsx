@@ -214,9 +214,12 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
     // touches them (owner, 2026-09-18): last year's average for this gender,
     // surface and format.
     if (ctx.default) { setAces(ctx.default.aces); setMinutes(ctx.default.minutes); return }
-    setAces(Math.round(acesMax / 4))
-    setMinutes(Math.round(durMax / 3))
-  }, [ctx, acesMax, durMax])     // eslint-disable-line react-hooks/exhaustive-deps
+    // Read off `ctx`, not off the derived ceilings: this effect sets the set
+    // count and durMax is derived FROM it, so listing durMax here seeded the
+    // answer back on every change — see mobile/finalGuess.jsx for the incident.
+    setAces(Math.round(Math.max(1, ctx.ceilings?.aces_max || 0) / 4))
+    setMinutes(Math.round(Math.max(1, ctx.ceilings?.duration_max_min || 0) / 3))
+  }, [ctx])     // eslint-disable-line react-hooks/exhaustive-deps
 
   // An answer cannot outlive its scale: the ceiling moves with the set count.
   useEffect(() => {
