@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { BracketIcon } from '../../BracketIcon'
 import { TourBadge } from '../../cards'
+import { categoryShort } from '../../category'
 import { Sheet } from '../../sheet'
 import { BrandMark, Eyebrow } from '../../ui'
 import { useAuth } from '../../auth'
@@ -474,8 +475,15 @@ function DrawRow({ t, showing, underHeading, onPress }) {
         {t.id === showing ? <BrandMark size={16} /> : null}
       </View>
       {/* The app's own badge, not a second one: same pill, same two
-          colours as every draw card and bracket header. */}
-      <TourBadge gender={t.gender} />
+          colours as every draw card and bracket header.
+
+          THE TIER AS WELL AS THE TOUR (owner, 2026-09-23: "show the category
+          as well on the right, in the drawer. ie 'ATP 250'"). The pill was
+          already built for it — TourBadge takes a `level` — and the row was
+          the one place a draw is named without saying what it is worth, which
+          is the second thing a reader wants after which event it is. The
+          name takes the extra width: it is the flexible half of the row. */}
+      <TourBadge gender={t.gender} level={categoryShort(t.category)} />
     </Pressable>
   )
 }
