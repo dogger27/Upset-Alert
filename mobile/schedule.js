@@ -73,10 +73,14 @@ export function sideEntryType(players, side) {
   return p?.entry_type ?? null
 }
 
-/* The inferred seed, for the badge to fall back to. Main-draw singles only —
-   the server withholds it for doubles and qualifying, where a draw_entry_id
-   points at the player's SINGLES row and any number read off it would describe
-   a different event. */
+/* The inferred seed, for the badge to fall back to — where this player sits
+   once their field is put in order.
+
+   Always about the EVENT BEING PLAYED, which is the whole reason the server
+   computes three of them rather than reading one number off a draw entry: a
+   doubles or qualifying row resolves to the player's SINGLES draw entry, so a
+   figure read off it would describe a different event entirely. A doubles
+   pair is ranked among the pairs, a qualifier among the qualifying field. */
 export function sideDrawRank(players, side) {
   const p = (players || []).find(x => x.side === side && x.draw_rank != null)
   return p?.draw_rank ?? null

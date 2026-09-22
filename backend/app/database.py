@@ -146,6 +146,7 @@ async def _migrate(conn):
         "ON app_devices(device_token) WHERE device_token IS NOT NULL",
         "ALTER TABLE matches ADD COLUMN scores_json JSON",
         "ALTER TABLE schedule_entry_players ADD COLUMN nationality VARCHAR",
+        "ALTER TABLE schedule_entry_players ADD COLUMN seed_mark VARCHAR",
         "ALTER TABLE tournaments ADD COLUMN sofa_mixed_tournament_id INTEGER",
         "ALTER TABLE tournaments ADD COLUMN sofa_mixed_season_id INTEGER",
         "ALTER TABLE schedule_documents ADD COLUMN content_sha VARCHAR",

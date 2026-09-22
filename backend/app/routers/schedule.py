@@ -26,6 +26,7 @@ from app.models.rankings import TePlayer, TeRankingsSnapshot
 from app.services.schedule import (carry_surname, settle_from_result_rows,
                                    settled_sides_index)
 from app.services.doubles_rank import doubles_pair_ranks
+from app.services.qualifying_rank import qualifying_places
 from app.services.oop_parser import served_nation
 from app.services.rankings import _norm
 from app.models.tournament import Draw, DrawEntry, Match, Tournament, default_short_name
@@ -367,9 +368,65 @@ async def _slugs_by_name(db, raws: list) -> dict:
     return hits
 
 
+async def _qualifying_ranks(db, fields: set) -> dict:
+    """(tournament_id, tour, name key) -> the player's place in the qualifying field.
+
+    THE QUALIFYING DRAW HAS NO BRACKET HERE (owner, 2026-09-23: "add an
+    inferred seed for qualifying players as well"). `draw_entries` holds the
+    MAIN draw — a qualifier reaches it only by winning through, and one who
+    does not never appears at all — so the badge every main-draw name wears
+    had nothing behind it on a qualifying row.
+
+    What we do hold is the order of play, which names the whole field on the
+    first day, so the field is read back off it: every qualifying singles row
+    this tournament has ever had, which is the Q1 draw plus nobody. Read per
+    TOUR as well as per tournament, because one tournament row can carry a
+    men's and a women's event and their qualifying draws are separate fields.
+
+    The order itself is in services/qualifying_rank, where it can be proved
+    without a database; this function is what knows where a field comes from.
+
+    The ranking is today's rather than the entry week's — a qualifying field
+    has no entry snapshot to read, and a week either way moves nobody far.
+    """
+    if not fields:
+        return {}
+    rows = (await db.execute(
+        select(ScheduleEntry.tournament_id, ScheduleEntry.tour,
+               ScheduleEntryPlayer.raw_name, ScheduleEntryPlayer.seed_mark)
+        .join(ScheduleEntryPlayer,
+              ScheduleEntryPlayer.schedule_entry_id == ScheduleEntry.id)
+        .where(ScheduleEntry.tournament_id.in_({t for t, _ in fields}),
+               ScheduleEntry.stage == "qualifying",
+               ScheduleEntry.discipline == "singles"))).all()
+    rows = [r for r in rows if (r[0], r[1]) in fields]
+    if not rows:
+        return {}
+
+    profiles = await _profiles_by_name(db, [r[2] for r in rows])
+    from collections import defaultdict as _dd
+    field: dict = _dd(dict)                       # (tid, tour) -> key -> (seed, ranking)
+    for tid, tour, raw, mark in rows:
+        key = _name_key(raw)
+        if not key or key in field[(tid, tour)]:
+            continue
+        seed, _etype = _printed_mark(raw)
+        if seed is None and mark:
+            seed, _etype = _printed_mark(f"[{mark}]")
+        ranking = (_by_name(profiles, raw) or {}).get("ranking")
+        field[(tid, tour)][key] = (seed, ranking)
+
+    out: dict = {}
+    for (tid, tour), by_key in field.items():
+        for key, place in qualifying_places(by_key).items():
+            out[(tid, tour, key)] = place
+    return out
+
+
 def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_bracket: bool,
                 slugs: dict = None, extra: dict = None, by_name: dict = None,
-                extra_by_name: dict = None, pair_rank: Optional[int] = None):
+                extra_by_name: dict = None, pair_rank: Optional[int] = None,
+                qual_rank: Optional[int] = None):
     """One player, preferring what the bracket knows over what the sheet printed.
 
     `from_bracket` is false for anything but main-draw singles. A doubles
@@ -380,6 +437,21 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_brack
     both, the sheet is the only source that is about the event being played.
     """
     seed, etype = _printed_mark(p.raw_name)
+    # THE MARK THE SOURCE STATED AS A FIELD, where the name carries none
+    # (owner, 2026-09-23: "qualifying player seeds are no longer showing").
+    # A PDF prints "[2] Alexandre MULLER FRA" and the line above finds it;
+    # Sofascore writes "Alexandre Muller" and states `homeTeamSeed: '2'`
+    # separately, which ingest stores on the row. Qualifying has no
+    # draw_entries row to fall back on, so when the schedule moved to the
+    # feeds those rows lost their seeds outright.
+    #
+    # Read through the SAME splitter as a printed name, because the field
+    # holds the same two things: '2' is a seeding, 'WC' is how they got in.
+    if seed is None or etype is None:
+        mark = getattr(p, "seed_mark", None)
+        m_seed, m_type = _printed_mark(f"[{mark}]" if mark else "")
+        seed = seed if seed is not None else m_seed
+        etype = etype or m_type
     draw_rank = None
     if from_bracket:
         seed = seeds.get(p.draw_entry_id) or seed
@@ -389,6 +461,13 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_brack
         # so an inferred seed read off it would describe a different event
         # entirely — the exact mistake the seeding guard above exists to stop.
         draw_rank = ranks.get(p.draw_entry_id)
+    elif qual_rank is not None:
+        # A QUALIFYING FIELD'S OWN ORDER (owner, 2026-09-23). Same idea as the
+        # bracket's grey badge and the doubles pair's: where this player sits
+        # once the field they are actually playing in is put in order. It may
+        # sit where the singles figure may not, for the same reason the
+        # doubles pair's may — it is about the event being played.
+        draw_rank = qual_rank
     elif pair_rank is not None:
         # A DOUBLES PAIR'S INFERRED SEED (owner, 2026-09-17): the rank of the
         # pair's summed doubles rankings among the field at the seeding week,
@@ -716,6 +795,11 @@ async def schedule_day(
             by_draw[de.draw_id].append(de)
         for _did, _es in by_draw.items():
             ent_ranks.update(_compute_draw_ranks(_es))
+
+    # The qualifying fields' own order, per tournament AND tour on the page.
+    qual_ranks = await _qualifying_ranks(
+        db, {(e.tournament_id, e.tour) for e in entries
+             if e.stage == "qualifying" and e.discipline == "singles"})
 
     # The doubles pairs' inferred seeds, per tournament on the page — cached
     # inside doubles_rank, since this endpoint is polled every ten seconds.
@@ -1155,7 +1239,9 @@ async def schedule_day(
             _player_out(p, nats, ent_seeds, ent_types, ent_ranks,
                         e.discipline == "singles" and e.stage == "main",
                         ent_slugs, ent_extra, slugs_by_name, extra_by_name,
-                        pair_rank=pair_ranks.get((e.id, p.side)))
+                        pair_rank=pair_ranks.get((e.id, p.side)),
+                        qual_rank=qual_ranks.get(
+                            (e.tournament_id, e.tour, _name_key(p.raw_name))))
             for p in ordered
         ]
         # A row whose match finished on another day holds no result of its

@@ -639,7 +639,8 @@ def _candidates(draws, names) -> set:
 
 
 async def _sync_players(db, entry, na: list, nb: list, ids: list,
-                        nats: Optional[list] = None) -> list:
+                        nats: Optional[list] = None,
+                        marks: Optional[list] = None) -> list:
     """Make a slot's stored players say exactly what THIS sheet prints.
 
     Write-once was the bug. `raw_name` used to be written only in the
@@ -675,6 +676,7 @@ async def _sync_players(db, entry, na: list, nb: list, ids: list,
             i = base + pos - 1
             eid = ids[i] if i < len(ids) else None
             nat = nats[i] if nats and i < len(nats) else None
+            mark = marks[i] if marks and i < len(marks) else None
             # A country the tour withholds is never stored, whichever source
             # stated it — the one place every feed's nations pass through.
             # See oop_parser.NEUTRAL_NATIONS.
@@ -684,7 +686,8 @@ async def _sync_players(db, entry, na: list, nb: list, ids: list,
             if row is None:
                 db.add(ScheduleEntryPlayer(
                     schedule_entry_id=entry.id, side=side, position=pos,
-                    raw_name=nm, draw_entry_id=eid, nationality=nat))
+                    raw_name=nm, draw_entry_id=eid, nationality=nat,
+                    seed_mark=mark))
                 continue
             if row.raw_name != nm:
                 changed.append((row.raw_name, nm))
@@ -701,6 +704,13 @@ async def _sync_players(db, entry, na: list, nb: list, ids: list,
                 row.nationality = nat
             elif (row.nationality or "").upper() in NEUTRAL_NATIONS:
                 row.nationality = None
+            # Same rule as the country above: a mark the source states wins,
+            # and a source that states none erases nothing. A day can be
+            # served by the feed on one pass and the sheet on the next, and
+            # the sheet's mark lives inside the printed name — so a None here
+            # means "this pass did not say", never "there is no seed".
+            if mark is not None:
+                row.seed_mark = mark
             # Never trade an id already proved for a None this pass could not
             # resolve: a qualifier reaches draw_entries days after the sheet
             # first names them.
@@ -1165,7 +1175,8 @@ async def ingest_document(db, tournament, play_date: date, url: str,
             # the create-only version froze a stale rendering into four rows.
             renamed += await _sync_players(
                 db, entry, na, nb, ids,
-                nats=(getattr(m, 'nations_a', None) or []) + (getattr(m, 'nations_b', None) or []) or None)
+                nats=(getattr(m, 'nations_a', None) or []) + (getattr(m, 'nations_b', None) or []) or None,
+                marks=(getattr(m, 'seeds_a', None) or []) + (getattr(m, 'seeds_b', None) or []) or None)
 
             # Link the slot to the draw and the bracket match. This is what the
             # whole feature turns on: without match_id there are no live scores

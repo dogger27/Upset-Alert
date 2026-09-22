@@ -333,6 +333,12 @@ class Match:
     # empty and nationality rides inside the printed name instead).
     nations_a: list = field(default_factory=list)
     nations_b: list = field(default_factory=list)
+    # Seeding marks aligned index-for-index with side_a/side_b, for sources
+    # that state them as a FIELD — "1", "WC" — rather than printing them into
+    # the name. A PDF leaves these empty: its mark rides inside the name, and
+    # the reader of a printed name is the only thing that can find it there.
+    seeds_a: list = field(default_factory=list)
+    seeds_b: list = field(default_factory=list)
     page: int = 0
     # INTERNAL. The event header printed inside this box ("DOUBLES FINAL"),
     # held until the names are in rather than applied where it is read: a
