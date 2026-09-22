@@ -246,7 +246,7 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
               rather than a tie in the table (owner, 2026-09-19). */}
           <p className="fg-intro">
             Ties occurring in the final standings of all leagues will be decided
-            by the questions below.
+            by the questions which follow.
           </p>
           {/* The bracket's own answer to "which final?", so the two questions
               below are about a match the reader can see named. */}
