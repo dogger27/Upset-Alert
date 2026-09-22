@@ -45,7 +45,7 @@ import { matchLine } from '../../matchLine'
 import { courtGroups } from '../../courtGroups'
 import { fitPillSize, textWidth } from '../../measure'
 import { bestLeftColumn } from '../../nameColumns'
-import { groupPastDay } from '../../pastGroups'
+import { eventRankFrom, groupPastDay } from '../../pastGroups'
 import { stampsFor } from '../../logos'
 import { longRound } from '../../rounds'
 import { CourtRenameSheet, TournamentRenameSheet } from '../../rename'
@@ -502,7 +502,12 @@ export default function ScheduleScreen() {
       // A dual-gender day — a Slam, a combined event — groups by tour too:
       // tournament, then ATP / WTA, then round (owner, 2026-09-17).
       const byTour = new Set(chrono.map(e => e.tour).filter(Boolean)).size > 1
-      return groupPastDay(chrono, { byTournament, byTour }).map(g => ({
+      // The bigger event first, ATP before WTA at the same tier (owner,
+      // 2026-09-23) — from the day's own tier stamps, the same ones the
+      // heading draws.
+      return groupPastDay(chrono, {
+        byTournament, byTour, eventRank: eventRankFrom(day.data?.tournaments),
+      }).map(g => ({
         key: g.key,
         title: g.first ? g.tournament : null,
         // The round has a line to itself here, so it is spelled out —
@@ -516,7 +521,7 @@ export default function ScheduleScreen() {
        ones that have not (owner, 2026-09-17); the cards keep the running
        order, where the clock is what each card leads with. */
     return [{ key: 'all', list: dense ? startedFirst(chrono) : chrono }]
-  }, [visible, view, grouped, dense])
+  }, [visible, view, grouped, dense, day.data?.tournaments])
 
   /* THE WIDEST THE RIGHT SLOT HAS TO BE, in points.
 
@@ -651,9 +656,20 @@ export default function ScheduleScreen() {
               word was wider than either of the switch's halves, and the
               scoreboard's own shorthand is what the rest of this screen
               already speaks. The spoken label stays the word. */}
-          {view === 'time' && hasDoubles && (
-            <Pressable onPress={() => setShowDoubles(v => !v)} style={[s.chip, showDoubles && s.chipOn]}
-                       accessibilityRole="button" accessibilityLabel="Doubles"
+          {/* GREYED ON A DAY WITH NO DOUBLES, NOT TAKEN AWAY (owner,
+              2026-09-23) — the treatment the tournament pills above already
+              use for an event that is idle today (eventIdle). A control that
+              disappears takes the row's shape with it, so the switch beside
+              it moves and the reader re-finds both; greyed, the row holds
+              still and the button says what it says on every other day.
+              Still pressable, for the same reason a pill for an idle
+              tournament is: the choice is remembered for the day that has
+              some. */}
+          {view === 'time' && (
+            <Pressable onPress={() => setShowDoubles(v => !v)}
+                       style={[s.chip, showDoubles && s.chipOn, !hasDoubles && s.chipIdle]}
+                       accessibilityRole="button"
+                       accessibilityLabel={hasDoubles ? 'Doubles' : 'Doubles, none this day'}
                        accessibilityState={{ selected: showDoubles }}>
               <Text style={[s.chipText, showDoubles && { color: '#fff' }]}>DBLS</Text>
             </Pressable>
@@ -1766,9 +1782,18 @@ const s = StyleSheet.create({
   lockChip: { paddingHorizontal: 6 },
   lockChipOn: { backgroundColor: C.greenLit, borderColor: C.greenLit },
   lockIcon: { fontSize: 11 },
+  /* THE STRIP IS DRAWN, NOT JUST TINTED (owner, 2026-09-23: "put a border
+     around the Time / Court switch, to clarify it as its own UI element").
+     A sunken fill was the only thing separating it from the bar it sits on,
+     and on the phone those two greens are nearly the same colour — so the
+     control's edge was where the reader guessed it was. The border is the
+     raised edge the app uses for a chip, quieter than the lit green the
+     chosen half wears, so the frame says "this is one control" without
+     competing with "this half is on". */
   tabs: {
     flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken,
     borderRadius: R.md, padding: 2,
+    borderWidth: 1, borderColor: C.borderOn,
   },
   // The switch and the density button on one line, with a gap between them
   // wide enough that they read as two controls rather than one.
@@ -1784,6 +1809,10 @@ const s = StyleSheet.create({
   phases: {
     flexDirection: 'row', gap: S.xs, backgroundColor: C.sunken,
     borderRadius: R.md, padding: 2, marginTop: S.xs,
+    // The same frame, for the same reason: these two are one control's
+    // anatomy in two places, and only one of them wearing an edge would be
+    // the second visual language the note above refuses.
+    borderWidth: 1, borderColor: C.borderOn,
   },
   phase: {
     flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 5,
@@ -1876,6 +1905,9 @@ const s = StyleSheet.create({
   // Greyed when the tournament has nothing on the day. This line once sat
   // INSIDE eventBox - a nested key no style reads - so nothing greyed.
   eventIdle: { opacity: 0.4 },
+  // The same greying for the Doubles chip on a day with none — one rule for
+  // "this control has nothing to act on today", wherever it is drawn.
+  chipIdle: { opacity: 0.4 },
   // Lit, the same green the Doubles chip lights with — these are siblings in
   // the same stack of controls and a second green would read as a second
   // meaning.

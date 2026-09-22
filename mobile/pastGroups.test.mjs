@@ -1,6 +1,6 @@
 /* node pastGroups.test.mjs */
 import assert from 'node:assert/strict'
-import { groupPastDay, matchStrength, roundRank, sortByStrength } from './pastGroups.js'
+import { eventRank, eventRankFrom, groupPastDay, matchStrength, roundRank, sortByStrength, tierPoints } from './pastGroups.js'
 
 // Qualifying first, then the draw from its first round to the final.
 const order = ['Q1', 'Q2', 'Q3', 'R128', 'R64', 'R32', 'R16', 'QF', 'SF', 'F'].map(roundRank)
@@ -66,4 +66,51 @@ assert.deepEqual(sortByStrength(strong).map(e => e.id), [13, 11, 12, 10, 14])
 assert.deepEqual(matchStrength(strong[3]), [1, 1])
 assert.deepEqual(matchStrength(strong[4]), [Infinity, Infinity])
 assert.deepEqual(groupPastDay(strong)[0].list.map(e => e.id), [13, 11, 12, 10, 14])
+
+/* ── THE BIGGER EVENT FIRST, ATP BEFORE WTA (owner, 2026-09-23) ────────── */
+
+// A tier is its ranking points, which is what the draw-filter bar prints.
+assert.equal(tierPoints('Grand Slam'), 2000)
+assert.equal(tierPoints('ATP 1000'), 1000)
+assert.equal(tierPoints('WTA 125'), 125)
+assert.equal(tierPoints('ATP Finals'), 1500, 'the finale has no number of its own')
+assert.equal(tierPoints('United Cup'), 0)
+assert.equal(tierPoints(null), 0)
+
+// A combined week is as big as its bigger half, and counts as ATP.
+assert.deepEqual(eventRank([{ gender: 'F', category: 'WTA 1000' },
+                            { gender: 'M', category: 'ATP 500' }]), [-1000, 0])
+assert.deepEqual(eventRank([{ gender: 'F', category: 'WTA 500' }]), [-500, 1])
+assert.deepEqual(eventRank([]), [0, 1], 'nothing known is not something big')
+
+const EV = (id, name, ...stamps) => ({ id, name, stamps })
+const week = [
+  EV(1, 'Almaty Open', { gender: 'M', category: 'ATP 250' }),
+  EV(2, 'US Open', { gender: 'M', category: 'Grand Slam' }, { gender: 'F', category: 'Grand Slam' }),
+  EV(3, 'Korea Open', { gender: 'F', category: 'WTA 500' }),
+  EV(4, 'Japan Open', { gender: 'M', category: 'ATP 500' }),
+  EV(5, 'Guangzhou Open', { gender: 'F', category: 'WTA 250' }),
+]
+const rank = eventRankFrom(week)
+const rows = [
+  E(20, 'Almaty Open', 'singles', 'QF', 1),
+  E(21, 'US Open', 'singles', 'QF', 2),
+  E(22, 'Korea Open', 'singles', 'QF', 3),
+  E(23, 'Japan Open', 'singles', 'QF', 4),
+  E(24, 'Guangzhou Open', 'singles', 'QF', 5),
+]
+const names = groupPastDay(rows, { byTournament: true, eventRank: rank }).map(g => g.tournament)
+assert.deepEqual(names, ['US Open', 'Japan Open', 'Korea Open', 'Almaty Open', 'Guangzhou Open'],
+  'the Slam leads; the two 500s are next with ATP first; the two 250s last, ATP first')
+
+// An event the day holds no stamp for sorts last, not first.
+const withUnknown = groupPastDay(
+  [...rows, E(25, 'Mystery Open', 'singles', 'QF', 99)],
+  { byTournament: true, eventRank: rank }).map(g => g.tournament)
+assert.equal(withUnknown[withUnknown.length - 1], 'Mystery Open')
+
+// Without a rank, the old alphabetical order stands — one caller, one change.
+assert.deepEqual(groupPastDay(rows, { byTournament: true }).map(g => g.tournament),
+  ['Almaty Open', 'Guangzhou Open', 'Japan Open', 'Korea Open', 'US Open'])
+
 console.log('ok — pastGroups')
