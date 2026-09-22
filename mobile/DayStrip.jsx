@@ -53,7 +53,7 @@ const FACE_ON = 'Archivo_700Bold', SIZE_ON = 15     // the chosen one, a size up
    beneath it, and the centring below treats the slot as outside the
    viewport, so a centred chip is centred in the space that is actually
    visible. With no days at all the bar is just this slot. */
-export function DayStrip({ days, active, onPick, right }) {
+export function DayStrip({ days, active, onPick, right, rightWidth }) {
   const tx = useSharedValue(0)          // how far the row has slid left
   const start = useSharedValue(0)
   const dragging = useSharedValue(false)
@@ -187,8 +187,13 @@ export function DayStrip({ days, active, onPick, right }) {
             )
           })}
         </Animated.View>
+        {/* FIXED WHERE THE CALLER SAYS, so the rule down its left edge does not
+            move as the word inside it changes (owner, 2026-09-22). Still
+            measured: the chips centre themselves in what is left, and one
+            onLayout serves whether the width was given or grown. */}
         {right != null && (
-          <View style={s.right} onLayout={e => setRightW(e.nativeEvent.layout.width)}>
+          <View style={[s.right, rightWidth ? { width: rightWidth } : null]}
+                onLayout={e => setRightW(e.nativeEvent.layout.width)}>
             {right}
           </View>
         )}
