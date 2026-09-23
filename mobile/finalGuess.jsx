@@ -259,6 +259,8 @@ function SetPicker({ value, options, onChange, disabled }) {
    sets question comes first: these rows change as soon as it is answered. */
 const round1 = (n) => (n == null ? null : Math.round(n * 10) / 10)
 
+const met = (n) => `${n} H2H ${n === 1 ? 'match' : 'matches'}`
+
 function setsRows(data) {
   const tier = data?.sets_question?.tier_finals
   const h = data?.sets_question?.h2h
@@ -269,7 +271,6 @@ function setsRows(data) {
     rows.push({ label: `recent ${data.tier_label} finals on ${where}`,
                 value: String(tier.sets_per_match), note: `${tier.matches} finals` })
   }
-  const met = (n) => `${n} H2H ${n === 1 ? 'match' : 'matches'}`
   if (h?.on_surface) {
     rows.push({ label: `${a} v ${b} on ${(data.surface || '').toLowerCase()}`,
                 value: String(h.on_surface.sets_per_match), note: met(h.on_surface.matches) })
@@ -299,11 +300,13 @@ function acesRows(data, sets) {
        (player_rates reads w_ace or l_ace by who won), so the row says so. */
     rows.push({ lead: 'Avg', label: `${sets}-set ace count from ${a} when facing ${b} on ${surf}`,
                 value: String(scale(q.champion_vs)),
-                note: `${q.champion_vs.matches} ${q.champion_vs.matches === 1 ? 'match' : 'matches'}` })
+                /* A per-set rate scaled to the picked length, so the sample is
+                   sets, not matches of this length (owner, 2026-09-23). */
+                noteLead: 'based on sets from', note: met(q.champion_vs.matches) })
   }
   if (q.champion_on_surface?.aces_per_set != null) {
     rows.push({ lead: 'Avg', label: `${sets}-set ace count from ${a} on ${surf}`,
-                value: String(scale(q.champion_on_surface)),
+                value: String(scale(q.champion_on_surface)), noteLead: 'based on sets from',
                 note: `${q.champion_on_surface.matches} matches` })
   }
   return rows
@@ -336,10 +339,6 @@ function minutesRows(data, sets) {
   const est = q.h2h_estimate?.by_sets?.[key]
   if (est != null) {
     rows.push({ label: `${sets}-set ${a} v ${b} matches on ${surf}, estimated`, value: fmtMinutes(est),
-                /* The estimate is per-set minutes from their meetings, rescaled to
-                   this set count — "Over 3 H2H matches" read as three
-                   matches of this length (owner, 2026-09-23). */
-                noteLead: 'based on sets from',
                 note: `${q.h2h_estimate.matches} H2H ${q.h2h_estimate.matches === 1 ? 'match' : 'matches'}` })
   }
   return rows
