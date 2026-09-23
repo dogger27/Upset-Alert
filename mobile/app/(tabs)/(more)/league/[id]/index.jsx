@@ -322,7 +322,11 @@ export default function LeagueDraws() {
                         got, so it goes beneath when the league shows it. */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Ionicons name="person-circle-outline" size={16} color={C.faint} />
-                      <View style={{ flexShrink: 1 }}>
+                      {/* flex: 1, not flexShrink: the names measure the room they
+                          are given, and a box only as wide as its text gave them
+                          their own width back — "Kwong" shrank and "Kenny Wong"
+                          was cut to "Wong". */}
+                      <View style={{ flex: 1, minWidth: 0 }}>
                         <PlayerName name={m.username} shrinkOnly style={[T.bodyMed, { color: C.ink }]} />
                         {/* A league decides whether to show real names;
                             Global has no such setting and shows none —
