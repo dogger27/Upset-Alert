@@ -364,8 +364,11 @@ const PILL = 84, BRACE = 18, PILL_H = 22, PAIR_H = PILL_H * 2 + 4, COL_H = PAIR_
 
 const s = StyleSheet.create({
   /* Timeline */
+  /* marginTop cancels the screen body's S.md gap (ui.jsx u.body), so the
+     rule sits right against the table rather than under a strip of black
+     (owner, 2026-09-23). */
   foot: {
-    marginHorizontal: -S.lg, paddingHorizontal: S.lg, paddingTop: S.sm, gap: S.sm,
+    marginTop: -S.md, marginHorizontal: -S.lg, paddingHorizontal: S.lg, paddingTop: S.sm, gap: S.sm,
     borderTopWidth: 2, borderTopColor: C.green,
   },
   scrub: { gap: 6 },
