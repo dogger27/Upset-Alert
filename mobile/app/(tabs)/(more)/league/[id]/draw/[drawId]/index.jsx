@@ -21,7 +21,7 @@ import { useAuth } from '../../../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores, getPositionChances, getChancesHistory } from '../../../../../../../api'
 import { useApi } from '../../../../../../../useApi'
 import { byFinish, competitionRanks, finishText, pct } from '../../../../../../../scoring'
-import { FOOT_FLUSH, STANDINGS_TITLE, StandingsFoot, useStandingsView } from '../../../../../../../standingsTools'
+import { FOOT_FLUSH, HeaderRule, STANDINGS_TITLE, StandingsFoot, useStandingsView } from '../../../../../../../standingsTools'
 import { othersPicksNote } from '../../../../../../../lock'
 import { C } from '../../../../../../../theme'
 import { leading } from '../../../../../../../fontScale.js'
@@ -148,6 +148,7 @@ export default function Standings() {
           for the table should not be somewhere past the table's end. The
           pull-to-refresh moves into the box, since that is what scrolls. */}
       <Screen scroll={false} style={FOOT_FLUSH}>
+        <HeaderRule />
         {scores.loading && !scores.data ? <Loading /> : null}
         <ErrorNote error={scores.error} onRetry={scores.refetch} />
 
