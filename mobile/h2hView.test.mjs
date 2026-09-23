@@ -6,7 +6,7 @@
    and look perfectly plausible doing it.
 */
 import assert from 'node:assert/strict'
-import { ageOf, betterSide, compareRows, formChips, onSurface, orient } from './h2hView.js'
+import { ageOf, betterSide, compareRows, formChips, formCount, formDetail, onSurface, orient } from './h2hView.js'
 
 const PAYLOAD = {
   slug_a: 'shapovalov', slug_b: 'van-de-zandschulp',
@@ -115,5 +115,36 @@ assert.match(chips[0].said, /^beat Pavlovic L\. 6-4, 6-7\(6\), 6-3 Chengdu Q-R16
   'each square says what it was, for a reader who cannot see the colour')
 assert.match(chips[1].said, /^lost to Balshaw F\./)
 assert.deepEqual(formChips(null), [])
+
+/* ── how many swatches a row holds, and what a tap on one says ─────────── */
+
+// Ten results in two rows: what fits a row is measured, the depth is not.
+assert.equal(formCount(131), 5, 'a phone column at ordinary text size holds five')
+assert.equal(formCount(94), 4, 'and four when large text has taken the room')
+assert.equal(formCount(40), 2, 'two 18pt swatches and their gap fit 39 of those 40 points')
+assert.equal(formCount(12), 1, 'one is the floor, never zero — a swatch narrower than itself')
+assert.equal(formCount(null), 5, 'before the row has been measured, draw the cap')
+assert.equal(formCount(1000), 5, 'and a tablet does not get a barcode')
+assert.equal(formCount(0), 5)
+
+const full = formChips([
+  { result: 'W', opponent: 'Pavlovic L.', score: '6-4, 6-3', event: 'Chengdu',
+    round: 'Q-R16', surface: 'Hard', date: '2026-09-22', level: 'tour', doubles: false },
+], 10)
+assert.equal(full.length, 1)
+assert.ok(full[0].match, 'a chip carries its match, because a tap opens it')
+
+const det = formDetail(full[0].match)
+assert.equal(det.won, true)
+assert.equal(det.line, 'beat Pavlovic L. · 6-4, 6-3')
+assert.equal(det.meta, 'Chengdu · Q-R16 · Hard', 'an ordinary tour singles needs no label')
+
+const lower = formDetail({ result: 'L', opponent: 'Someone A.', score: '6-1, 6-1',
+                           event: 'Cancun challenger', round: '1R', surface: 'Hard',
+                           level: 'challenger', doubles: true })
+assert.equal(lower.line, 'lost to Someone A. · 6-1, 6-1')
+assert.equal(lower.meta, 'Cancun challenger · 1R · challenger · doubles · Hard',
+  'a Challenger and a doubles result say so — that is why the ladder is in the form')
+assert.equal(formDetail(null), null)
 
 console.log('ok — h2hView')

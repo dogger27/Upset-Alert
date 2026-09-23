@@ -112,7 +112,7 @@ export function compareRows({ view, surface, left, right }) {
       better: opts.judged === false ? null : betterSide(l, r, opts),
     })
   }
-  add('overall', view.meetings.length ? 'meetings won' : 'record', view.wins[0], view.wins[1])
+  add('overall', view.meetings.length ? 'meetings' : 'record', view.wins[0], view.wins[1])
   const surf = onSurface(view.surfaces, surface)
   if (surf && (surf[0] || surf[1])) {
     add('surface', `on ${String(surface).toLowerCase()}`, surf[0], surf[1])
@@ -123,12 +123,46 @@ export function compareRows({ view, surface, left, right }) {
   return rows
 }
 
+/* HOW MANY SWATCHES FIT the width the row actually has.
+ *
+ * Five is the number a phone holds at ordinary text size, and it was hard-coded
+ * until the layout suite ran the same sums at 2x: the label column grows with
+ * the reader's text, the figure columns shrink to pay for it, and the fifth
+ * swatch fell off the end. So the count is measured rather than assumed — the
+ * row asks for its own width and this says what that width holds.
+ *
+ * `cap` is the most worth showing even on a tablet: a sixth result does not
+ * change what the line says, and a row of ten reads as a barcode.
+ */
+export function formCount(width, { chip = 18, gap = 3, cap = 5 } = {}) {
+  if (!(width > 0)) return cap
+  return Math.max(1, Math.min(cap, Math.floor((width + gap) / (chip + gap))))
+}
+
 /* A form line as the sheet draws it: the newest results first, at most `n`,
    each carrying what it was so a screen reader can say it. */
 export function formChips(form, n = 5) {
   return (form || []).slice(0, n).map(m => ({
     result: m.result,
+    // What a tap opens, and what a screen reader hears without tapping.
     said: [m.result === 'W' ? 'beat' : 'lost to', m.opponent,
            m.score, m.event, m.round].filter(Boolean).join(' '),
+    match: m,
   }))
+}
+
+/* WHAT A TAPPED SWATCH SAYS, in two lines: the result and the score, then
+   where it happened. The same shape as a meeting card below it, because it is
+   the same kind of fact — one match, read in one glance — and the app should
+   not have two ways of printing that.
+ */
+export function formDetail(m) {
+  if (!m) return null
+  return {
+    won: m.result === 'W',
+    line: [m.result === 'W' ? `beat ${m.opponent}` : `lost to ${m.opponent}`,
+           m.score].filter(Boolean).join(' · '),
+    meta: [m.event, m.round, m.level && m.level !== 'tour' ? m.level : null,
+           m.doubles ? 'doubles' : null, m.surface].filter(Boolean).join(' · '),
+  }
 }
