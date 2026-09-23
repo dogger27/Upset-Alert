@@ -302,7 +302,8 @@ function acesRows(data, sets) {
                 note: `${q.champion_vs.matches} ${q.champion_vs.matches === 1 ? 'match' : 'matches'}` })
   }
   if (q.champion_on_surface?.aces_per_set != null) {
-    rows.push({ label: `${sets}-set ${a} matches on ${surf}`, value: String(scale(q.champion_on_surface)),
+    rows.push({ lead: 'Avg', label: `${sets}-set ace count from ${a} on ${surf}`,
+                value: String(scale(q.champion_on_surface)),
                 note: `${q.champion_on_surface.matches} matches` })
   }
   return rows

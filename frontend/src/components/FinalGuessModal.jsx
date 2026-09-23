@@ -112,8 +112,8 @@ function rowsFor(ctx, which, sets) {
                  met(q.champion_vs.matches), 'Avg'])
     }
     if (q.champion_on_surface?.aces_per_set != null) {
-      rows.push([`${sets}-set ${a} matches on ${surf}`, scale(q.champion_on_surface),
-                 `${q.champion_on_surface.matches} matches`])
+      rows.push([`${sets}-set ace count from ${a} on ${surf}`, scale(q.champion_on_surface),
+                 `${q.champion_on_surface.matches} matches`, 'Avg'])
     }
     return rows
   }
