@@ -947,7 +947,7 @@ export default function ScheduleScreen() {
             {density === 'mid'
               ? (
                 <MiniRows list={list} tagsOf={e => miniTags(e, { past: grouped, tournament: !grouped && view !== 'court' && manyTournaments ? tournShortOf(e) : null, venueMode, venueTz: venueTzOf(e) })}>
-                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={grouped} tournament={!grouped && view !== 'court' && manyTournaments ? tournShortOf(e) : null} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} onH2H={openH2H} onPredictors={openPredictors} onMenu={openMenu} />)}
+                  {list.map((e, i) => <MatchMini key={e.id} e={e} first={i === 0} alt={i % 2 === 1} tourBar={tourBarOf(e)} past={grouped} tournament={!grouped && view !== 'court' && manyTournaments ? tournShortOf(e) : null} venueMode={venueMode} venueTz={venueTzOf(e)} onHistory={openHist} onH2H={openH2H} onPredictors={openPredictors} onMenu={openMenu} inCourt={view === 'court'} />)}
                 </MiniRows>
               )
               : compact
@@ -1212,7 +1212,7 @@ function MiniRows({ list, tagsOf, children }) {
   )
 }
 
-function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueTz, onHistory, onH2H, onPredictors, onMenu }) {
+function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueTz, onHistory, onH2H, onPredictors, onMenu, inCourt }) {
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const pair = onH2H ? h2hPairOf(e) : null
   const picks = onPredictors && e.match_id != null
@@ -1264,7 +1264,11 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
           a match starts — see miniTags — so a completed or live row keeps the
           left edge it always had and gives the 62pt back to its names, which
           are the rows most likely to be carrying a score as well. */}
-      <View style={[s.miniCard, when && s.miniCardWaiting]}>
+      {/* …AND NOT IN THE COURT VIEW (owner, 2026-09-23: "do NOT indent matches
+          in Today Court view"). There each court's rows run in its own
+          order, and the indent made the upcoming ones step in from the
+          finished ones above them on the same court. */}
+      <View style={[s.miniCard, when && !inCourt && s.miniCardWaiting]}>
         <MatchCard e={e} scale={0.8} round={round}
                    badges={!(past && e.discipline !== 'singles' && !(e.players || []).some(p => p.seed || p.draw_rank != null))} />
       </View>
