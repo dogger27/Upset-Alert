@@ -2389,6 +2389,38 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                  f"nobody can time as earlier than a timed one")
             break
 
+    # 2026-09-23, Singapore doc 463: COURT 1's opener — CASCINO / FENG vs
+    # COSTOULAS / GIBSON, printed "Not before 2:00 PM", no result on the sheet
+    # and no score anywhere — was served COMPLETED. The day endpoint infers a
+    # status the feeds cannot give it from the RUNNING ORDER ("a later slot
+    # under way proves the ones above it are over"), which is sound only
+    # within one tournament's court. Its groups were keyed on the court NAME,
+    # and a day spans every tournament playing: Chengdu and Hangzhou each had
+    # a live second match on THEIR "COURT 1", so Singapore's first was
+    # declared finished. Three tournaments shared "COURT 1" that afternoon and
+    # four shared "CENTER COURT" — generic court names are the norm, so this
+    # was firing most days, and only where a court name collided.
+    #
+    # Stated as the law that was broken — no running order may span two
+    # tournaments — and read through the serve path's OWN key
+    # (routers/schedule.court_run_key) the way untimed_slot_served_first runs
+    # its ordering, so the name-only key cannot drift back.
+    from app.routers.schedule import court_run_key as _court_run_key
+    runs: dict = {}
+    for r in (await db.execute(
+            select(ScheduleEntry).where(
+                ScheduleEntry.play_date == play_date))).scalars().all():
+        runs.setdefault(_court_run_key(r), []).append(r)
+    for key, group in runs.items():
+        mine = [r for r in group if r.tournament_id == tournament_id]
+        others = sorted({r.tournament_id for r in group} - {tournament_id})
+        if mine and others:
+            flag("court_run_crosses_tournaments", mine[0],
+                 f"{mine[0].court!r} puts this tournament's {len(mine)} slot(s) "
+                 f"and {len(group) - len(mine)} from tournament(s) {others} "
+                 f"under one running order (key {key!r}) — another venue's "
+                 f"court decides what has finished here")
+
     # 2026-09-18, SP Open doc 289 — see player_on_two_courts.
     for a, b, name in player_on_two_courts(rows, played=_was_on_court):
         flag("player_on_two_courts", b,
