@@ -90,6 +90,34 @@ _THREE_CAPS = re.compile(r"[A-Z]{3}$")
 # capitalised surname ("NYS") — both are uppercase, only one has two letters.
 _ALPHA = re.compile(r"[^A-Za-z]")
 
+# A GENERATIONAL SUFFIX IS FURNITURE, NOT A SURNAME — the same class as the
+# trailing country code and the seed mark, and it broke the same way. Chengdu
+# 2026-09-23: the ATP feed printed "Martin Damm Jr" (its nationality in its
+# own column, so no capitals anywhere in the name), every reading below fell
+# through to its last-token fallback, and the row's surname was read as "jr".
+# `stamp_linked_rows` then refused to link a slot whose own bracket match
+# already named him, and `bracket_player_unlinked` alerted.
+#
+# Measured over the whole stored corpus on 2026-09-23 — 1,206 distinct
+# schedule names, 598 draw entries, 184 Sofascore spellings — exactly one
+# name carries any of these tokens, and it is Damm's. None is a plausible
+# surname, and the strip always leaves at least one token behind.
+_GEN_SUFFIX = re.compile(r"^(?:jn?r|sn?r|ii|iii|iv)\.?$", re.I)
+
+
+def strip_gen_suffix(toks: list) -> list:
+    """The name's tokens with any trailing generational suffix removed.
+
+    Applied BEFORE the capitals are counted as well as before the last-token
+    fallback: the sheets print "Martin DAMM Jr USA" as readily as the feed
+    prints "Martin Damm Jr", and in the first form "Jr" would otherwise be
+    the last capitalised token and win the surname outright.
+    """
+    while len(toks) >= 2 and _GEN_SUFFIX.match(toks[-1]):
+        toks = toks[:-1]
+    return toks
+
+
 # A day at a venue, expressed in UTC. Play starts no earlier than 06:00 local
 # and the last match can finish after midnight, so against play_date's midnight
 # UTC an event may legitimately land anywhere from 6h before (UTC+13 morning) to
@@ -187,6 +215,7 @@ def _sheet_surnames(raw_names: list) -> set:
             while (len(toks) >= 2 and _THREE_CAPS.match(toks[-1])
                     and any(t.isupper() for t in toks[:-1])):
                 toks = toks[:-1]
+            toks = strip_gen_suffix(toks)
             # An INITIAL is uppercase too. "H. Nys" made caps == ["H."], so the
             # surname was thrown away and the initial kept — which is why a
             # doubles final could not be matched to the semi that fed it. A
@@ -291,6 +320,7 @@ def _sheet_people(raw_names: list, pids=None, ref=None) -> list:
             while (len(toks) >= 2 and _THREE_CAPS.match(toks[-1])
                     and any(t.isupper() for t in toks[:-1])):
                 toks = toks[:-1]
+            toks = strip_gen_suffix(toks)
             caps = [t for t in toks if t.isupper() and len(_ALPHA.sub("", t)) >= 2]
             surname = _fold(caps[-1]) if caps else (_fold(toks[-1]) if toks else "")
             if not surname:

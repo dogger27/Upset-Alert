@@ -89,9 +89,13 @@ def _surname(name: str) -> str:
     matched a pair across the two (2026-09-18)."""
     import re
     from app.services.schedule import _fold
+    from app.services.sofascore_doubles import strip_gen_suffix
     s = re.sub(r"^(?:\[[^\]]*\]\s*)+", "", (name or "").strip())
     s = re.sub(r"\s+[A-Z]{3}$", "", s)
-    toks = s.split()
+    # "Martin Damm Jr" off the ATP feed ends in a generational suffix, not a
+    # surname — the ATP writes one where the sheet writes none, which is the
+    # exact cross-source split this function exists to close.
+    toks = strip_gen_suffix(s.split())
     if not toks:
         return ""
     folded = _fold(toks[-1])

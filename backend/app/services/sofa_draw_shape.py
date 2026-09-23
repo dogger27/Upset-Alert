@@ -54,12 +54,16 @@ WHAT IT STILL CANNOT DO, stated plainly so nobody builds on a wish:
     bye lists were IDENTICAL to Wikipedia's absent slots in all four.
   * Nationality is not on the participant's team object in the trimmed shape,
     so entries still take it from elsewhere.
-  * A GENERATIONAL SUFFIX IS LEFT ALONE ON PURPOSE. Winston-Salem reports
+  * A GENERATIONAL SUFFIX IS NEVER FOLDED AWAY. Winston-Salem reports
     "Martin Damm Jr" where we hold "Martin Damm", and folding the suffix away
     would make those one key — but Martin Damm Sr is also a real player, so
-    that rule would eventually match a father to his son's slot. Reporting a
-    difference is the safe answer here and guessing is not; this is the last
-    residual difference across the four draws measured.
+    that rule would eventually match a father to his son's slot. So the
+    suffix is still not guessed at; the join is made on the PLAYER ID the cup
+    tree states and the resolver has already stamped on our row (see
+    `compare_to_entries`), which the father and the son cannot share. Chengdu
+    2026-09-23 was this exact pair reported as "1 in sofascore only; 1 in ours
+    only" — the last residual difference across the draws measured, and it is
+    settled by evidence rather than by a rule about names.
 
 NOTHING HERE MAKES A REQUEST. It parses a payload the caller already has, so
 the shadow comparison below costs no traffic — which is the whole point of
@@ -315,7 +319,22 @@ def compare_to_entries(shape: DrawShape, entries: list) -> dict:
     qualifier the tree names first — is `pending_ours`. Both resolve on their
     own. What is still reported is where BOTH sides state the slot and differ.
     """
-    # Four keys per entry, most trustworthy first: the name as we hold it,
+    # THE STRONGEST KEY IS NOT A NAME. The cup tree states each entrant's
+    # Sofascore player id and `resolve_draw` stamps that same id on our row, so
+    # a match on it is Sofascore asserting the identity rather than us
+    # inferring it from spelling. It is also the only safe answer for a
+    # GENERATIONAL SUFFIX: Sofascore writes "Martin Damm Jr" where we hold
+    # "Martin Damm", and folding "Jr" away would one day marry the father to
+    # the son's slot — but Damm Sr has a different id, so the id never can.
+    by_sofa_id: dict = {}
+    for e in entries:
+        if not (e.name or "").strip():
+            continue
+        pid = getattr(e, "sofa_player_id", None)
+        if pid:
+            by_sofa_id.setdefault(pid, e)
+
+    # Then four keys per entry, most trustworthy first: the name as we hold it,
     # the name SOFASCORE gave the resolver for this very entry (already stored
     # on the row, so this reuses matching that is proven rather than repeating
     # it), the order-insensitive form, and that form with hyphens joined.
@@ -344,12 +363,14 @@ def compare_to_entries(shape: DrawShape, entries: list) -> dict:
     for s in shape.entrants:
         if not s.name or s.placeholder:
             continue
-        mine = None
-        for key in (_fold(s.name), _unordered(s.name), _joined(s.name)):
-            mine = ours.get(key)
-            if mine is not None:
-                break
+        mine = by_sofa_id.get(s.sofa_player_id) if s.sofa_player_id else None
+        if mine is None:
+            for key in (_fold(s.name), _unordered(s.name), _joined(s.name)):
+                mine = ours.get(key)
+                if mine is not None:
+                    break
         if mine is not None:
+            by_sofa_id.pop(getattr(mine, "sofa_player_id", None), None)
             # Drop every key this row answers to, so one entrant is matched once.
             for k in [k for k, v in ours.items() if v is mine]:
                 del ours[k]
