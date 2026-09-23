@@ -151,6 +151,7 @@ export function DayStrip({ days, active, onPick, right, rightWidth }) {
   return (
     <GestureDetector gesture={pan} touchAction="pan-y">
       {/* No ref on the detector's child (React 19 logs element.ref). */}
+      <View>
       <View style={s.bar} onLayout={e => setBarW(e.nativeEvent.layout.width)}>
         <Animated.View
           style={[s.row, { gap: level.gap }, slide]}
@@ -198,6 +199,15 @@ export function DayStrip({ days, active, onPick, right, rightWidth }) {
           </View>
         )}
       </View>
+        {/* "SWIPE TO CYCLE DATE" SITS ON THE TOP RULE (owner, 2026-09-23), a
+            caption cut into the line: the swipe is the stepper since the
+            arrows went, and nothing said so. Outside the bar, whose
+            overflow:hidden would clip half of it; not pressable, so a swipe
+            that starts on it is still the strip's. */}
+        <View style={s.legendRow} pointerEvents="none">
+          <Text style={s.legend} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Swipe to cycle date</Text>
+        </View>
+      </View>
     </GestureDetector>
   )
 }
@@ -206,6 +216,11 @@ const s = StyleSheet.create({
   /* The draw page's round bar, edge to edge: the screen pads its body S.lg
      a side, and a ruled bar that stopped short of the edges read as a box.
      overflow hidden — the row slides under the glass at both ends. */
+  legendRow: { position: 'absolute', left: 0, right: 0, top: -leading(8), alignItems: 'center' },
+  legend: {
+    fontFamily: 'Archivo_500Medium', fontSize: 11, lineHeight: leading(15), color: C.muted,
+    backgroundColor: C.bg, paddingHorizontal: 6,
+  },
   bar: {
     marginHorizontal: -S.lg,
     backgroundColor: '#12262a',
