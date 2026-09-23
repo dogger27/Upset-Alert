@@ -2,7 +2,7 @@
 
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, RefreshControl, Share, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { getGlobalDraws, getGlobalGSTotals, getGrandSlamTotals, getLeague, getLeagueTournaments, shareLeagueByEmail } from '../../../../../api'
 import { useAuth } from '../../../../../auth'
@@ -14,7 +14,9 @@ import { useApi } from '../../../../../useApi'
 import { PlayerName, TourBadge } from '../../../../../cards'
 import { computeCohortInfo, getHomeSection } from '../../../../../drawStatus'
 import { GROUP_TONE, groupDrawsByStatus, sectionOfMany, showGroupHeadings } from '../../../../../drawGroups'
-import { C, R, T } from '../../../../../theme'
+import { C, R, S, T } from '../../../../../theme'
+import { leading } from '../../../../../fontScale.js'
+import { ScrollPane } from '../../../../../scrollPane'
 import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title, bareRight } from '../../../../../ui'
 
 export default function LeagueDraws() {
@@ -190,7 +192,8 @@ export default function LeagueDraws() {
           : null),
       }} />
       <LeaguePicker visible={picking} onClose={() => setPicking(false)} currentId={id} />
-      <Screen onRefresh={draws.refetch}>
+      <Screen onRefresh={tab === 'members' ? undefined : draws.refetch} scroll={tab !== 'members'}
+              style={tab === 'members' ? { paddingBottom: 0 } : undefined}>
         {draws.loading && !draws.data ? <Loading /> : null}
         <ErrorNote error={draws.error} onRetry={draws.refetch} />
 
@@ -298,58 +301,71 @@ export default function LeagueDraws() {
           </>
         )}
 
+        {/* THE MEMBERS TABLE IS THE STANDINGS TABLE (owner, 2026-09-23: "use
+            all the same page formatting as the standings page"): no card,
+            rows edge to edge, the header row pinned with its green rule, the
+            sorted column lit green in the header and inked in the rows, the
+            same type, and the same always-visible scroll bar. The tab trades
+            the page's scroll for the table's own, which is what lets the
+            header stay put. */}
         {tab === 'members' && (league.data || isGlobal) && (
           <>
-            <Eyebrow>{isGlobal ? `Players (${members.length})` : `Members (${league.data?.member_count ?? members.length})`}</Eyebrow>
-            <View style={s.tally}>
-              <Text style={[T.small, { color: C.muted, paddingHorizontal: 12, paddingTop: 10 }]}>
-                {gs.data?.year ?? new Date().getFullYear()} Grand Slam point tally
-              </Text>
-              <View style={[s.tRow, s.tHead]}>
-                <View style={s.tName} />
-                {[['atp', 'ATP'], ['wta', 'WTA'], ['combined', 'Total']].map(([col, label]) => (
-                  <Pressable key={col} onPress={() => sortBy(col)} style={s.tPts} hitSlop={6}
-                             accessibilityRole="button" accessibilityLabel={`Sort by ${label}`}>
-                    <Text style={[s.tHeadText, sortCol === col && { color: C.ink }]}
-                          numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
-                      {label}{sortCol === col ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ''}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              {members.map((m, i) => (
-                <View key={m.user_id} style={[s.tRow, i % 2 ? s.tAlt : null]}>
-                  {/* The name is the door to their draw history, as the site's
-                      person icon is. */}
-                  <CardLink href={{ pathname: '/history', params: { user: m.user_id } }} style={s.tName} grow>
-                    {/* The USERNAME names the member — the site prints it and
-                        keeps the real name for a hover, which a phone has not
-                        got, so it goes beneath when the league shows it. */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Ionicons name="person-circle-outline" size={16} color={C.faint} />
-                      {/* flex: 1, not flexShrink: the names measure the room they
-                          are given, and a box only as wide as its text gave them
-                          their own width back — "Kwong" shrank and "Kenny Wong"
-                          was cut to "Wong". */}
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <PlayerName name={m.username} shrinkOnly style={[T.bodyMed, { color: C.ink }]} />
-                        {/* A league decides whether to show real names;
-                            Global has no such setting and shows none —
-                            reading `.show_real_name` off the absent league
-                            was a red box on that screen. */}
-                        {league.data?.show_real_name && m.full_name ? (
-                          <PlayerName name={m.full_name} style={[T.tiny, { color: C.faint }]} />
-                        ) : null}
-                      </View>
-                      {m.is_admin ? <Text style={s.adminBadge}>A</Text> : null}
-                    </View>
-                  </CardLink>
-                  <Text style={[s.tPts, s.tPtsText]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{m.atp_points ?? '–'}</Text>
-                  <Text style={[s.tPts, s.tPtsText]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{m.wta_points ?? '–'}</Text>
-                  <Text style={[s.tPts, s.tPtsText, { fontFamily: 'Archivo_700Bold' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{m.combined_points ?? '–'}</Text>
+            <Eyebrow>
+              {isGlobal ? `Players (${members.length})` : `Members (${league.data?.member_count ?? members.length})`}
+              {` · ${gs.data?.year ?? new Date().getFullYear()} Grand Slam points`}
+            </Eyebrow>
+            <ScrollPane overlay style={s.mScroller} contentContainerStyle={{ paddingBottom: 4 }}
+                        stickyHeaderIndices={[0]}
+                        refreshControl={<RefreshControl refreshing={false} onRefresh={gs.refetch}
+                                                        tintColor={C.muted} colors={[C.clay]} />}>
+              {/* A plain View first: iOS replaces a sticky child's style
+                  (feedback_rn_sticky_header_style_stripped). */}
+              <View>
+                <View style={[s.mRow, s.mHead]}>
+                  <Text style={[s.mHeadText, s.mWho]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                    {isGlobal ? 'Player' : 'Member'}
+                  </Text>
+                  {[['atp', 'ATP'], ['wta', 'WTA'], ['combined', 'Total']].map(([col, label]) => (
+                    <Pressable key={col} onPress={() => sortBy(col)} hitSlop={8}
+                               accessibilityRole="button" accessibilityLabel={`Sort by ${label}`}
+                               accessibilityState={{ selected: sortCol === col }}>
+                      <Text style={[s.mHeadText, s.mNum, sortCol === col && s.mHeadOn]}
+                            numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{label}</Text>
+                    </Pressable>
+                  ))}
                 </View>
-              ))}
-            </View>
+              </View>
+              <View style={s.mRows}>
+                {members.map((m, i) => {
+                  const mine = me && m.user_id === me.id
+                  return (
+                    <View key={m.user_id} style={[i % 2 ? s.mAlt : null, mine && s.mMine]}>
+                      {/* The row is the door to their draw history, as the
+                          site's person icon is. */}
+                      <CardLink href={{ pathname: '/history', params: { user: m.user_id } }} grow style={s.mRow}>
+                        <View style={s.mWho}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <PlayerName name={m.username} shrinkOnly style={[s.mName, mine && s.mNameMine]} />
+                            </View>
+                            {m.is_admin ? <Text style={s.adminBadge}>A</Text> : null}
+                          </View>
+                          {/* A league decides whether to show real names;
+                              Global has no such setting and shows none. */}
+                          {league.data?.show_real_name && m.full_name ? (
+                            <PlayerName name={m.full_name} style={s.mReal} />
+                          ) : null}
+                        </View>
+                        {[['atp', m.atp_points], ['wta', m.wta_points], ['combined', m.combined_points]].map(([col, v]) => (
+                          <Text key={col} style={[s.mNumText, s.mNum, sortCol === col && s.mOn]}
+                                numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{v ?? '–'}</Text>
+                        ))}
+                      </CardLink>
+                    </View>
+                  )
+                })}
+              </View>
+            </ScrollPane>
           </>
         )}
       </Screen>
@@ -516,14 +532,23 @@ const s = StyleSheet.create({
   poolChipOn: { backgroundColor: C.green, borderColor: 'transparent' },
   poolChipText: { ...T.tiny, color: C.muted },
   poolChipTextOn: { color: '#ffffff', fontFamily: 'Archivo_700Bold' },
-  tally: { backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
-  tRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
-  tHead: { borderBottomWidth: 1, borderColor: C.border },
-  tAlt: { backgroundColor: '#ffffff08' },
-  tName: { flex: 1, minWidth: 0 },
-  tPts: { width: 52, alignItems: 'flex-end' },
-  tPtsText: { ...T.body, color: C.ink, textAlign: 'right', width: 52 },
-  tHeadText: { ...T.tiny, color: C.faint, fontFamily: 'Archivo_700Bold', letterSpacing: 0.5 },
+  /* The members table, in the standings table's own numbers
+     (league/[id]/draw/[drawId]/index.jsx): keep the two in step. */
+  mScroller: { flex: 1, minHeight: 0, marginHorizontal: -S.lg },
+  mRows: { backgroundColor: C.card },
+  mRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3, paddingHorizontal: S.lg, gap: 8 },
+  mHead: { backgroundColor: C.raised, paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: C.green },
+  mHeadText: { color: C.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
+  mHeadOn: { color: C.greenBright },
+  mAlt: { backgroundColor: '#14201c' },
+  mMine: { backgroundColor: '#1d3329' },
+  mWho: { flex: 1, minWidth: 0 },
+  mName: { color: C.ink, fontWeight: '600', fontSize: 14, lineHeight: leading(17) },
+  mNameMine: { color: C.clay, fontWeight: '800' },
+  mReal: { color: C.muted, fontSize: 12, lineHeight: leading(15), marginTop: -leading(3) },
+  mNum: { width: 46, textAlign: 'center' },
+  mNumText: { color: C.muted, fontSize: 14 },
+  mOn: { color: C.ink, fontWeight: '800' },
   adminBadge: { ...T.tiny, color: C.info, borderWidth: 1, borderColor: C.info, borderRadius: 4, paddingHorizontal: 4, overflow: 'hidden' },
   card: {
     backgroundColor: C.card, borderRadius: 14, borderWidth: 1,
