@@ -136,6 +136,13 @@ _ALPHA_RE = re.compile(r'[^A-Za-z]')
 # three is not a name any tour prints. Measured over all 705 stored player
 # rows: fires on the four shredded ones below and on nothing else.
 _SHRED_MIN_SINGLES = 3
+# A GENERATIONAL SUFFIX, as the LAW reads one. Stated here and not imported
+# from `sofascore_doubles.strip_gen_suffix` for the reason `_person_words` and
+# `_INITIAL_RE` are: a copy the service owns would go blind with it, and this
+# law exists to catch the day the service's identity fails. "Martin Damm Jr"
+# has no capitals at all off the ATP feed, so every last-token reading of a
+# surname took "Jr" for one (Chengdu 2026-09-23).
+_GEN_SUFFIX_RE = re.compile(r'^(?:jn?r|sn?r|ii|iii|iv)\.?$', re.I)
 
 
 def _names_nobody(raw: str) -> bool:
@@ -2321,13 +2328,16 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         trailing token that IS a country, and keep the capitalised ones —
         the sheets shout the surname. A sheet that capitalises nothing (some
         smaller events) leaves the last token, which is then a name because
-        the country is already gone."""
+        the country is already gone — and the generational suffix with it,
+        or two unrelated players both sign as "jr"."""
         out = set()
         for p in (entry.players or []):
             raw = _LEADING_SEED_RE.sub(
                 "", _TRAILING_SEED_RE.sub("", (p.raw_name or "").strip()))
             toks = raw.split()
             while len(toks) >= 2 and toks[-1] in COUNTRY_CODES:
+                toks = toks[:-1]
+            while len(toks) >= 2 and _GEN_SUFFIX_RE.match(toks[-1]):
                 toks = toks[:-1]
             caps = [t for t in toks
                     if t.isupper() and len(_ALPHA_RE.sub("", t)) >= 2]

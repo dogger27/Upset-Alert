@@ -1289,6 +1289,81 @@ async def resolve_tournament(db: AsyncSession, draw: Draw) -> Optional[tuple]:
     return found[0], found[1]
 
 
+async def _compare_shape(db: AsyncSession, draw: Draw, shape, rows: list,
+                         report: dict) -> None:
+    """Where the cup tree and our stored draw disagree — logged, never written.
+
+    AFTER RESOLUTION, NEVER BEFORE, and that ordering is the fix for the alarm
+    this kept raising. The comparison joins the two sources by NAME, and the
+    strongest keys it has are the ones `resolve_draw` establishes: the
+    Sofascore player id stamped on our row, and `sofa_name` — their spelling of
+    our entry. Running first, it could not use either on the one pass that
+    mattered: the pass where Sofascore FIRST slots a player whose spelling
+    differs from ours is exactly the pass that has neither yet, so every such
+    player bought one false "Draw shape disagrees with Wikipedia" and then
+    agreed forever after.
+
+    Chengdu 2026-09-23 10:01:20, draw 145: the cup tree slotted "Martin Damm
+    Jr" where we hold "Martin Damm"; the comparison ran, matched 27 of 28 and
+    warned "1 in sofascore only; 1 in ours only"; the resolver then stamped
+    him id 51345 and sofa_name "Martin Damm Jr" moments later, and re-running
+    the same comparison against the same tree now matches 28 and says nothing.
+    The 2026-09-21 fix — an unfilled slot is pending, not a disagreement — was
+    a different state and left this one untouched, so the alarm came back.
+
+    Seeds and entry types Sofascore states and we lack are filled here for the
+    same reason: after resolution there are more entries to fill, not fewer.
+    """
+    from app.services.sofa_draw_shape import compare_to_entries, disagreement_summary
+
+    cmp = compare_to_entries(shape, rows)
+    report["shape_matched"] = cmp["matched"]
+    # FILL WHAT WE LACK AND SOFASCORE STATES. Tennis Explorer does not always
+    # print seeds two days out (Chengdu had none the afternoon Hangzhou had
+    # all eight) and a Wikipedia draft can miss an entry type; the cup tree's
+    # teamSeed carries both once its events exist. Only ever fills a NULL — a
+    # seed we hold is never overwritten here; disagreement is logged below.
+    filled = 0
+    for mine, seed, entry_type in cmp.get("fillable", []):
+        if seed is not None and mine.seed is None:
+            mine.seed, filled = seed, filled + 1
+        if entry_type and not mine.entry_type:
+            mine.entry_type, filled = entry_type, filled + 1
+    if filled:
+        await db.commit()
+        report["shape_filled"] = filled
+        await app_log(
+            "info", "sofascore",
+            f"Filled {filled} seed/entry-type value(s) for {draw.year} "
+            f"{draw.name} ({draw.gender}) from the cup tree",
+            {"draw_id": draw.id, "filled": filled})
+    why = disagreement_summary(cmp)
+    report["shape_disagreement"] = why
+    if why:
+        await app_log(
+            "warning", "sofascore",
+            f"Draw shape disagrees with Wikipedia for {draw.year} "
+            f"{draw.name} ({draw.gender}): {why}",
+            {"draw_id": draw.id, "matched": cmp["matched"],
+             "position": cmp["position"][:10], "seed": cmp["seed"][:10],
+             "entry_type": cmp["entry_type"][:10],
+             "byes_ours": cmp["byes_ours"],
+             "byes_sofascore": cmp["byes_sofascore"],
+             "unfilled_sofascore": cmp["unfilled_sofascore"]},
+            dedup_key=f"shape_disagree_{draw.id}", dedup_hours=24)
+    else:
+        # A tree still filling in agrees on everything it states; the slots it
+        # has not stated yet are said here, at info, because they fill on
+        # their own (compare_to_entries).
+        logger.info(
+            "Draw shape agrees with Wikipedia for %s %s (%s): "
+            "%d entrant(s), byes %s; not yet filled — %d slot(s) "
+            "on Sofascore, %d of ours",
+            draw.year, draw.name, draw.gender,
+            cmp["matched"], cmp["byes_sofascore"],
+            len(cmp["unfilled_sofascore"]), len(cmp["pending_ours"]))
+
+
 async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> dict:
     """
     Stamp sofa_player_id across one draw. Returns a report; writes nothing else.
@@ -1319,70 +1394,20 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
         report["error"] = "draw has no named entries yet"
         return report
 
+    shape = None
     if draw.sofa_tournament_id and draw.sofa_season_id:
         payload = await _cuptree_of(draw.sofa_tournament_id, draw.sofa_season_id)
         field = _main_draw_teams(payload.get("cupTrees", []))
         # EVIDENCE BEFORE AUTHORITY. The same payload states the draw's shape —
         # slot, seed, entry type, byes — which Wikipedia is currently sole
-        # author of. Comparing the two here costs NO extra request and builds
-        # the record the decision to demote Wikipedia should be made on.
-        # Never writes, and never raises into the resolver.
+        # author of. Read here because the payload is already in hand; COMPARED
+        # at the end of this function, after the resolution below. See
+        # `_compare_shape` for why the order is the whole point.
         try:
-            from app.services.sofa_draw_shape import (
-                compare_to_entries, disagreement_summary, draw_shape)
-
+            from app.services.sofa_draw_shape import draw_shape
             shape = draw_shape(payload)
-            if shape and shape.entrant_count:
-                cmp = compare_to_entries(shape, all_rows)
-                report["shape_matched"] = cmp["matched"]
-                # FILL WHAT WE LACK AND SOFASCORE STATES. Tennis Explorer does
-                # not always print seeds two days out (Chengdu had none the
-                # afternoon Hangzhou had all eight) and a Wikipedia draft can
-                # miss an entry type; the cup tree's teamSeed carries both
-                # once its events exist. Only ever fills a NULL — a seed we
-                # hold is never overwritten here; disagreement is logged above.
-                filled = 0
-                for mine, seed, entry_type in cmp.get("fillable", []):
-                    if seed is not None and mine.seed is None:
-                        mine.seed, filled = seed, filled + 1
-                    if entry_type and not mine.entry_type:
-                        mine.entry_type, filled = entry_type, filled + 1
-                if filled:
-                    await db.commit()
-                    report["shape_filled"] = filled
-                    await app_log(
-                        "info", "sofascore",
-                        f"Filled {filled} seed/entry-type value(s) for {draw.year} "
-                        f"{draw.name} ({draw.gender}) from the cup tree",
-                        {"draw_id": draw.id, "filled": filled})
-                why = disagreement_summary(cmp)
-                report["shape_disagreement"] = why
-                if why:
-                    await app_log(
-                        "warning", "sofascore",
-                        f"Draw shape disagrees with Wikipedia for {draw.year} "
-                        f"{draw.name} ({draw.gender}): {why}",
-                        {"draw_id": draw.id, "matched": cmp["matched"],
-                         "position": cmp["position"][:10], "seed": cmp["seed"][:10],
-                         "entry_type": cmp["entry_type"][:10],
-                         "byes_ours": cmp["byes_ours"],
-                         "byes_sofascore": cmp["byes_sofascore"],
-                         "unfilled_sofascore": cmp["unfilled_sofascore"]},
-                        dedup_key=f"shape_disagree_{draw.id}", dedup_hours=24)
-                else:
-                    # A tree still filling in agrees on everything it states;
-                    # the slots it has not stated yet are said here, at info,
-                    # because they fill on their own (compare_to_entries).
-                    logger.info(
-                        "Draw shape agrees with Wikipedia for %s %s (%s): "
-                        "%d entrant(s), byes %s; not yet filled — %d slot(s) "
-                        "on Sofascore, %d of ours",
-                        draw.year, draw.name, draw.gender,
-                        cmp["matched"], cmp["byes_sofascore"],
-                        len(cmp["unfilled_sofascore"]), len(cmp["pending_ours"]))
         except Exception as exc:      # a comparison must never break resolution
-            logger.warning("Draw shape comparison failed for draw %s: %s",
-                           draw.id, exc)
+            logger.warning("Draw shape unreadable for draw %s: %s", draw.id, exc)
     else:
         # Resolving the tournament already had to read the field to verify it;
         # reuse that rather than fetching the same cup tree twice.
@@ -1444,6 +1469,15 @@ async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> 
 
     if dirty:
         await db.commit()
+
+    # NOW the shape comparison — with this pass's mapping in hand, never
+    # before it. See `_compare_shape`.
+    if shape is not None and shape.entrant_count:
+        try:
+            await _compare_shape(db, draw, shape, all_rows, report)
+        except Exception as exc:      # a comparison must never break resolution
+            logger.warning("Draw shape comparison failed for draw %s: %s",
+                           draw.id, exc)
 
     # A name we cannot place is only a problem once there is somewhere to place
     # it. While Sofascore's bracket still has unfilled slots the missing players

@@ -35,7 +35,8 @@ from typing import Optional
 
 from sqlalchemy import and_, delete, or_, select, update
 
-from app.services.sofascore_doubles import _fold as _sofa_fold, _sheet_people
+from app.services.sofascore_doubles import (_fold as _sofa_fold, _sheet_people,
+                                            strip_gen_suffix)
 from app.models.schedule import (ScheduleChange, ScheduleDocument,
                                  ScheduleEntry, ScheduleEntryPlayer)
 from app.models.tournament import Draw, DrawEntry, Match
@@ -205,6 +206,11 @@ def carry_surname(raw_name: str) -> str:
     while (len(toks) >= 2 and _THREE_CAPS_RE.match(toks[-1])
            and any(t.isupper() for t in toks[:-1])):
         toks = toks[:-1]
+    # And a GENERATIONAL SUFFIX is furniture too — see `strip_gen_suffix`.
+    # "Martin Damm Jr" off the ATP feed has no capitals at all, so the
+    # fallback below took "Jr" for the surname and `surname_agrees` could
+    # never meet the draw's "Martin Damm" (Chengdu 2026-09-23).
+    toks = strip_gen_suffix(toks)
     caps = [t for t in toks if t.isupper() and len(_ALPHA_ONLY_RE.sub('', t)) >= 2]
     return _norm(' '.join(caps or toks[-1:]))
 
@@ -2753,16 +2759,18 @@ def _surname_readings(part: str) -> frozenset:
     on offering TOMIC or TE with Tomić's win recorded (doc 418,
     `pending_side_result_unjoined`). So a name that does not say which word is
     its surname is read BOTH ways, first word and last — initials excluded,
-    since no surname is one letter.
+    since no surname is one letter, and a generational suffix excluded with
+    them, since "Martin Damm Jr" is not read either way as "jr".
     """
     people = _sheet_people([part])
     if not people:
         return frozenset()
     if _is_sheet_form(part):
         return frozenset({people[0].surname})
-    words = [w for w in (_sofa_fold(t) for t in
-                         re.sub(r'\[[^\]]*\]', ' ', part or '').split())
-             if len(w) >= 2]
+    words = strip_gen_suffix(
+        [w for w in (_sofa_fold(t) for t in
+                     re.sub(r'\[[^\]]*\]', ' ', part or '').split())
+         if len(w) >= 2])
     return frozenset(words[:1] + words[-1:]) or frozenset({people[0].surname})
 
 
