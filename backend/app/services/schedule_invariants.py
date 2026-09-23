@@ -93,6 +93,38 @@ _QUALI_ROUND_RE = re.compile(r'^(?:Q\d?|FQ)$', re.I)
 _ROLE_TOKEN_RE = re.compile(
     r'^(?:qualifier|lucky|loser|alternate|special|exempt|'
     r'LL|ALT|SE|Q\d?|BYE|TBD|TBA)$', re.I)
+# THE WORDS A SHEET PRINTS ABOUT ITSELF — the heading over a block of boxes,
+# as opposed to the roles above, which stand where a PERSON would.
+#
+# Korea's 2026-09-24 sheet (doc 465) printed "Doubles" on a line of its own in
+# each court's column: the heading over a doubles section whose draw was not
+# made yet, with nothing under it. Every header reader in oop_parser wanted a
+# ROUND word after the discipline, so the word was stored as a PLAYER —
+# Ostapenko's R16 SINGLES published as a doubles match against "Taylah PRESTON
+# AUS / Doubles", Bondar's the same on the other court, and both rows lost the
+# bracket match a singles row is linked by. Fixed in the parser
+# (oop_parser._BARE_EVENT_RE, da786379); this is the law that says it can
+# never be data again, whatever reads a sheet next.
+#
+# CASE-BLIND, which is exactly where it disagrees with `name_not_sheet_form`,
+# the check that happened to convict the incident. That one asks a name for a
+# capitalised run, and "DOUBLES" — the spelling the sheets shout their headings
+# in — HAS one, so the all-caps heading walks straight past it; on a doubles
+# row `doubles_side_not_two` then counts two names and passes as well. A
+# heading is not a person in any casing.
+_EVENT_WORD_RE = re.compile(
+    r"^(?:men'?s|women'?s|ladies'?|gentlemen'?s|boys'?|girls'?|"
+    r"singles|doubles|mixed|qualifying|qualification|main|draw|"
+    r"ATP|WTA|ITF)$", re.I)
+# The half of that vocabulary that can only be an event, tested ANYWHERE in a
+# name rather than as the whole of it — the reach `name_holds_slot_wording`
+# has, and for the same reason: the sheet's own word joins a name by being
+# GLUED to it as often as by standing alone. "Main", "Draw" and the tour codes
+# are deliberately absent here — they are ordinary words and three-letter
+# surnames, and only the whole-line reading above may judge them.
+_EVENT_DISCIPLINE_RE = re.compile(
+    r'(?<![A-Za-z])(?:singles|doubles|mixed|qualifying|qualification)'
+    r'(?![A-Za-z])', re.I)
 # A leading entry-status marker, "[LL] " / "[WC] " — the mirror of
 # _TRAILING_SEED_RE, which only strips the ones printed after the name.
 _LEADING_SEED_RE = re.compile(r'^(?:\[[^\]]*\]\s*)+')
@@ -119,6 +151,24 @@ def _names_nobody(raw: str) -> bool:
     while toks and toks[-1] in COUNTRY_CODES:
         toks.pop()
     return bool(toks) and all(_ROLE_TOKEN_RE.match(t) for t in toks)
+
+
+def _names_the_event(raw: str) -> bool:
+    """Is this stored player row the sheet's own HEADING rather than a person?
+
+    Two readings, either of which convicts, because the sheet's word reaches a
+    name two ways: standing alone in the column, and glued to the name above
+    it. Neither strips a country — a heading carries none, and a name that
+    holds a discipline word is wrong however it ends.
+
+    Measured over every name the system holds: 0 of 2,656 stored player rows
+    and 0 of 4,482 draw entries, against the two Korea rows it was written for.
+    """
+    s = _LEADING_SEED_RE.sub("", _TRAILING_SEED_RE.sub("", (raw or "").strip()))
+    if _EVENT_DISCIPLINE_RE.search(s):
+        return True
+    toks = [t for t in re.split(r'[\s/]+', s) if t]
+    return bool(toks) and all(_EVENT_WORD_RE.match(t) for t in toks)
 
 
 def _person_words(raw: str) -> set:
@@ -1518,6 +1568,21 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 flag("name_not_sheet_form", e,
                      f"side {p.side}: {raw!r} has no capitalised surname — "
                      f"not the sheet's rendering")
+
+        # 2026-09-24, Korea doc 465: "Doubles", the heading the sheet printed
+        # over an empty section of each court's column, stored as a player on
+        # whichever side was open when the line arrived. The page drew a
+        # phantom team — "Taylah PRESTON AUS / Doubles" against Ostapenko —
+        # and the two R16 SINGLES rows wearing it lost their bracket match.
+        # The sheet talking about itself is never a person; see
+        # `_names_the_event` for why neither neighbour above can be trusted to
+        # say so.
+        for p in players:
+            raw = (p.raw_name or "").strip()
+            if raw and _names_the_event(raw):
+                flag("name_is_event_heading", e,
+                     f"side {p.side}: {raw!r} is the sheet's own event "
+                     f"heading, not a player")
 
         # 2026-09-14, Sao Paulo: "[Q/LL] Qualifier/LL" — the tournament saying
         # the seat belongs to a qualifier or a lucky loser and to nobody yet.
