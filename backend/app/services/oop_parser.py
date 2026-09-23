@@ -577,6 +577,76 @@ SCORE_RE = re.compile(
     r'(?:\s*(?:RET|TBF|W/?O|DEF|ABD|CONC|F|SF|QF|ATP|WTA))*\s*$', re.I)
 
 
+# A MARK THAT ENDS THE MATCH, and one that explicitly does not. "RET" and
+# "DEF" close a match that was on court; "W/O" and "CONC" close one that never
+# started. "TBF" (to be finished) and "ABD" (abandoned) say the opposite in so
+# many words, and F/SF/QF/ATP/WTA in SCORE_RE are the ROUND and the tour, not a
+# result — reading "6-4 6-2 F" as "final" would be reading the round.
+_SCORE_ENDS_RE = re.compile(r'\b(?:RET|W\s*/?\s*O|DEF|CONC)\b', re.I)
+_SCORE_UNFINISHED_RE = re.compile(r'\b(?:TBF|ABD)\b', re.I)
+# Furniture that may sit beside a score without being part of it.
+_SCORE_FURNITURE_RE = re.compile(r'^(?:F|SF|QF|ATP|WTA)$', re.I)
+# One set as a sheet prints it: "6-2", "7-6(5)", "10-8". Nothing else counts —
+# the compact form ("62") and the server asterisk ("*42") are deliberately NOT
+# read here, because both are how a sheet prints a match still in progress and
+# a wrong guess in that direction is the expensive one.
+_SCORE_SET_RE = re.compile(r'^(\d{1,2})[-\u2013](\d{1,2})(?:\(\d+\))?[,;]?$')
+
+
+def _set_is_complete(a: int, b: int) -> bool:
+    """Has this set been won? 6-4 and 7-5 and 7-6 and a 10-8 match tiebreak
+    have; 6-5, 3-1 and 0-0 have not."""
+    hi, lo = max(a, b), min(a, b)
+    return (hi >= 6 and hi - lo >= 2) or (hi == 7 and lo >= 5)
+
+
+def printed_score_final(raw, sets_to_win: int = 2) -> bool:
+    """Does this printed score say the match is OVER?
+
+    The sheet prints its score where "vs" would go, and it is a snapshot from
+    whenever that revision was published: mid-match on one court, final on the
+    next. `SCORE_RE` only asks whether a line LOOKS like a score; this asks the
+    harder question, because "the tournament has declared this match finished"
+    is the only reading strong enough to act on.
+
+    Answers True only on evidence, never on shape. A score made entirely of
+    COMPLETED sets, with one side holding `sets_to_win` of them and more than
+    the other, is a finished best-of-three. A terminal mark (RET, W/O, DEF,
+    CONC) finishes it whatever the sets say. Anything this reader cannot
+    account for — the compact "62", a server asterisk, a "TBF", a set still
+    being played — is False, and the caller is left exactly where it was.
+
+    `sets_to_win` stays 2 for every caller today: the reading is used only for
+    rows with no bracket match behind them, which is doubles and qualifying,
+    and both are best-of-three everywhere on tour (men's Grand Slam doubles
+    included, since 2022). A best-of-five caller must say so — "6-2 6-3" is a
+    finished match under one format and a two-set lead under the other.
+    """
+    text = str(raw or '').strip()
+    if not text:
+        return False
+    if _SCORE_UNFINISHED_RE.search(text):
+        return False
+    if _SCORE_ENDS_RE.search(text):
+        return True
+    won = [0, 0]
+    saw_set = False
+    for token in text.split():
+        if _SCORE_FURNITURE_RE.match(token):
+            continue
+        m = _SCORE_SET_RE.match(token)
+        if not m:
+            return False
+        a, b = int(m.group(1)), int(m.group(2))
+        if not _set_is_complete(a, b):
+            # A set still being played is the whole answer: whatever came
+            # before it, this match had not finished when the sheet was cut.
+            return False
+        saw_set = True
+        won[0 if a > b else 1] += 1
+    return saw_set and max(won) >= sets_to_win and won[0] != won[1]
+
+
 # Two partners sometimes share one cell with nothing between them:
 # "David VEGA HERNANDEZ ESP Benjamin WINTER LOPEZ ESP". Every name in this
 # format ends with a nationality code, so the boundary is the point just after

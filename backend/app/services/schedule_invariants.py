@@ -277,6 +277,51 @@ def _printed_instant(entry, tz_name):
 _LAW_WALKOVER_RE = re.compile(r'^\s*w\s*/?\s*o\.?\s*$', re.I)
 
 
+# THE LAW'S OWN READING of "the sheet has declared this match over", written
+# apart from `oop_parser.printed_score_final` on purpose: an alarm that shares
+# its reader's blind spot is not an alarm (Chengdu doc 408 — `round_headers`
+# was counted with the very regex that could not see the header). This one
+# finds the sets by SEARCHING the line and then proves it has accounted for
+# every character of it; the parser's walks the line token by token. They agree
+# on all 43 printed scores in the stored corpus and can disagree on the next
+# form a sheet invents, which is the point.
+_LAW_SCORE_ENDS_RE = re.compile(r'\b(?:RET|W\s*/?\s*O|DEF|CONC)\b', re.I)
+_LAW_SCORE_OPEN_RE = re.compile(r'\b(?:TBF|ABD)\b', re.I)
+_LAW_SCORE_FURNITURE_RE = re.compile(r'\b(?:F|SF|QF|ATP|WTA)\b', re.I)
+_LAW_SCORE_SET_RE = re.compile(r'(\d{1,2})[-\u2013](\d{1,2})(?:\(\d+\))?')
+
+
+def _sheet_declared_finished(entry) -> bool:
+    """Did the tournament print this slot's match as FINISHED?
+
+    A sheet prints its score where "vs" would go, and the same cell holds a
+    mid-match snapshot ("62 *42 TBF") and a final result ("7-6(3) 6-1"). Only
+    the second may be acted on, so anything this reading cannot account for
+    character by character is False.
+    """
+    text = str(getattr(entry, "printed_score", None) or "").strip()
+    if not text or _LAW_SCORE_OPEN_RE.search(text):
+        return False
+    if _LAW_SCORE_ENDS_RE.search(text):
+        return True
+    pairs = _LAW_SCORE_SET_RE.findall(text)
+    if not pairs:
+        return False
+    rest = _LAW_SCORE_FURNITURE_RE.sub('', _LAW_SCORE_SET_RE.sub('', text))
+    if rest.strip(' ,;.'):
+        # A form this reading does not know — the compact "62", a server
+        # asterisk. Not a finished match as far as the law is concerned.
+        return False
+    won = [0, 0]
+    for a, b in pairs:
+        a, b = int(a), int(b)
+        hi, lo = max(a, b), min(a, b)
+        if not ((hi >= 6 and hi - lo >= 2) or (hi == 7 and lo >= 5)):
+            return False
+        won[0 if a > b else 1] += 1
+    return max(won) >= 2 and won[0] != won[1]
+
+
 def _walked_over(entry) -> bool:
     """Did this slot's match end in a walkover? The law's own reading, apart
     from schedule._played: a result cell or a printed score that is "w/o"."""
@@ -2485,6 +2530,41 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                  f"and {len(group) - len(mine)} from tournament(s) {others} "
                  f"under one running order (key {key!r}) — another venue's "
                  f"court decides what has finished here")
+
+    # 2026-09-23, Singapore doc 468: COURT 1's opener — CASCINO / FENG vs
+    # COSTOULAS / GIBSON — was printed with its score, "7-6(3) 6-1", on the
+    # very sheet the page's PDF button opens, and the page offered it as an
+    # upcoming 2:00 PM match all afternoon. ESPN covers neither doubles nor
+    # qualifying, so `winner_side` and `live_scores_json` stay empty unless
+    # the Sofascore sweep claims the event, and the day endpoint's other
+    # source of truth — the running order, "a later slot under way proves the
+    # ones above it are over" — cannot say anything about the LAST match to
+    # finish on a court that then stands idle. That is an ordinary shape, not
+    # a corner: every court has a last finished match.
+    #
+    # Stated as the law that was broken — a slot the tournament has declared
+    # finished is never served as still to come — and read through the serve
+    # path's OWN `_status_of`, the way court_run_crosses_tournaments runs its
+    # key, so a future edit there cannot quietly drop the sheet again. The
+    # law's reading of the score is its own (`_sheet_declared_finished`).
+    from app.routers.schedule import _status_of as _served_status
+    linked_m = {}
+    if linked:
+        from app.models.tournament import Match as _MatchRow
+        linked_m = {m.id: m for m in (await db.execute(
+            select(_MatchRow).where(_MatchRow.id.in_(linked)))).scalars().all()}
+    for e in rows:
+        if not _sheet_declared_finished(e):
+            continue
+        if _served_status(e, linked_m.get(e.match_id) if e.match_id else None) \
+                != "scheduled":
+            continue
+        flag("finished_slot_served_as_upcoming", e,
+             f"{e.court!r} #{e.court_order} is printed "
+             f"{e.printed_score!r} — the sheet says it is over — and the day "
+             f"endpoint still serves it as 'scheduled'"
+             + (" (no bracket match behind it, so the sheet is the only"
+                " record there is)" if not e.match_id else ""))
 
     # 2026-09-18, SP Open doc 289 — see player_on_two_courts.
     for a, b, name in player_on_two_courts(rows, played=_was_on_court):

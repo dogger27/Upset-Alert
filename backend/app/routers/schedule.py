@@ -27,7 +27,7 @@ from app.services.schedule import (carry_surname, settle_from_result_rows,
                                    settled_sides_index)
 from app.services.doubles_rank import doubles_pair_ranks
 from app.services.qualifying_rank import qualifying_places
-from app.services.oop_parser import served_nation
+from app.services.oop_parser import printed_score_final, served_nation
 from app.services.rankings import _norm
 from app.models.tournament import Draw, DrawEntry, Match, Tournament, default_short_name
 from app.models.prediction import UserPrediction
@@ -719,6 +719,34 @@ def _status_of(entry, match) -> str:
             return "completed"
         if getattr(entry, "live_scores_json", None):
             return "live"
+        # THEN THE SHEET'S OWN STATEMENT OF THE RESULT, last because a feed
+        # that is watching beats a snapshot that was true when the PDF was
+        # cut. Those two columns are written only where the Sofascore doubles
+        # sweep has claimed the event; until it does — and it never claims
+        # some of them — the only sighting of play that exists for a doubles
+        # or qualifying slot is the score the tournament PRINTED in the box.
+        # `schedule._slot_was_pulled` and `schedule_invariants.never_played`
+        # have always read it exactly that way; the serve path alone did not.
+        #
+        # The running-order fill-in below ("a later slot under way proves the
+        # ones above it are over") is what normally covers these, and it
+        # cannot reach a slot with nothing behind it on its court. Singapore
+        # 2026-09-23, doc 468: COURT 1's opener CASCINO / FENG vs COSTOULAS /
+        # GIBSON was printed "7-6(3) 6-1" — finished, and printed so on the
+        # sheet the page links to — while the page went on offering it as an
+        # upcoming 2:00 PM match, because the only slot under it was waiting
+        # on a 6:30 PM singles on another court. The last match to finish on
+        # a court that then stands idle is the everyday shape of that, not a
+        # corner case.
+        #
+        # Only a score that reads FINAL promotes. A snapshot of a match still
+        # on court is printed exactly the same way ("62 *42 TBF"), and that is
+        # what a rained-off row carried onto the next day prints — calling one
+        # of those live or finished would strand it out of the "to be
+        # completed" branch further down. `printed_score_final` refuses
+        # everything it cannot account for.
+        if printed_score_final(getattr(entry, "printed_score", None)):
+            return "completed"
     return entry.status or "scheduled"
 
 
@@ -1709,6 +1737,37 @@ async def schedule_dates(
     if tournament_id:
         q = q.where(ScheduleEntry.tournament_id.in_(tournament_id))
     rows = (await db.execute(q.order_by(ScheduleEntry.play_date))).all()
+    # THE SAME READING AS `_status_of`, and it has to be, or the two disagree
+    # about the same row. None of the four columns above can carry a result
+    # for a doubles or qualifying slot — no bracket match, and `winner_side`
+    # only once the Sofascore sweep claims the event — so a slot the SHEET
+    # printed a final score against was still being counted as one of the
+    # day's open matches. `open_counts` is what picks the day the schedule
+    # page lands on ("the first day from today that still has something on
+    # it"), so a day finished on paper could hold the reader on it while the
+    # next day's sheet was up. Singapore 2026-09-23, doc 468 — the COURT 1
+    # opener in `_status_of` above is one of these rows.
+    #
+    # Done as a second pass rather than inside the aggregate because "final"
+    # is a reading of the printed text, not a comparison SQLite can make, and
+    # a half-reading here would be worse than none: a carried, rained-off row
+    # prints its partial score the same way and IS still open. Scoped to the
+    # rows that have a printed score at all — 43 in the whole stored corpus.
+    sheet_done: dict = {}
+    dq = (select(ScheduleEntry.play_date, ScheduleEntry.printed_score)
+          .select_from(ScheduleEntry)
+          .outerjoin(Match, Match.id == ScheduleEntry.match_id)
+          .where(ScheduleEntry.printed_score.isnot(None),
+                 or_(ScheduleEntry.status.is_(None),
+                     ScheduleEntry.status != "completed"),
+                 ScheduleEntry.completed_at.is_(None),
+                 ScheduleEntry.winner_side.is_(None),
+                 Match.winner_id.is_(None)))
+    if tournament_id:
+        dq = dq.where(ScheduleEntry.tournament_id.in_(tournament_id))
+    for pd, printed in (await db.execute(dq)).all():
+        if printed_score_final(printed):
+            sheet_done[pd] = sheet_done.get(pd, 0) + 1
     # WHICH TOURNAMENTS ARE ON THE SHEETS AT ALL. The app's tournament chooser
     # needs to know whether there is a choice to make before it offers one: a
     # tournament with a live bracket but no schedule row anywhere is a filter
@@ -1732,5 +1791,7 @@ async def schedule_dates(
     main_start = (await db.execute(mq)).scalar()
     return {"dates": [r[0].isoformat() for r in rows],
             "main_start": main_start.isoformat() if main_start else None,
-            "open_counts": {r[0].isoformat(): int(r[2] or 0) for r in rows},
+            "open_counts": {r[0].isoformat():
+                            max(0, int(r[2] or 0) - sheet_done.get(r[0], 0))
+                            for r in rows},
             "tournaments": tournaments}
