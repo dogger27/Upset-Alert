@@ -357,7 +357,12 @@ const s = StyleSheet.create({
      with the money when the draw runs a cash pool. Beats the clay of "me":
      the certainty is the news. */
   namePodium: { color: C.gold, fontWeight: '800' },
-  real: { color: C.muted, fontSize: 12, lineHeight: leading(15) },
+  /* Pulled 3pt up into the username's line (owner, 2026-09-23): the two
+     lines' own leading — the name's descender room and this one's ascender
+     room — left a gap that read as two separate things. A margin rather than
+     a smaller lineHeight, because iOS clips glyphs in a line box shorter
+     than the font's own. Every row carries it, so they stay one height. */
+  real: { color: C.muted, fontSize: 12, lineHeight: leading(15), marginTop: -leading(3) },
   /* Centred, like the site: a label fills its cell and a number does not.
      The header is a bare tick now, so the column is the score columns'
      width and the name gets the rest. */
