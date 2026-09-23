@@ -14,14 +14,14 @@
  *    the person behind them is fourth.
  */
 
-import { Link, Stack, useLocalSearchParams, useRouter } from 'expo-router'
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useAuth } from '../../../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores, getPositionChances, getChancesHistory } from '../../../../../../../api'
 import { useApi } from '../../../../../../../useApi'
 import { byFinish, competitionRanks, finishText, pct } from '../../../../../../../scoring'
-import { StandingsFoot, useStandingsView } from '../../../../../../../standingsTools'
+import { FOOT_FLUSH, StandingsFoot, useStandingsView } from '../../../../../../../standingsTools'
 import { othersPicksNote } from '../../../../../../../lock'
 import { C } from '../../../../../../../theme'
 import { PlayerName, TourSwitch, headerTour } from '../../../../../../../cards'
@@ -146,21 +146,9 @@ export default function Standings() {
           timeline and What if sit beneath it, always on screen — a control
           for the table should not be somewhere past the table's end. The
           pull-to-refresh moves into the box, since that is what scrolls. */}
-      <Screen scroll={false}>
+      <Screen scroll={false} style={FOOT_FLUSH}>
         {scores.loading && !scores.data ? <Loading /> : null}
         <ErrorNote error={scores.error} onRetry={scores.refetch} />
-
-        {scores.data && (
-          <View style={s.bar}>
-            <Muted>
-              {scores.data.completed_matches_count} matches played
-              {t ? ` · ${t.draw_size} draw` : ''}
-            </Muted>
-            <Link href={`/league/${id}/draw/${drawId}/picks`} style={s.link}>
-              Your picks ›
-            </Link>
-          </View>
-        )}
 
         {scores.data && entries.length === 0 && (
           <Card>
@@ -331,8 +319,6 @@ const s = StyleSheet.create({
      column further left than its header — the ✓ count sat under the "120"
      however it was aligned. One number, in both places. */
   body: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 },
-  bar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  link: { color: C.clay, fontWeight: '700', paddingVertical: 6 },
   /* The bounded box the table scrolls in; the foot sits under it. */
   scroller: { flex: 1, minHeight: 0 },
   scrollerBody: { paddingBottom: 4 },

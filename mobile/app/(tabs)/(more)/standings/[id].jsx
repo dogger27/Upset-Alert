@@ -15,7 +15,7 @@ import { useAuth } from '../../../../auth'
 import { getGlobalRoundScores, listTournaments, getGlobalPositionChances, getGlobalChancesHistory } from '../../../../api'
 import { useApi } from '../../../../useApi'
 import { byFinish, competitionRanks, finishText, pct } from '../../../../scoring'
-import { StandingsFoot, useStandingsView } from '../../../../standingsTools'
+import { FOOT_FLUSH, StandingsFoot, useStandingsView } from '../../../../standingsTools'
 import { othersPicksNote } from '../../../../lock'
 import { C } from '../../../../theme'
 import { PlayerName, TourSwitch, headerTour } from '../../../../cards'
@@ -148,7 +148,7 @@ export default function GlobalStandings() {
           timeline and What if sit beneath it, always on screen — a control
           for the table should not be somewhere past the table's end. The
           pull-to-refresh moves into the box, since that is what scrolls. */}
-      <Screen scroll={false}>
+      <Screen scroll={false} style={FOOT_FLUSH}>
         {standings.loading && !standings.data ? <Loading /> : null}
         <ErrorNote error={standings.error} onRetry={standings.refetch} />
         {standings.data && (
