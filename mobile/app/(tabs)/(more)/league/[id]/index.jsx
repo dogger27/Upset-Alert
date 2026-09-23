@@ -11,7 +11,7 @@ import { LeagueSettingsSheet, canManageLeague } from '../../../../../leagueSetti
 import { LeaguePicker, LeagueTitle } from '../../../../../leaguePicker'
 import { setLastLeague } from '../../../../../lastLeague'
 import { useApi } from '../../../../../useApi'
-import { TourBadge } from '../../../../../cards'
+import { PlayerName, TourBadge } from '../../../../../cards'
 import { computeCohortInfo, getHomeSection } from '../../../../../drawStatus'
 import { GROUP_TONE, groupDrawsByStatus, sectionOfMany, showGroupHeadings } from '../../../../../drawGroups'
 import { C, R, T } from '../../../../../theme'
@@ -220,16 +220,27 @@ export default function LeagueDraws() {
             stretched thirds put "Previous" adrift in its box while
             "Open / Active" was still shrinking to fit in the one beside it.
             Now nothing shrinks and the group centres under the title. */}
+        {/* MEMBERS IS ITS OWN CONTROL (owner, 2026-09-23). Open / Active and
+            Previous are two views of the same thing — this league's draws —
+            so they share one switch; the member tally is a different subject
+            and sits beside it as a separate pill. Labels shrink to fit rather
+            than end in "…". */}
         {tabs.length > 1 && (
-          <View style={s.tabs}>
-            {tabs.map(x => (
-              <Pressable key={x.key} onPress={() => setTab(x.key)}
-                         style={({ pressed }) => [s.tab, tab === x.key && s.tabOn, pressed && { opacity: 0.7 }]}
-                         accessibilityRole="button" accessibilityState={{ selected: tab === x.key }}>
-                <Text style={[s.tabText, tab === x.key && s.tabTextOn]} numberOfLines={1}>
-                  {x.label}
-                </Text>
-              </Pressable>
+          <View style={s.tabBar}>
+            {[tabs.filter(x => x.key !== 'members'), tabs.filter(x => x.key === 'members')]
+              .filter(group => group.length).map((group, gi) => (
+              <View key={gi} style={[s.tabs, s.tabGroup]}>
+                {group.map(x => (
+                  <Pressable key={x.key} onPress={() => setTab(x.key)}
+                             style={({ pressed }) => [s.tab, tab === x.key && s.tabOn, pressed && { opacity: 0.7 }]}
+                             accessibilityRole="button" accessibilityState={{ selected: tab === x.key }}>
+                    <Text style={[s.tabText, tab === x.key && s.tabTextOn]}
+                          numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                      {x.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
             ))}
           </View>
         )}
@@ -291,10 +302,11 @@ export default function LeagueDraws() {
               </Text>
               <View style={[s.tRow, s.tHead]}>
                 <View style={s.tName} />
-                {[['atp', 'ATP'], ['wta', 'WTA'], ['combined', 'Comb.']].map(([col, label]) => (
+                {[['atp', 'ATP'], ['wta', 'WTA'], ['combined', 'Total']].map(([col, label]) => (
                   <Pressable key={col} onPress={() => sortBy(col)} style={s.tPts} hitSlop={6}
                              accessibilityRole="button" accessibilityLabel={`Sort by ${label}`}>
-                    <Text style={[s.tHeadText, sortCol === col && { color: C.ink }]} numberOfLines={1}>
+                    <Text style={[s.tHeadText, sortCol === col && { color: C.ink }]}
+                          numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
                       {label}{sortCol === col ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ''}
                     </Text>
                   </Pressable>
@@ -311,21 +323,21 @@ export default function LeagueDraws() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Ionicons name="person-circle-outline" size={16} color={C.faint} />
                       <View style={{ flexShrink: 1 }}>
-                        <Text style={[T.bodyMed, { color: C.ink }]} numberOfLines={1}>{m.username}</Text>
+                        <PlayerName name={m.username} shrinkOnly style={[T.bodyMed, { color: C.ink }]} />
                         {/* A league decides whether to show real names;
                             Global has no such setting and shows none —
                             reading `.show_real_name` off the absent league
                             was a red box on that screen. */}
                         {league.data?.show_real_name && m.full_name ? (
-                          <Text style={[T.tiny, { color: C.faint }]} numberOfLines={1}>{m.full_name}</Text>
+                          <PlayerName name={m.full_name} style={[T.tiny, { color: C.faint }]} />
                         ) : null}
                       </View>
                       {m.is_admin ? <Text style={s.adminBadge}>A</Text> : null}
                     </View>
                   </CardLink>
-                  <Text style={[s.tPts, s.tPtsText]}>{m.atp_points ?? '–'}</Text>
-                  <Text style={[s.tPts, s.tPtsText]}>{m.wta_points ?? '–'}</Text>
-                  <Text style={[s.tPts, s.tPtsText, { fontFamily: 'Archivo_700Bold' }]}>{m.combined_points ?? '–'}</Text>
+                  <Text style={[s.tPts, s.tPtsText]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{m.atp_points ?? '–'}</Text>
+                  <Text style={[s.tPts, s.tPtsText]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{m.wta_points ?? '–'}</Text>
+                  <Text style={[s.tPts, s.tPtsText, { fontFamily: 'Archivo_700Bold' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{m.combined_points ?? '–'}</Text>
                 </View>
               ))}
             </View>
@@ -394,10 +406,10 @@ function DrawRow({ items, leagueId, isGlobal = false, compact = false }) {
         )}
         <View style={[s.inner, s.innerCompact]}>
           <View style={s.nameRow}>
-            <Text style={[s.name, s.nameCompact]} numberOfLines={1}>{a.name}</Text>
+            <Text style={[s.name, s.nameCompact]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{a.name}</Text>
             {pooled ? <Text style={s.bag} accessibilityLabel="Cash pool">💰</Text> : null}
           </View>
-          <Text style={s.meta} numberOfLines={1}>
+          <Text style={s.meta} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
             {[tierText, a.year].filter(Boolean).join(' · ')}
           </Text>
         </View>
@@ -417,7 +429,7 @@ function DrawRow({ items, leagueId, isGlobal = false, compact = false }) {
       )}
       <View style={s.inner}>
         <View style={s.nameRow}>
-          <Text style={s.name} numberOfLines={2}>{a.name}</Text>
+          <Text style={s.name} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>{a.name}</Text>
           {pooled ? <Text style={s.bag} accessibilityLabel="Cash pool">💰</Text> : null}
         </View>
         <Text style={s.meta}>
@@ -459,12 +471,15 @@ const s = StyleSheet.create({
      the track rather than a rectangle laid over it. The hairline is what
      separates the shell from the page — raised-on-sunken alone is two greys
      a point apart and, on a phone in daylight, no edge at all. */
+  tabBar: { flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  // Each group shrinks before it overflows the row, and its labels with it.
+  tabGroup: { flexShrink: 1 },
   tabs: {
     alignSelf: 'center', flexDirection: 'row', gap: 2,
     backgroundColor: C.sunken, borderRadius: R.pill, padding: 3,
     borderWidth: 1, borderColor: C.border,
   },
-  tab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: R.pill },
+  tab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: R.pill, flexShrink: 1 },
   tabOn: { backgroundColor: C.raised, borderWidth: 1, borderColor: C.borderOn },
   /* No lineHeight: on iOS the extra leading lands above the glyphs and pushes
      the caps off a short strip's centre. The row centres the text.

@@ -27,7 +27,7 @@ export function LeagueTitle({ name, onPress }) {
     <Pressable onPress={onPress} hitSlop={10} accessibilityRole="button"
                accessibilityLabel={`${name || 'League'} — change league`}
                style={({ pressed }) => [s.title, pressed && { opacity: 0.6 }]}>
-      <Text style={s.titleText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+      <Text style={s.titleText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
         {name || 'League'}
       </Text>
       <Ionicons name="chevron-down" size={18} color={C.muted} style={{ marginTop: 2 }} />
