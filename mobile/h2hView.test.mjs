@@ -6,7 +6,7 @@
    and look perfectly plausible doing it.
 */
 import assert from 'node:assert/strict'
-import { ageOf, betterSide, compareRows, formChips, formCount, formDetail, onSurface, orient } from './h2hView.js'
+import { ageOf, betterSide, compareRows, eventTitle, roundWord, formChipText, formChips, formDetail, formGrid, onSurface, orient, shortEvent, singlesOnly } from './h2hView.js'
 
 const PAYLOAD = {
   slug_a: 'shapovalov', slug_b: 'van-de-zandschulp',
@@ -118,14 +118,35 @@ assert.deepEqual(formChips(null), [])
 
 /* ── how many swatches a row holds, and what a tap on one says ─────────── */
 
-// Ten results in two rows: what fits a row is measured, the depth is not.
-assert.equal(formCount(131), 5, 'a phone column at ordinary text size holds five')
-assert.equal(formCount(94), 4, 'and four when large text has taken the room')
-assert.equal(formCount(40), 2, 'two 18pt swatches and their gap fit 39 of those 40 points')
-assert.equal(formCount(12), 1, 'one is the floor, never zero — a swatch narrower than itself')
-assert.equal(formCount(null), 5, 'before the row has been measured, draw the cap')
-assert.equal(formCount(1000), 5, 'and a tablet does not get a barcode')
-assert.equal(formCount(0), 5)
+/* Five to a row, and the SQUARE is what is measured: they fill the column
+   they are given rather than leaving a gap beside the word in the middle. */
+assert.deepEqual(formGrid(131), { size: 23, per: 5 }, 'a phone column at ordinary text size')
+assert.deepEqual(formGrid(94), { size: 16, per: 5 }, 'narrower squares when large text takes the room')
+assert.deepEqual(formGrid(160), { size: 29, per: 5 }, 'a wider phone gets bigger squares, not a wider gap')
+assert.deepEqual(formGrid(1000), { size: 30, per: 5 }, 'but a swatch is a mark, not a button')
+assert.deepEqual(formGrid(null), { size: 14, per: 5 }, 'before it is measured, the floor')
+
+/* THE COUNT GIVES WAY BEFORE THE SIZE DOES: below about 85 points five
+   squares cannot hold a letter, and clamping the size up overflowed the
+   column — which is what an 80pt column proved. */
+assert.deepEqual(formGrid(80), { size: 17, per: 4 }, 'four bigger squares, not five clipped ones')
+/* And it stops at the FIRST count that clears the floor, so a cramped column
+   keeps as many results as it can rather than drawing two big squares: the
+   information here is the run of results, not the size of the tiles. */
+assert.deepEqual(formGrid(50), { size: 14, per: 3 })
+for (const w of [50, 60, 70, 80, 94, 105, 118, 131, 160, 300]) {
+  const { size, per } = formGrid(w)
+  const used = size * per + (per - 1) * 3
+  assert.ok(used <= w, `${per} ${size}pt swatches overflow a ${w}pt column`)
+  // They fill the column unless the CEILING is what decided the size — on a
+  // tablet the row deliberately stops growing and the slack is the point.
+  if (size < 30) {
+    assert.ok(w - used < per + 1, `${per} ${size}pt swatches leave ${w - used}pt of ${w} empty`)
+  }
+}
+// The letter grows with its box: fixed at 10 it was a dot in a 24pt square.
+assert.equal(formChipText(23), 13)
+assert.equal(formChipText(14), 9, 'and never smaller than nine, whatever the box')
 
 const full = formChips([
   { result: 'W', opponent: 'Pavlovic L.', score: '6-4, 6-3', event: 'Chengdu',
@@ -137,14 +158,84 @@ assert.ok(full[0].match, 'a chip carries its match, because a tap opens it')
 const det = formDetail(full[0].match)
 assert.equal(det.won, true)
 assert.equal(det.line, 'beat Pavlovic L. · 6-4, 6-3')
-assert.equal(det.meta, 'Chengdu · Q-R16 · Hard', 'an ordinary tour singles needs no label')
+assert.equal(det.meta, 'Chengdu · Q R16 · Hard', 'an ordinary tour singles needs no rung label')
 
 const lower = formDetail({ result: 'L', opponent: 'Someone A.', score: '6-1, 6-1',
                            event: 'Cancun challenger', round: '1R', surface: 'Hard',
                            level: 'challenger', doubles: true })
 assert.equal(lower.line, 'lost to Someone A. · 6-1, 6-1')
-assert.equal(lower.meta, 'Cancun challenger · 1R · challenger · doubles · Hard',
-  'a Challenger and a doubles result say so — that is why the ladder is in the form')
+assert.equal(lower.meta, 'Cancun · CH · 1R · doubles · Hard',
+  'a Challenger and a doubles result still say so — abbreviated, and the rung once')
 assert.equal(formDetail(null), null)
+
+/* ── a singles preview shows singles form ───────────────────────────────── */
+
+const mixed = [
+  { result: 'W', opponent: 'A', doubles: false },
+  { result: 'L', opponent: 'B / C', doubles: true },
+  { result: 'W', opponent: 'D', doubles: false },
+]
+assert.deepEqual(singlesOnly(mixed).map(m => m.opponent), ['A', 'D'],
+  'two players\' serve against two others says nothing about a singles match')
+assert.deepEqual(singlesOnly(null), [])
+
+/* ── "CH", not "Challenger" ──────────────────────────────────────────────── */
+
+assert.equal(shortEvent('Guangzhou 2 challenger'), 'Guangzhou 2 CH')
+assert.equal(shortEvent('Mallorca Challenger'), 'Mallorca CH', 'whatever the case')
+assert.equal(shortEvent('US Open'), 'US Open', 'and nothing else is touched')
+assert.equal(shortEvent(null), '')
+
+/* THE RUNG IS A FIELD AND THE NAME GIVES IT UP (owner: "when we already put
+   'challenger' in the tournament type, remove it completely from the
+   tournament title"). TE writes it into both. */
+assert.equal(eventTitle('Guangzhou 2 challenger'), 'Guangzhou 2')
+assert.equal(eventTitle('Mallorca Challenger'), 'Mallorca')
+assert.equal(eventTitle('ITF M15 Cancun'), 'M15 Cancun',
+  'both rung words, and what is left is the part the rung does not say')
+assert.equal(eventTitle('US Open'), 'US Open')
+
+const ch = formDetail({ result: 'W', opponent: 'Sesko Z.', score: '6-4, 6-2',
+                        event: 'Mallorca challenger', round: '1R', surface: 'Hard',
+                        level: 'challenger', doubles: false })
+assert.equal(ch.meta, 'Mallorca · CH · 1R · Hard', 'the type sits with the tournament')
+
+const itf = formDetail({ result: 'L', opponent: 'X Y.', score: '6-0, 6-0',
+                         event: 'ITF M15 Cancun', round: 'QF', surface: 'Hard',
+                         level: 'itf', doubles: false })
+assert.equal(itf.meta, 'M15 Cancun · ITF · QF · Hard', 'and is never said twice')
+
+const tour = formDetail({ result: 'W', opponent: 'Sonego L.', score: '7-5, 6-3',
+                          event: 'Winston Salem', round: 'R16', surface: 'Hard',
+                          level: 'tour', doubles: false })
+assert.equal(tour.meta, 'Winston Salem · R16 · Hard', 'the tour needs no label')
+
+/* A rung we hold NO level for keeps the word in its name, abbreviated —
+   stripping it there would quietly promote a Challenger to the tour. */
+const unknown = formDetail({ result: 'W', opponent: 'A B.', score: '6-1, 6-1',
+                             event: 'Cancun challenger', round: '1R', surface: 'Hard',
+                             level: null, doubles: false })
+assert.equal(unknown.meta, 'Cancun CH · 1R · Hard')
+
+/* ── the round, in the app's words and not the source's ─────────────────── */
+
+assert.equal(roundWord('Q-R16'), 'Q R16', 'the owner: "WTF is Q-R16??"')
+assert.equal(roundWord('Q-QF'), 'Q QF')
+assert.equal(roundWord('Q-F'), 'Q final')
+assert.equal(roundWord('F'), 'final', 'an initial alone reads as an initial')
+assert.equal(roundWord('R16'), 'R16', 'and what the app already says is left alone')
+assert.equal(roundWord('1R'), '1R')
+assert.equal(roundWord(''), '')
+assert.equal(roundWord(null), '')
+
+/* WHERE TE NUMBERS THE ROUND, the number is used — it is stated. */
+assert.equal(roundWord('Q-1R'), 'Q1')
+assert.equal(roundWord('Q-2R'), 'Q2')
+
+/* WHERE IT NAMES A POSITION, the position is kept. Reading Q-R16 as "Q1" is
+   right for a sixteen-player qualifying draw and wrong for a thirty-two, and
+   a form row does not carry the draw size — so it says how deep and nothing
+   it cannot know. */
+assert.notEqual(roundWord('Q-R16'), 'Q1')
 
 console.log('ok — h2hView')

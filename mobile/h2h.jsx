@@ -40,7 +40,8 @@ import { getH2H, getPlayerForm } from './api'
 import { FitText, FlagSlot, PlayerName } from './cards'
 import { shortDay } from './dates'
 import { leading } from './fontScale.js'
-import { compareRows, formChips, formCount, formDetail, orient } from './h2hView.js'
+import { FORM_GAP, compareRows, formChipText, formChips, formDetail, formGrid, orient, roundWord, shortEvent, singlesOnly }
+  from './h2hView.js'
 import { ScrollPane } from './scrollPane'
 import { Sheet } from './sheet'
 import { C, PICK, R, S, SIDE, T } from './theme'
@@ -139,13 +140,17 @@ export function H2HSheet({ visible, onClose, a, b, surface }) {
                   <View style={[s.detailEdge,
                                 { backgroundColor: (open.side === 0 ? SIDE.left : SIDE.right).line }]} />
                   <View style={s.detailBody}>
-                    <Text style={s.detailLine} numberOfLines={1}>
+                    {/* TWO LINES, NOT A CUT (owner's rule, again): "lost to
+                        Fancutt T. / Watanabe S. · 6-3,…" is what a fixed line
+                        and a long pair of names produce. A card with room
+                        below it wraps. */}
+                    <Text style={s.detailLine} numberOfLines={2}>
                       <Text style={{ color: open.detail.won ? PICK.correct.border : PICK.wrong.border }}>
                         {open.detail.won ? 'W' : 'L'}
                       </Text>
                       {`  ${open.detail.line}`}
                     </Text>
-                    <Text style={s.detailMeta} numberOfLines={1}>
+                    <Text style={s.detailMeta} numberOfLines={2}>
                       {[open.detail.meta, shortDay(open.match.date)].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
@@ -173,10 +178,14 @@ export function H2HSheet({ visible, onClose, a, b, surface }) {
                       <View style={s.meetTop}>
                         <PlayerName name={m.side === 0 ? a?.name : b?.name}
                                     style={[s.meetWho, { color: side.ink }]} />
-                        <Text style={s.meetScore} numberOfLines={1}>{m.score}</Text>
+                        {/* A five-set score with two tiebreaks is long, and a
+                            cut score is unreadable in a way a smaller one is
+                            not: shrink, never truncate. */}
+                        <FitText style={s.meetScore} min={10} align="right">{m.score}</FitText>
                       </View>
-                      <Text style={s.meetMeta} numberOfLines={1}>
-                        {[m.tournament, m.year, m.round, m.surface].filter(Boolean).join(' · ')}
+                      <Text style={s.meetMeta} numberOfLines={2}>
+                        {[shortEvent(m.tournament), m.year, roundWord(m.round), m.surface]
+                          .filter(Boolean).join(' · ')}
                       </Text>
                     </View>
                   </View>
@@ -229,8 +238,14 @@ function Form({ form, side, end = false, open, onOpen }) {
      formCount says what that holds; ten chips then wrap into however many
      rows that makes. */
   const [width, setWidth] = useState(null)
-  const perRow = formCount(width)
-  const chips = formChips(form, perRow * 2)
+  /* THE SQUARES ARE SIZED FROM THE COLUMN, not fixed: five to a row, filling
+     the width the row has, which is what brings them up to the word in the
+     middle. See h2hView.formChipSize for why the ceiling and the floor. */
+  const { size, per } = formGrid(width)
+  // Two rows of whatever a row holds: ten at ordinary text size, eight where
+  // large text has narrowed the column.
+  // Singles only: this sheet previews a singles match — see singlesOnly.
+  const chips = formChips(singlesOnly(form), per * 2)
   return (
     <View style={[s.formRow, end && s.formRowEnd]}
           onLayout={e => setWidth(e.nativeEvent.layout.width)}>
@@ -240,12 +255,13 @@ function Form({ form, side, end = false, open, onOpen }) {
           <Pressable key={i} onPress={() => onOpen(showing ? null
             : { side, i, match: c.match, detail: formDetail(c.match) })}
                      hitSlop={2}
-                     style={[s.chip, c.result === 'W' ? s.chipWon : s.chipLost,
+                     style={[s.chip, { width: size, height: size },
+                             c.result === 'W' ? s.chipWon : s.chipLost,
                              showing && s.chipOpen]}
                      accessibilityRole="button" accessibilityLabel={c.said}
                      accessibilityState={{ selected: showing }}>
-            <Text style={[s.chipText,
-                          { color: c.result === 'W' ? PICK.correct.border : PICK.wrong.border }]}>
+            <Text style={[s.chipText, { fontSize: formChipText(size),
+                          color: c.result === 'W' ? PICK.correct.border : PICK.wrong.border }]}>
               {c.result}
             </Text>
           </Pressable>
@@ -260,7 +276,9 @@ function Form({ form, side, end = false, open, onOpen }) {
    and were cut off against both edges of the sheet on a phone with large text
    (owner's screenshot, 2026-09-23). The letter inside is small and fixed for
    the same reason: it labels a colour, it is not prose. */
-const CHIP = 18
+/* No CHIP constant any more: the square is measured from the row it sits in
+   (h2hView.formChipSize), which is the only way it can fill the column on a
+   wide phone and still fit on one with large text. */
 
 const s = StyleSheet.create({
   body: { paddingBottom: S.md, gap: S.md },
@@ -311,17 +329,17 @@ const s = StyleSheet.create({
   /* Wraps, so ten swatches make two rows of five — and three rows of four on
      a phone with large text, which is the same information either way. */
   formRow: {
-    flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', gap: 3,
+    flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', gap: FORM_GAP,
     justifyContent: 'flex-end', overflow: 'hidden',
   },
   formRowEnd: { justifyContent: 'flex-start' },
   chip: {
-    width: CHIP, height: CHIP, borderRadius: R.xs + 1,
+    borderRadius: R.xs + 1,
     alignItems: 'center', justifyContent: 'center', borderWidth: 1,
   },
   chipWon: { backgroundColor: PICK.correct.bg, borderColor: PICK.correct.border },
   chipLost: { backgroundColor: PICK.wrong.bg, borderColor: PICK.wrong.border },
-  chipText: { fontFamily: 'Archivo_700Bold', fontSize: 10 },
+  chipText: { fontFamily: 'Archivo_700Bold' },
   /* The open one wears the app's own "chosen" ring rather than a brighter
      fill: the fill already says won or lost, and a second meaning in the same
      property would fight it. */

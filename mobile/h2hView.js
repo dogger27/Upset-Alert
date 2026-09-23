@@ -123,20 +123,115 @@ export function compareRows({ view, surface, left, right }) {
   return rows
 }
 
-/* HOW MANY SWATCHES FIT the width the row actually has.
+/* THE FORM GRID: how big a swatch is, and how many go on a row.
  *
- * Five is the number a phone holds at ordinary text size, and it was hard-coded
- * until the layout suite ran the same sums at 2x: the label column grows with
- * the reader's text, the figure columns shrink to pay for it, and the fifth
- * swatch fell off the end. So the count is measured rather than assumed — the
- * row asks for its own width and this says what that width holds.
+ * Five to a row is the shape the owner asked for and the site's own; what is
+ * NOT fixed is the size, and fixing it was the mistake. At 18 points the five
+ * squares used 102 of the 131 this column has at ordinary text size, and the
+ * 29 that were left sat as a gap between them and the word in the middle
+ * (owner, 2026-09-23: "make the form pill boxes larger, so they get closer to
+ * the 'form' title"). Derived from the column instead, they fill it — and they
+ * keep filling it on a wider phone.
  *
- * `cap` is the most worth showing even on a tablet: a sixth result does not
- * change what the line says, and a row of ten reads as a barcode.
+ * THE COUNT GIVES WAY BEFORE THE SIZE DOES. On a phone with large text the
+ * label column grows and this one shrinks, and below about 85 points five
+ * squares cannot be drawn at a size that still holds a letter — the first
+ * version clamped the size up and overflowed the column instead, which the
+ * suite caught at an 80pt column. So the row drops to four, then three: a
+ * shorter line of form is still form, a clipped one is a bug.
+ *
+ * The ceiling is there because a swatch is a mark, not a button: past thirty
+ * points a row of ten reads as ten tiles rather than one line of form. The
+ * floor is the smallest square that still holds a letter.
  */
-export function formCount(width, { chip = 18, gap = 3, cap = 5 } = {}) {
-  if (!(width > 0)) return cap
-  return Math.max(1, Math.min(cap, Math.floor((width + gap) / (chip + gap))))
+export const FORM_PER_ROW = 5
+export const FORM_GAP = 3
+
+export function formGrid(width, { gap = FORM_GAP, min = 14, max = 30,
+                                  per = FORM_PER_ROW } = {}) {
+  const each = (n) => Math.floor((width - (n - 1) * gap) / n)
+  if (!(width > 0)) return { size: min, per }
+  let n = per
+  while (n > 1 && each(n) < min) n -= 1
+  return { size: Math.max(min, Math.min(max, each(n))), per: n }
+}
+
+/* The letter inside, which grows with its box rather than sitting in the
+   middle of one: fixed at 10 points it was a dot in a 24-point square. */
+export function formChipText(size) {
+  return Math.max(9, Math.round(size * 0.55))
+}
+
+/* TENNIS EXPLORER'S ROUND, IN THE APP'S OWN WORDS (owner, 2026-09-23: "WTF
+ * is Q-R16??").
+ *
+ * That is TE's spelling for the qualifying round of sixteen, and it was being
+ * printed raw — source vocabulary straight onto the screen. The app says Q1
+ * and Q2 for qualifying rounds and R16 / QF / SF / F for the draw, and this
+ * says the same things in those words.
+ *
+ * WHAT IT WILL NOT DO IS RENUMBER BY POSITION. It is tempting to read Q-R16
+ * as Q1 — the round of sixteen IS the first round of a sixteen-player
+ * qualifying draw — but a thirty-two-player qualifying draw has an R32 before
+ * it, and there the same label is Q2. The draw size is not in a form row, so
+ * the round of sixteen stays the round of sixteen: "Q R16" says qualifying
+ * and says how deep, and says nothing it cannot know. Where TE numbers the
+ * round itself ("Q-1R", from "Qualification - 1. round") the number is used,
+ * because then it is stated rather than inferred.
+ */
+const ROUND_WORD = { F: 'final', FIN: 'final' }
+
+export function roundWord(round) {
+  const raw = String(round || '').trim()
+  if (!raw) return ''
+  const qual = /^q[-\s]/i.test(raw)
+  const core = raw.replace(/^q[-\s]/i, '').toUpperCase()
+  const ord = /^(\d+)R$/.exec(core)
+  if (qual && ord) return `Q${ord[1]}`          // stated by TE, not inferred
+  const word = ROUND_WORD[core] || core
+  return qual ? `Q ${word}` : word
+}
+
+/* A SINGLES MATCH'S FORM IS SINGLES (owner, 2026-09-23). The form reads the
+ * whole ladder on purpose — a qualifier's month is Challengers and Futures —
+ * but a doubles result in a singles preview answers a question nobody asked:
+ * two players' serve against two others tells you nothing about the singles
+ * match being previewed, and it pushes a real result off the end of the row.
+ */
+export function singlesOnly(form) {
+  return (form || []).filter(m => !m.doubles)
+}
+
+/* "CH", NOT "CHALLENGER" (owner, 2026-09-23). Tennis Explorer prints the rung
+ * into the event's own name — "Guangzhou 2 challenger", "Mallorca challenger"
+ * — and spelled out it takes a third of the line, which is how a detail line
+ * ended up truncated. The tour's own shorthand is two letters.
+ *
+ * For a line that has NO field of its own for the rung: a previous meeting
+ * carries no level, so taking the word out of its name would quietly promote
+ * a Challenger to the tour.
+ */
+export function shortEvent(name) {
+  return String(name || '').replace(/\bchallengers?\b/gi, 'CH').trim()
+}
+
+/* THE RUNG IS A FIELD, NOT PART OF THE NAME (owner, 2026-09-23: "when we
+ * already put 'challenger' in the tournament type, remove it completely from
+ * the tournament title"). Used only where the rung IS printed beside it —
+ * "Mallorca · CH · 1R" rather than "Mallorca CH · CH · 1R" — which is why
+ * shortEvent above still exists for the lines that have nowhere else to say
+ * it.
+ */
+export function eventTitle(name) {
+  return String(name || '')
+    // Both rung words, because both appear in a name whose level repeats them:
+    // "ITF M15 Cancun" beside a rung of ITF said it twice, exactly as
+    // "Mallorca challenger" did. What is left — "M15 Cancun" — is the part
+    // that tells a reader something the rung does not.
+    .replace(/\bchallengers?\b/gi, ' ')
+    .replace(/\bitf\b/gi, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
 }
 
 /* A form line as the sheet draws it: the newest results first, at most `n`,
@@ -158,11 +253,19 @@ export function formChips(form, n = 5) {
  */
 export function formDetail(m) {
   if (!m) return null
+  /* The rung is said ONCE, as its own field, and the name gives it up: TE
+     writes it into both ("Mallorca challenger", level "challenger") and
+     printing both read the same fact twice on the line with no room. */
+  const rung = m.level === 'challenger' ? 'CH'
+    : m.level === 'itf' ? 'ITF'
+      : m.level && m.level !== 'tour' ? String(m.level).toUpperCase() : null
+  const event = rung ? eventTitle(m.event) : shortEvent(m.event)
   return {
     won: m.result === 'W',
     line: [m.result === 'W' ? `beat ${m.opponent}` : `lost to ${m.opponent}`,
            m.score].filter(Boolean).join(' · '),
-    meta: [m.event, m.round, m.level && m.level !== 'tour' ? m.level : null,
-           m.doubles ? 'doubles' : null, m.surface].filter(Boolean).join(' · '),
+    // The type sits with the tournament it types, before the round.
+    meta: [event, rung, roundWord(m.round), m.doubles ? 'doubles' : null,
+           m.surface].filter(Boolean).join(' · '),
   }
 }
