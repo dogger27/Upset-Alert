@@ -826,7 +826,10 @@ const s = StyleSheet.create({
   // new one.
   trFigures: { flexDirection: 'row', alignItems: 'baseline', gap: S.lg,
                paddingLeft: S.md },
-  tdLabel: { ...T.small, color: C.inkBody },
+  /* THREE COLOURS, THREE JOBS (owner, 2026-09-23: "just a big glob of
+     text"). The question in gold, the figure in white, its sample in light
+     green — so the eye can find each part without reading the others. */
+  tdLabel: { ...T.small, color: C.gold },
   // Room for '1h 44m' without squeezing the label beside it.
   /* The numeric spine: one width, right-aligned, tabular figures. Three
      numbers in a column can be compared without being read. */
@@ -836,7 +839,7 @@ const s = StyleSheet.create({
   // No fixed width and no right alignment any more: the figures lead their
   // own line, so they line up down the left edge on their own.
   tdValue: { ...T.score, color: C.ink, fontVariant: ['tabular-nums'] },
-  tdNote: { ...T.tiny, color: C.faint, flexShrink: 1 },
+  tdNote: { ...T.tiny, color: C.greenBright, flexShrink: 1 },
 
   /* ── A section heading: title, rule, and a number on the end ───────────── */
 
