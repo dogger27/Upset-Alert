@@ -10,9 +10,10 @@
  */
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { Alert, Pressable, RefreshControl, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useAuth } from '../../../../auth'
 import { getGlobalRoundScores, listTournaments, getGlobalPositionChances, getGlobalChancesHistory } from '../../../../api'
+import { ScrollPane } from '../../../../scrollPane'
 import { useApi } from '../../../../useApi'
 import { byFinish, competitionRanks, finishText, pct } from '../../../../scoring'
 import { FOOT_FLUSH, HeaderRule, STANDINGS_TITLE, StandingsFoot, useStandingsView } from '../../../../standingsTools'
@@ -170,7 +171,7 @@ export default function GlobalStandings() {
             (see lock.js::othersPicksNote). */}
         {entries.length > 0 && picksNote ? <Muted>{picksNote}</Muted> : null}
         {entries.length > 0 && (
-          <ScrollView style={s.scroller} contentContainerStyle={s.scrollerBody} showsVerticalScrollIndicator={false}
+          <ScrollPane overlay style={s.scroller} contentContainerStyle={s.scrollerBody}
                       stickyHeaderIndices={[0]}
                       refreshControl={<RefreshControl refreshing={pulling} onRefresh={pull} tintColor={C.muted} colors={[C.clay]} />}>
             <View style={[s.row, s.head, podiumCol && s.tightRow]}>
@@ -284,7 +285,7 @@ export default function GlobalStandings() {
               )
             })}
           </View>
-          </ScrollView>
+          </ScrollPane>
         )}
         {entries.length > 0 ? <StandingsFoot view={view} minPos={sortKey === 'finish' ? (view.finishFrom ?? 0) : 0} /> : null}
       </Screen>
@@ -304,7 +305,9 @@ const s = StyleSheet.create({
      its own UI element"). The table was a rounded, bordered card inside the
      body's 16pt gutters; the scroller now runs past the gutters to both
      edges, the rows carry the gutter as their own padding, and the header
-     row is the ScrollView's sticky child 0 — always on screen. */
+     row is the ScrollView's sticky child 0 — always on screen. ScrollPane
+     draws a scroll bar that is always there while the rows overflow; iOS's
+     own indicator only flashes on a touch. */
   scroller: { flex: 1, minHeight: 0, marginHorizontal: -S.lg },
   scrollerBody: { paddingBottom: 4 },
   rowsBox: { backgroundColor: C.card },

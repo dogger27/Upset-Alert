@@ -21,7 +21,11 @@ const BAR_W = 3
    of a line is the kind of thing that reads as a rendering fault. */
 const BAR_GAP = BAR_W + 5
 
-export function ScrollPane({ style, contentContainerStyle, children, ...rest }) {
+/* `overlay`: the bar sits OVER the content's right edge instead of pushing it
+   in. For an edge-to-edge list whose rows keep their own right padding — the
+   standings table — the gutter is already empty, and reserving a second one
+   would stop every row short of the screen's edge. */
+export function ScrollPane({ style, contentContainerStyle, children, overlay = false, ...rest }) {
   const [viewH, setViewH] = useState(0)
   const [contentH, setContentH] = useState(0)
   const y = useRef(new Animated.Value(0)).current
@@ -36,7 +40,7 @@ export function ScrollPane({ style, contentContainerStyle, children, ...rest }) 
         scrollEventThrottle={16}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y } } }], { useNativeDriver: true })}
         onContentSizeChange={(_w, h) => setContentH(h)}
-        contentContainerStyle={[contentContainerStyle, thumb ? { paddingRight: BAR_GAP } : null]}
+        contentContainerStyle={[contentContainerStyle, thumb && !overlay ? { paddingRight: BAR_GAP } : null]}
         {...rest}>
         {children}
       </Animated.ScrollView>
@@ -61,7 +65,7 @@ const s = StyleSheet.create({
   /* The track spans the pane, so its own length is the page and the thumb's
      place in it is where the reader is. */
   track: {
-    position: 'absolute', top: 0, bottom: 0, right: 0, width: BAR_W,
+    position: 'absolute', top: 0, bottom: 0, right: 2, width: BAR_W,
     borderRadius: R.xs, backgroundColor: C.border,
   },
   thumb: { width: BAR_W, borderRadius: R.xs, backgroundColor: C.borderLit },
