@@ -210,7 +210,11 @@ export function DayStrip({ days, active, onPick, right, rightWidth }) {
               as two lengths either side of them instead of as the bar's
               border, so the text sits in a gap in the middle of the line. */}
           <View style={s.legendLine} />
-          <Text style={s.legend} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Swipe to cycle date</Text>
+          {/* No adjustsFontSizeToFit here: on iOS a shrink-to-fit Text in a
+              flex row is measured at next to no width, so the caption drew
+              tiny and the two rule lengths lost their gap (phone, 2026-09-23;
+              the web build did not show it). Its own width, never shrunk. */}
+          <Text style={s.legend}>Swipe to cycle date</Text>
           <View style={s.legendLine} />
         </View>
       </View>
@@ -230,7 +234,7 @@ const s = StyleSheet.create({
     height: leading(15), flexDirection: 'row', alignItems: 'center',
   },
   legendLine: { flex: 1, height: 1, backgroundColor: C.borderLit },
-  legend: { fontFamily: 'Archivo_500Medium', fontSize: 11, lineHeight: leading(15), color: C.muted, paddingHorizontal: 6 },
+  legend: { fontFamily: 'Archivo_500Medium', fontSize: 11, lineHeight: leading(15), color: C.muted, paddingHorizontal: 6, flexShrink: 0 },
   bar: {
     marginHorizontal: -S.lg,
     backgroundColor: STRIP_BG,
