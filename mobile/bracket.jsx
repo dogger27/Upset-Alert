@@ -301,6 +301,18 @@ function abbrevName(full) {
   return nameForms(full)[1] ?? full
 }
 
+/* What the head-to-head sheet reads off an entry. Named here so the two
+   places that open it (this bracket and the schedule's rows) hand over the
+   same shape — h2hView expects a nationality, a ranking, an Elo place and a
+   date of birth, and a missing one draws a dash rather than a wrong number. */
+function h2hPlayer(e) {
+  return {
+    name: e.name, te_slug: e.te_slug, nationality: e.nationality,
+    ranking: e.ranking, elo_rank: e.elo_rank, date_of_birth: e.date_of_birth,
+  }
+}
+
+
 function lastNameOf(full) {
   const parts = full.trim().split(/\s+/)
   return parts.length > 1 ? parts.slice(1).join(' ') : parts[0]
@@ -747,8 +759,12 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
       )}
       {canH2H && onH2H && (
         <Chip side="right" label={`Head-to-head: ${hA.name} vs ${hB.name}`}
-              onPress={() => onH2H({ a: { name: hA.name, te_slug: hA.te_slug },
-                                     b: { name: hB.name, te_slug: hB.te_slug } })}>
+              /* THE WHOLE ENTRY, not a name and a slug (2026-09-23). The
+                 sheet now compares the two players — flag, ranking, Elo, age
+                 — and every one of those fields is already on the draw entry
+                 the bracket drew this box from. Picking two of them out was
+                 the only reason the sheet could not show the rest. */
+              onPress={() => onH2H({ a: h2hPlayer(hA), b: h2hPlayer(hB) })}>
           <Text style={s.chipText}>H2H</Text>
         </Chip>
       )}

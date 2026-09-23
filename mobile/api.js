@@ -266,6 +266,11 @@ export const getEntryStatus = () => request('/predictions/entry-status')
    be slow — so there is no client cache beyond useApi's, and no retry storm to
    design around. Slugs come off draw_entries.te_slug, which is null when a
    player never matched a TE profile; the caller must not offer H2H then. */
+/* A player's own last matches, whichever rung of the ladder they were on —
+   Challengers, Futures, qualifying and doubles included (services/te_form). */
+export const getPlayerForm = (slug) =>
+  request(`/h2h/form?slug=${encodeURIComponent(slug)}`)
+
 export const getH2H = (p1, p2) =>
   request(`/h2h?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`)
 

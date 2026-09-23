@@ -960,7 +960,10 @@ export default function ScheduleScreen() {
       <TournamentRenameSheet event={renamingEvent} onClose={() => setRenamingEvent(null)} />
       <MatchMenu target={menuFor} onClose={() => setMenuFor(null)}
                  onH2H={setH2H} onPredictors={setPredictors} onHistory={setHist} />
-      <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} />
+      {/* The surface comes off the ROW: a day mixes draws, so there is no one
+          surface for the page. */}
+      <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b}
+                surface={h2h?.surface} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
           and women's draws on one day, so there is no single draw to pass. */}
       <PredictorsSheet
@@ -1154,8 +1157,16 @@ function LineTags({ first, alt, when, tournament }) {
    Explorer — in the shape the H2H sheet takes. */
 function h2hPairOf(e) {
   const a = (e.players || []).find(p => p.side === 'a'), b = (e.players || []).find(p => p.side === 'b')
+  /* THE WHOLE PLAYER, not a name and a slug (2026-09-23): the sheet compares
+     flags, rankings, Elo places and ages, and the day's rows already carry all
+     four (SchedulePlayerOut). The surface goes with them — "on hard" is one of
+     the rows, and only the row knows which draw it belongs to. */
+  const of = (p) => ({
+    name: p.entry_name || p.name, te_slug: p.te_slug, nationality: p.nationality,
+    ranking: p.ranking, elo_rank: p.elo_rank, date_of_birth: p.date_of_birth,
+  })
   return e.discipline === 'singles' && a?.te_slug && b?.te_slug
-    ? { a: { name: a.entry_name || a.name, te_slug: a.te_slug }, b: { name: b.entry_name || b.name, te_slug: b.te_slug } }
+    ? { a: of(a), b: of(b), surface: e.surface }
     : null
 }
 

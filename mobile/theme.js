@@ -73,6 +73,26 @@ export const C = {
   },
 }
 
+/* THE TWO SIDES OF ONE MATCH.
+ *
+ * A head-to-head needs to say "this number is his and that one is hers" six
+ * times on one screen, and the tour colours cannot: in a men's match both
+ * players are ATP navy. The site solves it with blue against purple; the app
+ * already owns two accents that are nothing to do with a tour — the brand
+ * green and the one warm clay — so the pair is theirs.
+ *
+ * Learned once, in the underline beneath each name, and then used for
+ * everything that belongs to a side: which of them leads a row, and who won
+ * each previous meeting. One key, one meaning, no second legend.
+ *
+ * The clay plate is the value the clay-court tag already uses, referenced
+ * rather than repeated, so there is one dark clay in this file.
+ */
+export const SIDE = {
+  left:  { ink: C.greenBright, line: C.greenLit, plate: C.greenDeep },
+  right: { ink: C.clayLight,   line: C.clay,     plate: C.surfaces.clay.bg },
+}
+
 /* --shadow-sm in dark: 0 1px 3px rgba(0,0,0,0.50). RN wants the pieces
    separately, and its shadowRadius is roughly the CSS blur halved. */
 /* Pick states, from the bracket's own CSS. THE WHOLE BOX CHANGES, not a mark
