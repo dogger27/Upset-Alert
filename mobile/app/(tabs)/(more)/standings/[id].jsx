@@ -260,7 +260,9 @@ export default function GlobalStandings() {
                     </View>
                     {/* The sorted column is the lit one: white and bold, the
                       other two muted. */}
-                  {checkCol ? <Text style={[s.right, sortKey === 'correct_count' && s.on]}>{e.is_bot ? '' : e.correct_count}</Text> : null}
+                  {/* The bot's correct picks DO show (owner, 2026-09-23): it holds no place
+                      and has no chances, but how many it has right is the point of it. */}
+                  {checkCol ? <Text style={[s.right, sortKey === 'correct_count' && s.on]}>{e.correct_count}</Text> : null}
                     <Text style={[s.num, oddsAvail && s.numTight, sortKey === 'total' && s.on]}>{Math.round(e.total)}</Text>
                     {oddsAvail ? null : <Text style={[s.num, sortKey === 'max_points' && s.on]}>{e.max_points != null ? Math.round(e.max_points) : '–'}</Text>}
                     {/* A place clinched is the one certainty in the column,
