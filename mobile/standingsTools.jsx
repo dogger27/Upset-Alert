@@ -171,7 +171,16 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g',
    only a little room inside either of them. FOOT_FLUSH is the screen's half:
    its body ends 32pt above the tab bar, a gap under a section that is meant
    to sit against it. */
-export const FOOT_FLUSH = { paddingBottom: S.sm, paddingTop: S.xs }
+export const FOOT_FLUSH = { paddingBottom: S.sm, paddingTop: 0 }
+
+/* THE TOP BAR'S GREEN EDGE (owner, 2026-09-23), the tab bar's own 2pt rule.
+   A native-stack header takes a background colour and nothing else, so the
+   rule is drawn as the page's first child, flush under the bar and across
+   the body's side padding. Its negative bottom margin undoes most of the
+   body's 12pt gap, so the table starts 4pt under it. */
+export function HeaderRule() {
+  return <View style={s.headerRule} />
+}
 /* The two standings screens' title, a size up from the stack's T.h2 (owner,
    2026-09-23: "increase text size of tournament name"). And the body's top
    padding above is 4pt, not 16: the bar already ends in its own space, and
@@ -369,6 +378,7 @@ const s = StyleSheet.create({
   /* marginTop cancels the screen body's S.md gap (ui.jsx u.body), so the
      rule sits right against the table rather than under a strip of black
      (owner, 2026-09-23). */
+  headerRule: { height: 2, backgroundColor: C.green, marginHorizontal: -S.lg, marginBottom: -(S.md - S.xs) },
   foot: {
     marginTop: -S.md, marginHorizontal: -S.lg, paddingHorizontal: S.lg, paddingTop: S.sm, gap: S.sm,
     borderTopWidth: 2, borderTopColor: C.green,
