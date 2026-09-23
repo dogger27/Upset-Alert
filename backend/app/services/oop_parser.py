@@ -125,7 +125,12 @@ _QUALI_HEADER_RE = re.compile(
 # The words a sheet builds an event header out of, in ONE place. Two copies of
 # a vocabulary drift and the failure is silent — the same reason COUNTRY_CODES
 # lives here and schedule.py imports it rather than keeping its own.
-_EVENT_WORDS = (r"men'?s|women'?s|singles|doubles|mixed|qualifying|"
+# The apostrophe is a CHARACTER CLASS: a PDF may carry the typographic U+2019
+# where this file is typed with the ASCII one, and a vocabulary that knows only
+# one of them reads "Women’s Doubles" as a player (see feedback on Unicode
+# apostrophes — the same variant has bitten the Wikipedia titles).
+_APOS = "['\u2019\u02bc]?"
+_EVENT_WORDS = (rf"men{_APOS}s|women{_APOS}s|singles|doubles|mixed|qualifying|"
                 r"qualification|main\s+draw")
 # What `round_headers` COUNTS — deliberately wider than what the two readers
 # above accept. The count used to be taken with _EVENT_HEADER_RE itself, so a

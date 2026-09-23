@@ -43,6 +43,7 @@ HEADINGS = [
     "Main Draw",
     "WTA Doubles",
     "Women's Singles",
+    "Women\u2019s Doubles",       # the typographic apostrophe a PDF may carry
 ]
 
 # Lines that must keep their meaning. The names are ones this parser has been
