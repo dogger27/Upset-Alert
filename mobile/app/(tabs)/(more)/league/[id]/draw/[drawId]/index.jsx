@@ -20,7 +20,7 @@ import { Alert, Pressable, RefreshControl, StyleSheet, Text, View, useWindowDime
 import { useAuth } from '../../../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores, getPositionChances, getChancesHistory } from '../../../../../../../api'
 import { DrawHeaderBar } from '../../../../../../../drawHeader'
-import { nextLiveDraw } from '../../../../../../../drawCycle'
+import { nextListedDraw, nextLiveDraw } from '../../../../../../../drawCycle'
 import { useChoosableTournaments } from '../../../../../../../choosableTournaments'
 import { ScrollPane } from '../../../../../../../scrollPane'
 import { useApi } from '../../../../../../../useApi'
@@ -57,7 +57,7 @@ function explainChances(attribution, sampled) {
 }
 
 export default function Standings() {
-  const { id, drawId } = useLocalSearchParams()
+  const { id, drawId, cycle } = useLocalSearchParams()
   const { me } = useAuth()
   const router = useRouter()
 
@@ -72,13 +72,28 @@ export default function Standings() {
      tab's cycle (live draws, fixed order), kept to this league's draws so
      the button never opens an empty standings page. */
   const { live } = useChoosableTournaments()
-  const next = useMemo(() => {
-    const mine = new Set((draws.data || []).map(x => String(x.tournament?.id)))
-    return nextLiveDraw(live.filter(d => mine.has(String(d.id))), t)
-  }, [live, draws.data, t])
   const siblings = (draws.data || []).map(x => x.tournament).filter(x => x && t && (
     t.tournament_id != null ? x.tournament_id === t.tournament_id
       : x.name === t.name && x.year === t.year))
+  /* `cycle` is the list the league page's tab was showing when the reader
+     tapped in (owner, 2026-09-23) — the button walks THAT, and is hidden when
+     it held one event. Reached any other way, no list came along, and it
+     falls back to the live draws this league has a table for. */
+  const listed = typeof cycle === 'string' && cycle ? cycle.split(',') : null
+  const next = useMemo(() => {
+    const byId = new Map((draws.data || []).map(x => [String(x.tournament?.id), x.tournament]))
+    if (listed) {
+      const to = nextListedDraw(listed, [t?.id, ...siblings.map(x => x.id)].filter(x => x != null))
+      return to == null ? null : (byId.get(to) || { id: to, name: 'the next draw' })
+    }
+    const mine = new Set(byId.keys())
+    return nextLiveDraw(live.filter(d => mine.has(String(d.id))), t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, draws.data, t, cycle])
+  // Every step keeps the list, or the second press would forget it.
+  const go = d => router.replace(listed
+    ? { pathname: `/league/${id}/draw/${d.id}`, params: { cycle } }
+    : `/league/${id}/draw/${d.id}`)
   const view = useStandingsView(scores.data, t,
                                 pos => getPositionChances(id, drawId, pos), `l${id}`,
                                 () => getChancesHistory(id, drawId))
@@ -157,8 +172,7 @@ export default function Standings() {
       <Screen scroll={false} style={FOOT_FLUSH}>
         {t ? (
           <DrawHeaderBar t={t} siblings={siblings} next={next}
-                         onPickSibling={d => router.replace(`/league/${id}/draw/${d.id}`)}
-                         onNext={d => router.replace(`/league/${id}/draw/${d.id}`)} />
+                         onPickSibling={go} onNext={go} />
         ) : null}
         {scores.loading && !scores.data ? <Loading /> : null}
         <ErrorNote error={scores.error} onRetry={scores.refetch} />

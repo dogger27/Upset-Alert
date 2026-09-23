@@ -90,6 +90,9 @@ export default function LeagueDraws() {
      over the handful of events a league is playing — so no memo. */
   const currentGroups = groupDrawsByStatus(current, g => g.section)
   const currentHeadings = showGroupHeadings(currentGroups)
+  /* WHAT EACH TAB IS LISTING, one draw per event in its order, handed to the
+     standings so their next-draw button walks this list (owner, 2026-09-23). */
+  const currentCycle = currentGroups.flatMap(grp => grp.draws.map(g => g.items[0].tournament.id)).join(',')
   const [prevShown, setPrevShown] = useState(5)
   /* SHOW ONLY THE EVENTS THIS LEAGUE PLAYED FOR MONEY — the site's Previous
      filter. Most useful here, where a season's draws pile up and the question
@@ -100,6 +103,8 @@ export default function LeagueDraws() {
   const isPooled = g => g.items.some(x => x.cash_pool_enabled)
   const prevPooled = previous.some(isPooled)
   const prevList = poolOnly ? previous.filter(isPooled) : previous
+  // What Previous is SHOWING — the cash-pool filter and "Show more" included.
+  const prevCycle = prevList.slice(0, prevShown).map(g => g.items[0].tournament.id).join(',')
   const [invite, setInvite] = useState(false)
   const [picking, setPicking] = useState(false)
   /* WHICH LEAGUE THE TAB REOPENS. Reported from the screen that is showing it,
@@ -262,7 +267,7 @@ export default function LeagueDraws() {
               </View>
             ) : null}
             {grp.draws.map(g => (
-              <DrawRow key={g.key} items={g.items} leagueId={id} isGlobal={isGlobal} />
+              <DrawRow key={g.key} items={g.items} leagueId={id} isGlobal={isGlobal} cycle={currentCycle} />
             ))}
           </View>
         ))}
@@ -281,7 +286,7 @@ export default function LeagueDraws() {
               ) : null}
             </View>
             {prevList.slice(0, prevShown).map(g => (
-              <DrawRow key={g.key} items={g.items} leagueId={id} isGlobal={isGlobal} compact />
+              <DrawRow key={g.key} items={g.items} leagueId={id} isGlobal={isGlobal} compact cycle={prevCycle} />
             ))}
             {prevShown < prevList.length && (
               <Pressable onPress={() => setPrevShown(n => n + 5)} style={s.more} hitSlop={8}>
@@ -363,10 +368,11 @@ function tierLabel(category) {
   return '250'
 }
 
-function DrawRow({ items, leagueId, isGlobal = false, compact = false }) {
+function DrawRow({ items, leagueId, isGlobal = false, compact = false, cycle = '' }) {
   /* Global's standings for a draw are their own screen — /standings/[id],
      everyone who entered — where a league's are scoped to its members. */
-  const href = drawId => (isGlobal ? `/standings/${drawId}` : `/league/${leagueId}/draw/${drawId}`)
+  const href = drawId => (isGlobal ? `/standings/${drawId}`
+    : { pathname: `/league/${leagueId}/draw/${drawId}`, params: cycle ? { cycle } : {} })
   const a = items[0].tournament
   const b = items[1]?.tournament
   const paired = !!b

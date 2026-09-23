@@ -36,3 +36,21 @@ export function nextLiveDraw(live, current) {
   const i = ordered.findIndex(d => d.id === current.id)
   return ordered[i < 0 ? 0 : (i + 1) % ordered.length] ?? null
 }
+
+/**
+ * THE LIST THE READER CAME FROM (owner, 2026-09-23): on a league's standings
+ * the next-draw button walks the events the league page's tab was LISTING
+ * when the reader tapped in — not every live draw — and is hidden when that
+ * list held one event.
+ *
+ * `listed` is one draw id per event, in the tab's order; `here` is every id
+ * of the event on screen (both halves), so the ATP and WTA standings of one
+ * event count as the same stop. Returns the id to step to, or null.
+ */
+export function nextListedDraw(listed, here) {
+  const ids = (listed || []).map(String)
+  if (ids.length < 2) return null
+  const mine = new Set((here || []).map(String))
+  const i = ids.findIndex(x => mine.has(x))
+  return ids[i < 0 ? 0 : (i + 1) % ids.length]
+}
