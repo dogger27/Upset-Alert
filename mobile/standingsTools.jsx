@@ -177,7 +177,7 @@ export const FOOT_FLUSH = { paddingBottom: S.sm, paddingTop: 0 }
    A native-stack header takes a background colour and nothing else, so the
    rule is drawn as the page's first child, flush under the bar and across
    the body's side padding. Its negative bottom margin undoes most of the
-   body's 12pt gap, so the table starts 4pt under it. */
+   body's 12pt gap, so the table starts right against it. */
 export function HeaderRule() {
   return <View style={s.headerRule} />
 }
@@ -378,7 +378,7 @@ const s = StyleSheet.create({
   /* marginTop cancels the screen body's S.md gap (ui.jsx u.body), so the
      rule sits right against the table rather than under a strip of black
      (owner, 2026-09-23). */
-  headerRule: { height: 2, backgroundColor: C.green, marginHorizontal: -S.lg, marginBottom: -(S.md - S.xs) },
+  headerRule: { height: 2, backgroundColor: C.green, marginHorizontal: -S.lg, marginBottom: -S.md },
   foot: {
     marginTop: -S.md, marginHorizontal: -S.lg, paddingHorizontal: S.lg, paddingTop: S.sm, gap: S.sm,
     borderTopWidth: 2, borderTopColor: C.green,
