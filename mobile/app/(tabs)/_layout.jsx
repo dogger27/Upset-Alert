@@ -28,6 +28,8 @@ import { useLastLeague } from '../../lastLeague'
 import { pruneScheduleTournaments, setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
 import { holdSelection } from '../../scheduleRows'
 import { C, S, T } from '../../theme'
+import { leading } from '../../fontScale.js'
+import { FinalGuessSheet } from '../../finalGuess'
 
 /* THE TAB BAR'S OWN HEIGHT ARITHMETIC, because it has to be reproduced to be
    trimmed. getTabBarHeight() returns TABBAR_HEIGHT_UIKIT + insets.bottom and
@@ -91,6 +93,8 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets()
   const tabBottom = Math.min(insets.bottom, TAB_BOTTOM_MAX)
   const [picking, setPicking] = useState(false)
+  // The draw whose tiebreak questions are open from the drawer, or null.
+  const [tbFor, setTbFor] = useState(null)
   /* WHICH TOURNAMENTS THE SCHEDULE SHOWS. A day's sheet can carry four of them
      and a hundred rows, so the tab asks before it opens — one or many, never
      none (scheduleFilter). Held here as a draft and published on close, so a
@@ -343,13 +347,21 @@ export default function TabLayout() {
                      /* The heading brought its own rule, so the first row
                         under one must not draw a second immediately below it. */
                      underHeading={groupHeadings && i === 0}
-                     onPress={() => { setPicking(false); router.push(`/draw/${t.id}`) }} />
+                     onPress={() => { setPicking(false); router.push(`/draw/${t.id}`) }}
+                     onTiebreak={() => { setPicking(false); setTbFor(t.id) }} />
           ))}
         </View>
       )) : (
         <Text style={s.none}>No draws are being played right now.</Text>
       )}
     </Sheet>
+
+    {/* THE TIEBREAK QUESTIONS, FROM THE DRAWER (owner, 2026-09-23). The draw
+        page's bar leaves once picks lock, so this is the way back to them —
+        read-only by then, since the sheet itself knows the draw is locked.
+        The drawer closes first and this opens in the same tap, the handover
+        MatchMenu already makes to the head-to-head. */}
+    <FinalGuessSheet tournamentId={tbFor} visible={tbFor != null} onClose={() => setTbFor(null)} />
 
     {/* WHICH TOURNAMENTS. One row per EVENT — the US Open is one entry with
         both badges, not two rows — because the ATP/WTA split is a control the
@@ -445,7 +457,7 @@ export default function TabLayout() {
 /* ONE DRAW IN THE CHOOSER. Its own component now that the list is grouped: the
    rows are drawn from inside a second map, and the alternative was this body
    nested two levels deep in the sheet. */
-function DrawRow({ t, showing, underHeading, onPress }) {
+function DrawRow({ t, showing, underHeading, onPress, onTiebreak }) {
   return (
     <Pressable style={[s.row, underHeading && s.rowUnderHeading]} accessibilityRole="button"
                /* The mark says "this one" to anyone who can see it; this
@@ -483,7 +495,17 @@ function DrawRow({ t, showing, underHeading, onPress }) {
           the one place a draw is named without saying what it is worth, which
           is the second thing a reader wants after which event it is. The
           name takes the extra width: it is the flexible half of the row. */}
-      <TourBadge gender={t.gender} level={categoryShort(t.category)} />
+      {/* "TB" OPENS THE TIEBREAK QUESTIONS (owner, 2026-09-23), just left of
+          the tier. Outlined where the tour badge is filled: that one states
+          what the draw is, this one is a thing to press. Its own Pressable, so
+          the tap stops here instead of opening the draw. */}
+      <View style={s.pills}>
+        <Pressable style={s.tb} onPress={onTiebreak} hitSlop={10}
+                   accessibilityRole="button" accessibilityLabel={`Tiebreak questions for ${t.name}`}>
+          <Text style={s.tbText}>TB</Text>
+        </Pressable>
+        <TourBadge gender={t.gender} level={categoryShort(t.category)} style={s.pillCentre} />
+      </View>
     </Pressable>
   )
 }
@@ -528,4 +550,13 @@ const s = {
   // A combined event carries both badges, so they need a row of their own.
   badges: { flexDirection: 'row', gap: 4 },
   none: { ...T.smallMed, color: C.muted, textAlign: 'center', paddingVertical: 12 },
+  pills: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // TourBadge sits flex-start for the stacked cards it usually lives in.
+  pillCentre: { alignSelf: 'center' },
+  /* The tour badge's own box and type, outlined: the 1pt border comes out of
+     the vertical padding so the two pills stand the same height. */
+  tb: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1,
+        borderWidth: 1, borderColor: C.borderLit },
+  tbText: { fontFamily: 'Archivo_700Bold', fontSize: 10, lineHeight: leading(14),
+            letterSpacing: 0.6, color: C.inkBody },
 }
