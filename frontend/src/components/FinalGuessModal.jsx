@@ -131,7 +131,7 @@ function rowsFor(ctx, which, sets) {
   }
   if (q.h2h_estimate?.by_sets?.[key] != null) {
     rows.push([`${sets}-set ${a} v ${b} matches on ${surf}, estimated`, fmtMinutes(q.h2h_estimate.by_sets[key]),
-               met(q.h2h_estimate.matches)])
+               met(q.h2h_estimate.matches), undefined, 'based on sets from'])
   }
   return rows
 }
@@ -169,7 +169,7 @@ function Reference({ ctx, which, sets, unit }) {
       {/* The block says what it is: under a question and its answer sat a run
           of sentences with numbers, and nothing said they were evidence. */}
       <p className="fg-refs-title">Reference data:</p>
-      {rows.map(([label, value, note, lead]) => (
+      {rows.map(([label, value, note, lead, noteLead]) => (
         <div className="fg-ref" key={label}>
           {/* "Avg", not "Average": the word is on every row and what follows
               it is the part that differs. The colon is what makes the figure
@@ -182,7 +182,7 @@ function Reference({ ctx, which, sets, unit }) {
             {/* "(Over 82 finals)" — the count is the SAMPLE the average was
                 taken over, said once here as "Avg for" is. Bracketed because
                 it is an aside about the figure, not a second figure. */}
-            {note && <span className="fg-td-note">(Over {note})</span>}
+            {note && <span className="fg-td-note">({noteLead || 'Over'} {note})</span>}
           </p>
         </div>
       ))}
