@@ -322,3 +322,17 @@ export function CardLink({ href, style, children, pressedOpacity = 0.75, grow = 
   )
   return grow ? <View style={{ flex: 1 }}>{link}</View> : link
 }
+
+/* A HEADER'S RIGHT-HAND CONTROL WITHOUT THE GLASS (owner, 2026-09-23: the
+   settings gear's "outer shell"). iOS 26 draws a Liquid Glass capsule around
+   every item in the nav bar; hidesSharedBackground turns it off per item, and
+   is reachable only through the item API (react-native-screens >= 4.17).
+   headerRight stays alongside for Android and the web, which draw no capsule.
+   Spread into a screen's options: `options={{ title, ...bareRight(() => …) }}`. */
+export function bareRight(render) {
+  if (!render) return {}
+  return {
+    headerRight: render,
+    unstable_headerRightItems: () => [{ type: 'custom', element: render(), hidesSharedBackground: true }],
+  }
+}

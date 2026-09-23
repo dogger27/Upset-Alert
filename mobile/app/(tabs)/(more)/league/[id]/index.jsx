@@ -15,8 +15,7 @@ import { TourBadge } from '../../../../../cards'
 import { computeCohortInfo, getHomeSection } from '../../../../../drawStatus'
 import { GROUP_TONE, groupDrawsByStatus, sectionOfMany, showGroupHeadings } from '../../../../../drawGroups'
 import { C, R, T } from '../../../../../theme'
-import { leading } from '../../../../../fontScale.js'
-import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../../../../ui'
+import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title, bareRight } from '../../../../../ui'
 
 export default function LeagueDraws() {
   const { id } = useLocalSearchParams()
@@ -161,33 +160,32 @@ export default function LeagueDraws() {
           here — a larger name with a chevron, the same gesture as the draw
           chooser on the tab bar. headerTitle rather than `title`, because a
           string cannot be pressed. */}
-      {/* NO SYSTEM HEADER (owner, 2026-09-23: "make the settings gear larger,
-          and remove the outer shell"). The shell is iOS 26's Liquid Glass
-          capsule, drawn around anything in the nav bar's right slot; hiding it
-          per item needs a newer react-native-screens than this build has. So
-          the page draws its own top row — the league name (a button: it opens
-          the league chooser) centred, the gear on the right, level with it by
-          construction, as it was in the bar. */}
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen options={{
+        headerTitle: () => (
+          <LeagueTitle name={isGlobal ? 'Global' : league.data?.name} onPress={() => setPicking(true)} />
+        ),
+        /* THE GEAR BELONGS IN THE BAR, level with the name by construction
+           rather than by arithmetic. It sat in the page under the title,
+           sharing a line with the section switch — where it took width from
+           the control used on every visit and pushed it off centre (owner,
+           2026-09-14). The bar's right slot is where a screen's one
+           configuration door goes.
+
+           Icon only, 28pt, and bare: bareRight turns off the Liquid Glass
+           capsule iOS 26 draws round a bar item (owner, 2026-09-23). The
+           accessibility label carries the word "Settings". */
+        ...bareRight(!isGlobal && canManageLeague(league.data, me)
+          ? () => (
+            <Pressable onPress={() => setSettings(true)} hitSlop={10}
+                       style={({ pressed }) => [s.gear, pressed && { opacity: 0.6 }]}
+                       accessibilityRole="button" accessibilityLabel="League settings">
+              <Ionicons name="settings-outline" size={28} color={C.ink} />
+            </Pressable>
+          )
+          : null),
+      }} />
       <LeaguePicker visible={picking} onClose={() => setPicking(false)} currentId={id} />
       <Screen onRefresh={draws.refetch}>
-        <View style={s.top}>
-          {/* An empty box the gear's width, so the name stays centred. */}
-          <View style={s.gearBox} />
-          <View style={s.topTitle}>
-            <LeagueTitle name={isGlobal ? 'Global' : league.data?.name} onPress={() => setPicking(true)} />
-          </View>
-          <View style={s.gearBox}>
-            {!isGlobal && canManageLeague(league.data, me) ? (
-              /* Icon only; the accessibility label carries the word. */
-              <Pressable onPress={() => setSettings(true)} hitSlop={10}
-                         style={({ pressed }) => pressed && { opacity: 0.6 }}
-                         accessibilityRole="button" accessibilityLabel="League settings">
-                <Ionicons name="settings-outline" size={leading(28)} color={C.ink} />
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
         {draws.loading && !draws.data ? <Loading /> : null}
         <ErrorNote error={draws.error} onRetry={draws.refetch} />
 
@@ -462,9 +460,7 @@ function Tours({ a, paired }) {
 
 const s = StyleSheet.create({
   stripeHalf: { flex: 1 },
-  top: { flexDirection: 'row', alignItems: 'center' },
-  topTitle: { flex: 1, minWidth: 0, alignItems: 'center' },
-  gearBox: { width: leading(36), alignItems: 'flex-end' },
+  gear: { paddingHorizontal: 4, paddingVertical: 4 },
   /* A capsule of capsules: the shell rounded as far as it goes and the live
      segment rounded to match, so the selection reads as a token lifted out of
      the track rather than a rectangle laid over it. The hairline is what
