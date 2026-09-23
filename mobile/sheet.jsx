@@ -37,9 +37,23 @@ export function Sheet({ visible, onClose, title, titleRight, children, height })
           ) : <Text style={s.title}>{title}</Text>
         ) : null}
         {children}
-        <Pressable onPress={onClose} style={s.close} hitSlop={8}>
-          <Text style={s.closeText}>Close</Text>
-        </Pressable>
+        {/* THE FOOTER IS ITS OWN SECTION, and now says so (owner, 2026-09-23:
+            "put a thin line / upper border / divider on the bottom screen
+            section where the Close button is"). A sheet whose content scrolls
+            ends wherever the scroll happens to stop — half a row of buttons,
+            in the case that prompted this — and with nothing between that and
+            Close the clipped content read as broken rather than as scrollable.
+
+            The line spans the whole sheet, not the button: negative margins
+            cancel the sheet's own horizontal padding, which is what makes a
+            divider read as the edge of a section instead of an underline on a
+            word. Every sheet in the app gets it, because every sheet has this
+            row. */}
+        <View style={s.footer}>
+          <Pressable onPress={onClose} style={s.close} hitSlop={8}>
+            <Text style={s.closeText}>Close</Text>
+          </Pressable>
+        </View>
       </View>
     </Modal>
   )
@@ -57,6 +71,10 @@ const s = StyleSheet.create({
   title: { ...T.h2, color: C.ink, textAlign: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   titleLeft: { flex: 1, textAlign: 'left' },
+  footer: {
+    marginHorizontal: -S.md, paddingHorizontal: S.md, alignItems: 'center',
+    borderTopWidth: 1, borderTopColor: C.border,
+  },
   close: { alignSelf: 'center', paddingVertical: S.sm, paddingHorizontal: S.lg },
   closeText: { ...T.smallMed, color: C.clay },
 })
