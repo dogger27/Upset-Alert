@@ -33,7 +33,7 @@ import Animated, {
   Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withDecay, withTiming,
 } from 'react-native-reanimated'
 import { C, S } from './theme'
-import { leading } from './fontScale.js'
+import { FONT_SCALE, leading } from './fontScale.js'
 import { textWidth } from './measure'
 import { pickLevel } from './stripLayout'
 
@@ -241,6 +241,11 @@ const s = StyleSheet.create({
     fontFamily: 'Archivo_700Bold', fontSize: 11, lineHeight: leading(15), color: C.ink,
     textShadowColor: '#000', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 },
     paddingHorizontal: 6, flexShrink: 0,
+    /* iOS sets the glyphs low in their line box, so the caps sat ~3.5pt
+       under the rule (measured off the phone, 2026-09-23). Lifted so the
+       rule runs through the middle of the capitals. The lengths either
+       side stay where they are. */
+    transform: [{ translateY: -3.5 * FONT_SCALE }],
   },
   bar: {
     marginHorizontal: -S.lg,
