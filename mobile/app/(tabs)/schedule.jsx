@@ -1348,10 +1348,13 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, onCha
   const live = isLive(e)
   const suspended = isSuspended(e)
   const done = e.status === 'completed'
-  const a = (e.players || []).find(p => p.side === 'a'), b = (e.players || []).find(p => p.side === 'b')
-  const h2hPair = e.discipline === 'singles' && a?.te_slug && b?.te_slug
-    ? { a: { name: a.entry_name || a.name, te_slug: a.te_slug }, b: { name: b.entry_name || b.name, te_slug: b.te_slug } }
-    : null
+  /* THE SAME BUILDER THE MINI ROWS USE. This row had its own copy, built
+     before the sheet needed anything but a name and a slug — so opening the
+     head-to-head from the LIST view gave it no flags, no rankings, no ages and
+     no surface, while the same sheet opened from a card had all four (owner,
+     2026-09-23: "the h2h drawer isn't showing the player flags"). Two copies
+     of one shape is how half a screen goes missing. */
+  const h2hPair = h2hPairOf(e)
   const postponed = e.status === 'postponed'
   const carried = e.status === 'to_be_completed'
   // The three states no segment implies — see the top row's note.

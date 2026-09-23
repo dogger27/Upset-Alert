@@ -6,7 +6,7 @@
    and look perfectly plausible doing it.
 */
 import assert from 'node:assert/strict'
-import { ageOf, betterSide, compareRows, eventTitle, roundWord, formChipText, formChips, formDetail, formGrid, onSurface, orient, shortEvent, singlesOnly } from './h2hView.js'
+import { ageOf, betterSide, compareRows, eventTitle, roundWord, teName, formChipText, formChips, formDetail, formGrid, onSurface, orient, shortEvent, singlesOnly } from './h2hView.js'
 
 const PAYLOAD = {
   slug_a: 'shapovalov', slug_b: 'van-de-zandschulp',
@@ -111,9 +111,9 @@ const form = [
 const chips = formChips(form.concat(form, form), 5)
 assert.equal(chips.length, 5, 'five is what a phone row holds')
 assert.deepEqual(chips.map(c => c.result), ['W', 'L', 'W', 'L', 'W'], 'newest first, in order')
-assert.match(chips[0].said, /^beat Pavlovic L\. 6-4, 6-7\(6\), 6-3 Chengdu Q-R16$/,
-  'each square says what it was, for a reader who cannot see the colour')
-assert.match(chips[1].said, /^lost to Balshaw F\./)
+assert.match(chips[0].said, /^beat L\. Pavlovic 6-4, 6-7\(6\), 6-3 Chengdu Q R16$/,
+  'each square says what it was — in the app\'s words, for a reader who cannot see the colour')
+assert.match(chips[1].said, /^lost to F\. Balshaw/)
 assert.deepEqual(formChips(null), [])
 
 /* ── how many swatches a row holds, and what a tap on one says ─────────── */
@@ -123,7 +123,7 @@ assert.deepEqual(formChips(null), [])
 assert.deepEqual(formGrid(131), { size: 23, per: 5 }, 'a phone column at ordinary text size')
 assert.deepEqual(formGrid(94), { size: 16, per: 5 }, 'narrower squares when large text takes the room')
 assert.deepEqual(formGrid(160), { size: 29, per: 5 }, 'a wider phone gets bigger squares, not a wider gap')
-assert.deepEqual(formGrid(1000), { size: 30, per: 5 }, 'but a swatch is a mark, not a button')
+assert.deepEqual(formGrid(1000), { size: 34, per: 5 }, 'but a swatch is a mark, not a button')
 assert.deepEqual(formGrid(null), { size: 14, per: 5 }, 'before it is measured, the floor')
 
 /* THE COUNT GIVES WAY BEFORE THE SIZE DOES: below about 85 points five
@@ -140,7 +140,7 @@ for (const w of [50, 60, 70, 80, 94, 105, 118, 131, 160, 300]) {
   assert.ok(used <= w, `${per} ${size}pt swatches overflow a ${w}pt column`)
   // They fill the column unless the CEILING is what decided the size — on a
   // tablet the row deliberately stops growing and the slack is the point.
-  if (size < 30) {
+  if (size < 34) {
     assert.ok(w - used < per + 1, `${per} ${size}pt swatches leave ${w - used}pt of ${w} empty`)
   }
 }
@@ -157,13 +157,13 @@ assert.ok(full[0].match, 'a chip carries its match, because a tap opens it')
 
 const det = formDetail(full[0].match)
 assert.equal(det.won, true)
-assert.equal(det.line, 'beat Pavlovic L. · 6-4, 6-3')
+assert.equal(det.line, 'beat L. Pavlovic · 6-4, 6-3')
 assert.equal(det.meta, 'Chengdu · Q R16 · Hard', 'an ordinary tour singles needs no rung label')
 
 const lower = formDetail({ result: 'L', opponent: 'Someone A.', score: '6-1, 6-1',
                            event: 'Cancun challenger', round: '1R', surface: 'Hard',
                            level: 'challenger', doubles: true })
-assert.equal(lower.line, 'lost to Someone A. · 6-1, 6-1')
+assert.equal(lower.line, 'lost to A. Someone · 6-1, 6-1')
 assert.equal(lower.meta, 'Cancun · CH · 1R · doubles · Hard',
   'a Challenger and a doubles result still say so — abbreviated, and the rung once')
 assert.equal(formDetail(null), null)
@@ -237,5 +237,15 @@ assert.equal(roundWord('Q-2R'), 'Q2')
    a form row does not carry the draw size — so it says how deep and nothing
    it cannot know. */
 assert.notEqual(roundWord('Q-R16'), 'Q1')
+
+/* ── a person is introduced initials first ──────────────────────────────── */
+
+assert.equal(teName('Sinclair C.'), 'C. Sinclair', 'TE writes a results table; the app writes a person')
+assert.equal(teName('Bar Biryukov P.'), 'P. Bar Biryukov', 'a two-word surname stays whole')
+assert.equal(teName('Fancutt T. / Watanabe S.'), 'T. Fancutt / S. Watanabe',
+  'each half of a pair flips on its own')
+assert.equal(teName('C. Sinclair'), 'C. Sinclair', 'a name already that way round is left alone')
+assert.equal(teName('Roger Federer'), 'Roger Federer', 'and so is one with no initial')
+assert.equal(teName(null), '')
 
 console.log('ok — h2hView')

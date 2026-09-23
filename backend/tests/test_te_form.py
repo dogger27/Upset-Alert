@@ -203,3 +203,41 @@ def test_a_walkover_is_a_result_with_no_score(singles):
     wo = [r for r in singles if not r["score"]]
     assert len(wo) == 1
     assert (wo[0]["date"], wo[0]["result"], wo[0]["doubles"]) == ("2026-04-02", "L", True)
+
+
+def test_a_header_with_no_link_still_names_its_tournament():
+    """TE links most events and not all — a team competition or an exhibition
+    can be printed as plain text. Reading the anchor directly left the event
+    blank for every row under such a header, and the app drew a form line with
+    no tournament on it (owner, 2026-09-23)."""
+    page = (
+        '<tr class="head flags"><td class="t-name" colspan="3">'
+        '<span class="fl fl-cn">&nbsp;</span>Some Team Cup</td>'
+        '<th class="round">Round</th><th class="f-score">Result</th></tr>\n'
+        '<tr class="one"><td class="first time">02.09.</td>'
+        '<td class="s-color"><span title="hard">&nbsp;</span></td>'
+        '<td class="t-name"><a href="/player/muller-c81bc/" class="notU">'
+        '<strong>Muller A.</strong></a> - <a href="/player/other/">Other P.</a></td>'
+        '<td class="round" title="1. round">1R</td>'
+        '<td class="tl"><a href="/match-detail/?id=1">6-4, 6-2</a></td></tr>'
+    )
+    rows = parse_player_matches(page, "muller-c81bc", season=2026, today=TODAY)
+    assert len(rows) == 1
+    assert rows[0]["event"] == "Some Team Cup"
+    assert rows[0]["level"] is None, "no link, so no rung is claimed"
+
+
+def test_the_linked_header_still_gives_its_rung():
+    page = (
+        '<tr class="head flags"><td class="t-name" colspan="3">'
+        '<a href="/mallorca-challenger/2026/atp-men/">Mallorca challenger</a></td></tr>\n'
+        '<tr class="one"><td class="first time">03.09.</td>'
+        '<td class="s-color"><span title="hard">&nbsp;</span></td>'
+        '<td class="t-name"><a href="/player/x/">X Y.</a> - '
+        '<a href="/player/muller-c81bc/">Muller A.</a></td>'
+        '<td class="round" title="round of 16">R16</td>'
+        '<td class="tl"><a href="/match-detail/?id=2">7-5, 6-2</a></td></tr>'
+    )
+    rows = parse_player_matches(page, "muller-c81bc", season=2026, today=TODAY)
+    assert (rows[0]["event"], rows[0]["level"], rows[0]["result"]) == (
+        "Mallorca challenger", "challenger", "L")

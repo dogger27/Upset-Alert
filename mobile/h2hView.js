@@ -147,7 +147,7 @@ export function compareRows({ view, surface, left, right }) {
 export const FORM_PER_ROW = 5
 export const FORM_GAP = 3
 
-export function formGrid(width, { gap = FORM_GAP, min = 14, max = 30,
+export function formGrid(width, { gap = FORM_GAP, min = 14, max = 34,
                                   per = FORM_PER_ROW } = {}) {
   const each = (n) => Math.floor((width - (n - 1) * gap) / n)
   if (!(width > 0)) return { size: min, per }
@@ -190,6 +190,27 @@ export function roundWord(round) {
   if (qual && ord) return `Q${ord[1]}`          // stated by TE, not inferred
   const word = ROUND_WORD[core] || core
   return qual ? `Q ${word}` : word
+}
+
+/* "C. SINCLAIR", NOT "SINCLAIR C." (owner, 2026-09-23: "it appears to be
+ * writing the opponent with their first initial AFTER the last name").
+ *
+ * That is Tennis Explorer's own order, and it is the order a RESULTS TABLE
+ * uses; the app writes a person the way a person is introduced, initials
+ * first — mobile/names.js builds "B. van de Zandschulp" for exactly this
+ * reason. Only a trailing single initial moves: a name that is already the
+ * other way round, or has no initial at all, is left alone.
+ *
+ * Each half of a doubles pair is flipped on its own, so "Fancutt T. /
+ * Watanabe S." becomes "T. Fancutt / S. Watanabe" rather than one name
+ * swapping and the other not.
+ */
+export function teName(name) {
+  return String(name || '')
+    .split('/')
+    .map(part => part.trim().replace(/^(.+?)\s+([A-Z][a-z]?\.)$/, '$2 $1'))
+    .filter(Boolean)
+    .join(' / ')
 }
 
 /* A SINGLES MATCH'S FORM IS SINGLES (owner, 2026-09-23). The form reads the
@@ -240,8 +261,8 @@ export function formChips(form, n = 5) {
   return (form || []).slice(0, n).map(m => ({
     result: m.result,
     // What a tap opens, and what a screen reader hears without tapping.
-    said: [m.result === 'W' ? 'beat' : 'lost to', m.opponent,
-           m.score, m.event, m.round].filter(Boolean).join(' '),
+    said: [m.result === 'W' ? 'beat' : 'lost to', teName(m.opponent),
+           m.score, m.event, roundWord(m.round)].filter(Boolean).join(' '),
     match: m,
   }))
 }
@@ -262,7 +283,7 @@ export function formDetail(m) {
   const event = rung ? eventTitle(m.event) : shortEvent(m.event)
   return {
     won: m.result === 'W',
-    line: [m.result === 'W' ? `beat ${m.opponent}` : `lost to ${m.opponent}`,
+    line: [m.result === 'W' ? `beat ${teName(m.opponent)}` : `lost to ${teName(m.opponent)}`,
            m.score].filter(Boolean).join(' · '),
     // The type sits with the tournament it types, before the round.
     meta: [event, rung, roundWord(m.round), m.doubles ? 'doubles' : null,
