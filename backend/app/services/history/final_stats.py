@@ -628,10 +628,13 @@ def tier_finals(conn, tour: str, tier: str, surface: str, years: int,
 
 
 def _both_sides(rows) -> Optional[dict]:
-    """Per-set rates counting BOTH players' aces, plus sets per match.
+    """Per-set rates for a set of finals, plus sets per match.
 
-    A tour baseline is about the match rather than about one player in it, so
-    an ace is an ace whoever served it — the same reading tour_reference uses.
+    THE ACES ARE THE WINNER'S (owner, 2026-09-23). The question is how many
+    aces the CHAMPION hits in the final, and the row reads "ace count from the
+    winner of … finals". It used to count both players' aces per player-set,
+    which answered a question nobody was asked — and ran low, since a final's
+    winner usually out-serves its loser.
     """
     aces = sets_a = play = sets_m = sets_total = n = 0
     for wa, la, m, score in rows:
@@ -640,9 +643,9 @@ def _both_sides(rows) -> Optional[dict]:
             continue
         n += 1
         sets_total += s
-        if wa is not None and la is not None:
-            aces += wa + la
-            sets_a += 2 * s
+        if wa is not None:
+            aces += wa
+            sets_a += s
         if m is not None and m > 0:
             play += _play_minutes(m, s)
             sets_m += s

@@ -102,8 +102,8 @@ function rowsFor(ctx, which, sets) {
     const where = q.tier_finals?.surface_scoped === false ? 'all surfaces' : surf
     const scale = (r) => (r?.aces_per_set == null ? null : round1(r.aces_per_set * sets))
     if (q.tier_finals?.aces_per_set != null) {
-      rows.push([`recent ${sets}-set ${ctx.tier_label} finals on ${where}`,
-                 scale(q.tier_finals), `${q.tier_finals.matches} finals`])
+      rows.push([`${sets}-set ace count from the winner of ${ctx.tier_label} finals on ${where}`,
+                 scale(q.tier_finals), `${q.tier_finals.matches} finals`, 'Avg'])
     }
     if (q.champion_vs?.aces_per_set != null) {
       // The champion's own aces against this opponent — said so, since

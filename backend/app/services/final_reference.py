@@ -47,13 +47,14 @@ logger = logging.getLogger(__name__)
 
 # Bump when the shape or the arithmetic changes, so stored blocks are
 # recomputed rather than read forever under a schema they predate.
+#   4 — the finals' aces are the WINNER's, not both players' (2026-09-23).
 #   3 — the tier's finals are filtered by FORMAT as well as surface; the ATP's
 #       legacy 250 code had six best-of-five finals in it (2026-09-19).
 #   2 — per-set durations became PLAYING time, breaks stripped before
 #       averaging and re-added for the predicted set count (owner,
 #       2026-09-19). A block from version 1 has the breaks counted twice in
 #       its minutes_by_sets and must not be trusted.
-VERSION = 3
+VERSION = 4
 # The lengths a final can go live in final_stats.set_lengths — one definition,
 # imported here and by the endpoint, because two copies drift.
 
