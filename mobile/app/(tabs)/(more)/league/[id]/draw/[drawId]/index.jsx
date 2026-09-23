@@ -166,6 +166,13 @@ export default function Standings() {
           <ScrollPane overlay style={s.scroller} contentContainerStyle={s.scrollerBody}
                       stickyHeaderIndices={[0]}
                       refreshControl={<RefreshControl refreshing={pulling} onRefresh={pull} tintColor={C.muted} colors={[C.clay]} />}>
+            {/* THE WRAPPER IS FOR iOS. A sticky header is cloned with its style
+                REPLACED (ScrollViewStickyHeader moves the child's style to an
+                Animated wrapper and gives the child only {flex: 1}), so the row
+                lost flexDirection and its cells stacked in a column on the
+                phone — the web build does not do this. This plain View is what
+                iOS strips; the row inside keeps its style. */}
+            <View>
             <View style={[s.row, s.head, podiumCol && s.tightRow]}>
               {/* numberOfLines on every header cell, without exception: these
                   are FIXED-WIDTH columns, and "Correct" at 12pt uppercase is
@@ -240,6 +247,7 @@ export default function Standings() {
                 sortHead('p_win', 'Win', s.chance, { adjustsFontSizeToFit: true, minimumFontScale: 0.6 },
                          'Chance of finishing first — sort by this')
               ) : null}
+            </View>
             </View>
             <View style={s.rowsBox}>
             {rows.map((e, i) => {
