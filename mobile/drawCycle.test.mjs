@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cycleOrder, nextLiveDraw } from './drawCycle.js'
+import { cycleOrder, nextListedDraw, nextLiveDraw } from './drawCycle.js'
 
 const d = (id, tid, gender, start, name) =>
   ({ id, tournament_id: tid, gender, start_date: start, name })
@@ -41,4 +41,18 @@ test('no button when every live draw is this same tournament', () => {
 test('an old draw opened from history starts the cycle at the top', () => {
   const old = d(9, 12, 'M', '2026-02-01', 'Rotterdam')
   assert.equal(nextLiveDraw([GUADALAJARA, SP], old).id, 142)
+})
+
+test('a league tab listing ONE event gives no button', () => {
+  assert.equal(nextListedDraw(['77'], ['77', '78']), null)
+  assert.equal(nextListedDraw([], ['77']), null)
+})
+
+test('the listed cycle steps in the tab order, wraps, and treats both halves as one stop', () => {
+  assert.equal(nextListedDraw(['77', '142', '143'], ['142']), '143')
+  assert.equal(nextListedDraw(['77', '142', '143'], ['143']), '77')
+  // On the US Open's WTA half (78), listed by its ATP half (77): next is still Guadalajara.
+  assert.equal(nextListedDraw(['77', '142'], ['78', '77']), '142')
+  // Reached some other way, not in the list: start at the top.
+  assert.equal(nextListedDraw(['77', '142'], ['999']), '77')
 })
