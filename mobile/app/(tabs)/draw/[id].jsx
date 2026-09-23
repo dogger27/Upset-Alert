@@ -407,8 +407,11 @@ export default function DrawScreen() {
 
         {/* ABOVE THE ROUND SELECTOR, ALWAYS (owner, 2026-09-22). It used to be
             a card inside the bracket, after the final-round match — four
-            rounds away from where anyone is picking on a 32 draw. */}
-        {!viewing && (
+            rounds away from where anyone is picking on a 32 draw.
+            GONE ONCE THE DRAW LOCKS (owner, 2026-09-23): the server refuses
+            the answers from then on (put_final_guess, 409), so a bar inviting
+            them is a control that cannot do anything. */}
+        {!viewing && !drawLocked && (
           <FinalGuessBar tournamentId={Number(id)} enabled refreshKey={finalGuessKey}
                          onOpen={() => setFinalGuessOpen(true)} />
         )}
