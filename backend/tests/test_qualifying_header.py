@@ -37,7 +37,11 @@ def test_qualifying_final_is_the_generic_last_qualifying_round():
     # The readers that were already there are untouched.
     assert _event_header('DOUBLES FINAL') == ('doubles', 'F')
     assert _event_header('SINGLES SEMI-FINAL') == ('singles', 'SF')
-    assert _event_header('QUALIFYING') is None
+    # A BARE "QUALIFYING" STATES NO ROUND, and never did. It is now READ —
+    # as a section heading stating nothing, so that it cannot be taken for a
+    # player (test_oop_bare_event_heading) — and the round it yields is still
+    # None, which is the whole of what this line has ever guarded.
+    assert _event_header('QUALIFYING') == (None, None)
 
 
 def test_the_header_reaches_the_box_and_files_it_qualifying():
