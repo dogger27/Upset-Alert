@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useApi } from './useApi'
-import { C, T } from './theme'
+import { C, S, T } from './theme'
 import { placesDecided, roundTag, scrubEntries, surname, worldEntries, worldLine } from './scoring'
 
 const THUMB = 28
@@ -166,9 +166,17 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g',
 
 /* The instruments under the table. The slider goes while a world is chosen:
    it rewinds the past, and a chosen future has none. */
+/* THE FOOT IS ITS OWN SECTION (owner, 2026-09-23): a 2pt green rule on top,
+   the tab bar's own, so the timeline sits between two matching lines — and
+   only a little room inside either of them. FOOT_FLUSH is the screen's half:
+   its body ends 32pt above the tab bar, a gap under a section that is meant
+   to sit against it. */
+export const FOOT_FLUSH = { paddingBottom: S.sm }
+
 export function StandingsFoot({ view, minPos = 0 }) {
+  if (!(!view.world && view.timeline.length > 0) && !(view.worlds && view.worlds.length > 0)) return null
   return (
-    <>
+    <View style={s.foot}>
       {!view.world && view.timeline.length > 0 ? (
         <Scrubber timeline={view.timeline} pos={view.pos} onChange={view.setPos} numRounds={view.numRounds} min={minPos} />
       ) : null}
@@ -176,7 +184,7 @@ export function StandingsFoot({ view, minPos = 0 }) {
         <WhatIf worlds={view.worlds} tailMatches={view.tailMatches} numRounds={view.numRounds}
                 worldIdx={view.worldIdx} onChange={view.setWorldIdx} />
       ) : null}
-    </>
+    </View>
   )
 }
 
@@ -356,7 +364,11 @@ const PILL = 84, BRACE = 18, PILL_H = 22, PAIR_H = PILL_H * 2 + 4, COL_H = PAIR_
 
 const s = StyleSheet.create({
   /* Timeline */
-  scrub: { marginTop: 10, gap: 6 },
+  foot: {
+    marginHorizontal: -S.lg, paddingHorizontal: S.lg, paddingTop: S.sm, gap: S.sm,
+    borderTopWidth: 2, borderTopColor: C.green,
+  },
+  scrub: { gap: 6 },
   flash: { ...T.small, color: C.muted, marginBottom: 2 },
   flashWhen: { ...T.tiny, color: C.muted },
   track: { height: THUMB, justifyContent: 'center' },
@@ -371,7 +383,7 @@ const s = StyleSheet.create({
 
   /* What if */
   whatif: {
-    marginTop: 12, padding: 12, gap: 10,
+    padding: 12, gap: 10,
     borderWidth: 1, borderColor: C.border, borderRadius: 12, backgroundColor: C.raised,
   },
   whatifOn: {},
