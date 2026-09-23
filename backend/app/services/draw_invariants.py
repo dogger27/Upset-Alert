@@ -221,10 +221,31 @@ def entries_without_draw_rank(entries: list) -> Optional[str]:
     it self-heals only if something notices, which until now nothing did.
 
     Byes and empty slots are not players and are not counted.
+
+    NEITHER IS A PLAYER NOBODY HAS LOOKED UP YET. An entry with no
+    te_player_id has not been judged unbadgeable — it has not been judged at
+    all, and `assign_rankings` re-attempts every one of them on every scrape.
+    That condition already has an owner: `_check_rankings_health` escalates it
+    per draw once play has been under way for UNRESOLVED_GRACE_HOURS, a grace
+    it was given on 2026-09-14 precisely because three Guadalajara qualifiers
+    were reported unbridgeable minutes after their draw "started" and all
+    three resolved on the next pass. Claiming the same condition here with no
+    grace did not add a check; it added a second, louder, earlier opinion
+    about a state the other one was deliberately waiting out — and on
+    2026-09-23 it reported eight Hangzhou and Chengdu qualifiers whose Tennis
+    Explorer profiles were already in our own table and matched on the first
+    token-set try, seconds after ESPN had named their slots.
+
+    So the division is by what a repair could still do. No te_player_id means
+    the lookup has not happened: `_check_rankings_health` owns it, and waits.
+    A te_player_id and still no seed and no ranking means the lookup HAS
+    happened and produced no number — nothing further will run, the pill
+    wears no badge for the rest of the tournament, and that is this check.
     """
     nameless = {"", "bye", "bye/"}
     blank = [e for e in entries
              if (e.name or "").strip().lower() not in nameless
+             and e.te_player_id is not None
              and e.seed is None and e.ranking is None]
     if not blank:
         return None
