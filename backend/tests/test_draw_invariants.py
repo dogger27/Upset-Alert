@@ -25,7 +25,6 @@ from app.services.draw_invariants import (
     finish_decision,
     not_completed_after_its_end,
     row_holds_two_events,
-    not_completed_after_its_end,
 )
 
 
@@ -39,12 +38,18 @@ class D:
 
 
 class E:
-    """A draw entry, as far as the rank check is concerned."""
+    """A draw entry, as far as the rank check is concerned.
 
-    def __init__(self, name, seed=None, ranking=None):
+    te_player_id defaults to a resolved one: the check is about a player the
+    lookup has already been run for, and an unresolved entry is a different
+    check's business (see the two tests at the end of this section).
+    """
+
+    def __init__(self, name, seed=None, ranking=None, te_player_id=7):
         self.name = name
         self.seed = seed
         self.ranking = ranking
+        self.te_player_id = te_player_id
 
 
 # ── end_date_behind_play: SP Open's postponed final ───────────────────────
@@ -264,6 +269,29 @@ def test_the_detail_names_at_most_six_and_says_there_are_more():
 def test_a_full_draw_of_ranked_players_is_lawful():
     assert entries_without_draw_rank(
         [E(f"Player {i}", ranking=i + 1) for i in range(32)]) is None
+
+
+def test_a_slot_named_seconds_ago_is_not_this_checks_business():
+    """THE REGRESSION. 2026-09-23: ESPN named four Chengdu and four Hangzhou
+    Round-1 qualifier slots, and this check called all eight a fault within
+    seconds — while `assign_rankings` had not yet been past them and their
+    Tennis Explorer profiles were sitting in our own table, matching on the
+    first token-set try. An entry with no te_player_id has not been judged
+    unbadgeable, it has not been judged at all; `_check_rankings_health` owns
+    that state and waits UNRESOLVED_GRACE_HOURS before escalating it."""
+    assert entries_without_draw_rank(
+        [E("Alexandre Muller", te_player_id=None),
+         E("Lloyd Harris", te_player_id=None)]) is None
+
+
+def test_a_resolved_player_with_no_number_anywhere_still_is():
+    """And the split does not blunt the check. A lookup that HAS run and come
+    back with no ranking is a pill that wears no badge for the whole
+    tournament — no retry will change it, so it is a fault the moment it is
+    true."""
+    why = entries_without_draw_rank([E("Ranked", ranking=88),
+                                     E("Resolved But Rankless", te_player_id=42)])
+    assert why and "1 entry" in why and "Resolved But Rankless" in why
 
 
 # ── finish_decision: the repair, not a check ─────────────────────────────

@@ -2591,6 +2591,34 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
         seen_positions.add(pe.bracket_position)
         if pe.bracket_position in existing_players:
             player = existing_players[pe.bracket_position]
+            # A SOURCE THAT DOES NOT KNOW THE NAME DOES NOT GET TO ERASE IT.
+            #
+            # An unfilled qualifier slot parses to an empty name, and writing
+            # that over a slot we HAVE a name for is not an update, it is a
+            # deletion by a source that has nothing to say. The same law the
+            # match upsert below already states for a later-round slot: a
+            # shape-only source's blank means "unknown", not "nobody".
+            #
+            # 2026 Chengdu Open, 2026-09-23: Wikipedia still printed four
+            # Round-1 slots as "Qualifier" hours into play, while ESPN's
+            # pairings had already named them. Each scrape blanked the four
+            # names and the ESPN fill put them back — three round trips inside
+            # seven minutes, a duplicate "filled" draw-change event every time
+            # (24 queued for re-announcement), and `assign_rankings` handed a
+            # blank name on every pass, so the four kept te_player_id NULL and
+            # rendered with no rank badge, no ranking, no ELO, no H2H and no
+            # form on a draw already on court. `classify_change` had long since
+            # decided a slot going blank is not news; it is not a FACT either.
+            #
+            # entry_type still applies: Q is the slot's own property and the
+            # placeholder is the thing that states it. Nothing else does, so
+            # nothing else can be lost.
+            if not (pe.name or "").strip() and (player.name or "").strip():
+                if pe.entry_type:
+                    player.entry_type = pe.entry_type
+                pos_to_player_id[pe.bracket_position] = player.id
+                upserted_players.append(player)
+                continue
             if player.name != pe.name:
                 # Captured BEFORE the overwrite — one line later the old name
                 # is gone and there is nothing left to diff against.
@@ -2969,6 +2997,22 @@ async def _do_scrape(tournament: Draw, db: AsyncSession, force_refresh: bool = F
             if added:
                 logger.info("US Open %s: filled %d slot(s) from the official draw",
                             tournament.gender, added)
+                # Same law as the ESPN fill: a slot that gains a name gains a
+                # player. This runs AFTER the upsert's own assign_rankings, so
+                # without this the names it just wrote would carry no ranking
+                # until the next scrape came round — and a draw holding
+                # entrants nothing can rank is `entries_without_draw_rank`.
+                # Still inside the scrape's write, so there is no window.
+                ref = (tournament.entry_ranking_week
+                       or tournament.start_date or date.today())
+                fresh = (await db.execute(
+                    select(DrawEntry).where(
+                        DrawEntry.draw_id == tournament.id,
+                        DrawEntry.te_player_id.is_(None)))).scalars().all()
+                if fresh:
+                    await assign_rankings(fresh, tournament.gender, ref, db)
+                    await assign_seed_week_rankings(
+                        fresh, tournament.gender, tournament.seed_ranking_week, db)
         except Exception:
             logger.exception("official draw fill failed for draw %s", tournament.id)
 

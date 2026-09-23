@@ -881,6 +881,7 @@ class ESPNMonitor:
             taken = {_norm(e.name) for e in entries if (e.name or "").strip()}
 
             filled = 0
+            named: list[DrawEntry] = []
             for m in matches:
                 sides = [by_id.get(m.player1_id), by_id.get(m.player2_id)]
                 if any(x is None for x in sides):
@@ -910,6 +911,7 @@ class ESPNMonitor:
 
                 blanks[0].name = opponent
                 taken.add(_norm(opponent))
+                named.append(blanks[0])
                 filled += 1
                 # Recorded like a scraper fill would be, or this path names the
                 # slot and nobody is told. It is now the path that usually gets
@@ -932,6 +934,31 @@ class ESPNMonitor:
                             tournament.year, tournament.name, opponent, anchor_name)
 
             if filled:
+                # A SLOT THAT GAINS A NAME GAINS A PLAYER, and a name on its
+                # own is half an entrant: no te_player_id means no ranking, no
+                # ELO, no H2H, no form, and — because the badge on a pill is
+                # seed-or-ranking — no rank badge at all. The scrape's own
+                # retry sweep would get there eventually, but only on its next
+                # pass, and `entries_without_draw_rank` is watching in between.
+                #
+                # IN THE SAME TRANSACTION as the names, deliberately: commit
+                # the names first and there is a real window in which the draw
+                # holds entrants nothing can rank, which is precisely the
+                # violation. One commit, no window. This mirrors the scrape's
+                # own upsert, which also resolves inside its write.
+                try:
+                    from app.services.rankings import (assign_rankings,
+                                                       assign_seed_week_rankings)
+                    ref_date = (tournament.entry_ranking_week
+                                or tournament.start_date or date.today())
+                    await assign_rankings(named, tournament.gender, ref_date, db)
+                    await assign_seed_week_rankings(
+                        named, tournament.gender, tournament.seed_ranking_week, db)
+                except Exception as exc:
+                    # The names are still worth keeping; the retry sweep owns
+                    # what could not be resolved here.
+                    logger.warning("Could not rank the slots named in %s %s: %s",
+                                   tournament.year, tournament.name, exc)
                 await db.commit()
 
         if filled:
