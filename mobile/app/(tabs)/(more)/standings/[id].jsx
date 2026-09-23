@@ -17,7 +17,7 @@ import { useApi } from '../../../../useApi'
 import { byFinish, competitionRanks, finishText, pct } from '../../../../scoring'
 import { FOOT_FLUSH, HeaderRule, STANDINGS_TITLE, StandingsFoot, useStandingsView } from '../../../../standingsTools'
 import { othersPicksNote } from '../../../../lock'
-import { C } from '../../../../theme'
+import { C, S } from '../../../../theme'
 import { leading } from '../../../../fontScale.js'
 import { PlayerName, TourSwitch, headerTour } from '../../../../cards'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title, bareRight } from '../../../../ui'
@@ -171,8 +171,8 @@ export default function GlobalStandings() {
         {entries.length > 0 && picksNote ? <Muted>{picksNote}</Muted> : null}
         {entries.length > 0 && (
           <ScrollView style={s.scroller} contentContainerStyle={s.scrollerBody} showsVerticalScrollIndicator={false}
+                      stickyHeaderIndices={[0]}
                       refreshControl={<RefreshControl refreshing={pulling} onRefresh={pull} tintColor={C.muted} colors={[C.clay]} />}>
-          <View style={s.table}>
             <View style={[s.row, s.head, podiumCol && s.tightRow]}>
               <Text style={[s.rank, s.headText]} numberOfLines={1}>#</Text>
               <Text style={[s.who, s.headText]} numberOfLines={1}>Player</Text>
@@ -237,6 +237,7 @@ export default function GlobalStandings() {
                          'Chance of finishing first — sort by this')
               ) : null}
             </View>
+            <View style={s.rowsBox}>
             {rows.map((e, i) => {
               const mine = me && e.user_id === me.id
               const Body = opens ? CardLink : View
@@ -299,12 +300,17 @@ const s = StyleSheet.create({
      however it was aligned. One number, in both places. */
   body: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 },
   /* The bounded box the table scrolls in; the foot sits under it. */
-  scroller: { flex: 1, minHeight: 0 },
+  /* EDGE TO EDGE, HEADER PINNED (owner, 2026-09-23: "do not put this data in
+     its own UI element"). The table was a rounded, bordered card inside the
+     body's 16pt gutters; the scroller now runs past the gutters to both
+     edges, the rows carry the gutter as their own padding, and the header
+     row is the ScrollView's sticky child 0 — always on screen. */
+  scroller: { flex: 1, minHeight: 0, marginHorizontal: -S.lg },
   scrollerBody: { paddingBottom: 4 },
-  table: { borderWidth: 1, borderColor: C.border, borderRadius: 14, overflow: 'hidden', backgroundColor: C.card },
+  rowsBox: { backgroundColor: C.card },
   /* 3pt, not 10 (owner, 2026-09-23): at the largest text size a row was
      mostly padding. The name lines' own leading already clears the glyphs. */
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3, paddingHorizontal: 12, gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3, paddingHorizontal: S.lg, gap: 8 },
   head: { backgroundColor: C.raised, paddingVertical: 8 },
   headText: { color: C.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
   // The header the rows are sorted by.
