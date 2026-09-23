@@ -679,18 +679,34 @@ export function FinalGuessBar({ tournamentId, enabled, onOpen, refreshKey }) {
 
 const s = StyleSheet.create({
   /* Edge to edge under the header, like the strip below it. */
+  /* WAY LESS TALL, AND DRAWN (owner, 2026-09-23). It stood as tall as the
+     round strip below it for two lines of small text, because both lines
+     carried their face's own leading — and on iOS that leading lands ABOVE
+     the glyphs (feedback_ios_lineheight_sinks_caps), so it was padding the
+     bar twice over. The line boxes are now the caps plus a little, still
+     through leading() so they grow with the reader's text size, and the
+     padding is halved.
+
+     The borders were already here and could not be seen: C.border against
+     C.card is the rule for a hairline BETWEEN rows, and this is the edge of a
+     control. Two points of borderLit, the weight and colour the schedule's
+     draw bar settled on.
+
+     And it sits down off the title rather than against it: the header above
+     is the draw's, this belongs to the bracket. */
   bar: {
     flexDirection: 'row', alignItems: 'center', gap: S.sm,
-    marginHorizontal: -S.lg, paddingHorizontal: S.lg, paddingVertical: 6,
-    borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.border,
+    marginHorizontal: -S.lg, paddingHorizontal: S.lg, paddingVertical: 3,
+    marginTop: S.sm,
+    borderTopWidth: 2, borderBottomWidth: 2, borderColor: C.borderLit,
     backgroundColor: C.card,
   },
   barDown: { backgroundColor: C.raised },
   barStale: { borderColor: C.bad },
   barText: { flex: 1, minWidth: 0 },
-  barLabel: { ...T.tiny, color: C.muted, letterSpacing: 0.6 },
+  barLabel: { ...T.tiny, color: C.muted, letterSpacing: 0.6, lineHeight: leading(13) },
   barLabelStale: { color: C.bad },
-  barValue: { ...T.smallMed, color: C.ink },
+  barValue: { ...T.smallMed, color: C.ink, lineHeight: leading(15) },
   barActual: { ...T.tiny, color: C.faint, flexShrink: 0 },
   /* A GLYPH, not an icon: it survives whatever the icon font does, and the
      circle is drawn by the view rather than by the character. */

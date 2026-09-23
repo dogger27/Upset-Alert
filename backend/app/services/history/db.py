@@ -7,6 +7,7 @@ the most contended thing on the machine. A second file keeps that work off
 it entirely. Callers use `run()` to keep the event loop clear.
 """
 import asyncio
+import logging
 import sqlite3
 from pathlib import Path
 
@@ -19,6 +20,8 @@ from app.core.config import settings
 # next model (dominance ratio, serve/return form), and they cost nothing to
 # keep once the file is being read anyway.
 STAT_COLS = ["ace", "df", "svpt", "1stIn", "1stWon", "2ndWon", "SvGms", "bpSaved", "bpFaced"]
+
+logger = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tml_files (
@@ -50,6 +53,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_tml_match2 ON tml_matches(tour, family, tou
 CREATE INDEX IF NOT EXISTS ix_tml_date ON tml_matches(tourney_date);
 CREATE INDEX IF NOT EXISTS ix_tml_winner ON tml_matches(tour, winner_id);
 CREATE INDEX IF NOT EXISTS ix_tml_loser ON tml_matches(tour, loser_id);
+-- THE THREE SHAPES THE TIEBREAK SHEET ASKS IN, each of which was a full scan
+-- of 495,094 rows (owner, 2026-09-23: "is there a reason it currently waits
+-- like 20 seconds?"). It was seven and a half seconds of history for one ATP
+-- draw — the reference figures, both slider ends, the head-to-head — and the
+-- bar only appears when they arrive.
+--
+-- `ix_tml_shape` serves every question asked of a tour, a format and a
+-- surface: the slider ends, the tier baselines, the estimates. The other two
+-- are the OR of "this player won or lost it" — the existing (tour, winner_id)
+-- pair could not also range on the date, so each arm re-read the rows it had
+-- just found. With the date in the index SQLite takes the MULTI-INDEX OR and
+-- touches neither table page twice.
+--
+-- Measured on the live file: 7,609 ms -> 69 ms for ATP, 1,315 -> 22 for WTA.
+-- They cost 2.4 seconds to build, once, and 43 MB on a 166 MB file.
+CREATE INDEX IF NOT EXISTS ix_tml_shape ON tml_matches(tour, best_of, surface, tourney_date);
+CREATE INDEX IF NOT EXISTS ix_tml_won ON tml_matches(tour, winner_id, tourney_date);
+CREATE INDEX IF NOT EXISTS ix_tml_lost ON tml_matches(tour, loser_id, tourney_date);
 
 -- Every player TML has ever printed, one row per id, for the name fallback.
 CREATE TABLE IF NOT EXISTS tml_players (
@@ -105,7 +126,36 @@ def connect() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.executescript(SCHEMA)
+    _ensure_stats(conn)
     return conn
+
+
+def _ensure_stats(conn: sqlite3.Connection) -> None:
+    """ANALYZE once, because the indexes alone are not enough.
+
+    Measured, and not obvious: with the three indexes above and no statistics,
+    the planner still chose to scan for some of these queries and the sheet
+    took 2.5 seconds rather than 7.6. It needs to know they are selective.
+
+    `analysis_limit` is what makes this cheap enough to guarantee rather than
+    schedule: a bounded sample, 46 ms on the live file against seconds for a
+    full pass, and the planner only needs the order of magnitude. Run when
+    sqlite_stat1 has no row for our own index — so once per file, and again by
+    itself if a loader ever rebuilds the table and takes the stats with it.
+    """
+    try:
+        have = conn.execute(
+            "SELECT 1 FROM sqlite_stat1 WHERE idx = 'ix_tml_shape'").fetchone()
+    except sqlite3.OperationalError:
+        have = None                       # no sqlite_stat1 yet: never analysed
+    if have:
+        return
+    try:
+        conn.execute("PRAGMA analysis_limit=400")
+        conn.execute("ANALYZE")
+        conn.commit()
+    except sqlite3.Error as exc:          # a read-only copy, a locked file
+        logger.debug("history.db ANALYZE skipped: %s", exc)
 
 
 async def run(fn, *args):
