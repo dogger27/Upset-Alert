@@ -15,19 +15,22 @@
  */
 
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Alert, Pressable, RefreshControl, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useAuth } from '../../../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores, getPositionChances, getChancesHistory } from '../../../../../../../api'
+import { DrawHeaderBar } from '../../../../../../../drawHeader'
+import { nextLiveDraw } from '../../../../../../../drawCycle'
+import { useChoosableTournaments } from '../../../../../../../choosableTournaments'
 import { ScrollPane } from '../../../../../../../scrollPane'
 import { useApi } from '../../../../../../../useApi'
 import { byFinish, competitionRanks, finishText, pct } from '../../../../../../../scoring'
-import { FOOT_FLUSH, HeaderRule, STANDINGS_TITLE, StandingsFoot, useStandingsView } from '../../../../../../../standingsTools'
+import { FOOT_FLUSH, StandingsFoot, useStandingsView } from '../../../../../../../standingsTools'
 import { othersPicksNote } from '../../../../../../../lock'
 import { C, S } from '../../../../../../../theme'
 import { leading } from '../../../../../../../fontScale.js'
-import { PlayerName, TourSwitch, headerTour } from '../../../../../../../cards'
-import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title, bareRight } from '../../../../../../../ui'
+import { PlayerName } from '../../../../../../../cards'
+import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../../../ui'
 
 /* WHAT THE CHANCES ARE, in the reader's words, and who the ratings belong to.
    The heading is the natural place to ask; on a phone there is no hover, so
@@ -65,6 +68,14 @@ export default function Standings() {
   const t = draws.data?.find(x => String(x.tournament?.id) === String(drawId))?.tournament
   /* The two halves of one event, as on the site: a shared tournament_id, or
      name and year where the API has none. */
+  /* The next draw being played that this league has a table for: the Draw
+     tab's cycle (live draws, fixed order), kept to this league's draws so
+     the button never opens an empty standings page. */
+  const { live } = useChoosableTournaments()
+  const next = useMemo(() => {
+    const mine = new Set((draws.data || []).map(x => String(x.tournament?.id)))
+    return nextLiveDraw(live.filter(d => mine.has(String(d.id))), t)
+  }, [live, draws.data, t])
   const siblings = (draws.data || []).map(x => x.tournament).filter(x => x && t && (
     t.tournament_id != null ? x.tournament_id === t.tournament_id
       : x.name === t.name && x.year === t.year))
@@ -135,21 +146,20 @@ export default function Standings() {
 
   return (
     <>
-      {/* The tour pill beside the title, as the site's popup puts ATP / WTA
-          beside the draw name: which draw this is, at a glance. */}
-      {/* THE PAIR, AS A SWITCH — see the global standings screen. */}
-      <Stack.Screen options={{ title: t?.name || 'Standings', headerTitleStyle: STANDINGS_TITLE,
-                               ...bareRight(() => (
-                                 <TourSwitch draws={siblings} currentId={t?.id} showLevel
-                                             style={headerTour}
-                                             onPick={d => router.replace(`/league/${id}/draw/${d.id}`)} />
-                               )) }} />
+      {/* THE DRAW PAGE'S OWN HEADER BAR (owner, 2026-09-23): tour tint, the
+          ATP/WTA switch, the name, and the button on to the next draw — here
+          the next one THIS LEAGUE has standings for. The system bar is off. */}
+      <Stack.Screen options={{ title: t?.name || 'Standings', headerShown: false }} />
       {/* THE FOOT IS PINNED. The table scrolls in a bounded box and the
           timeline and What if sit beneath it, always on screen — a control
           for the table should not be somewhere past the table's end. The
           pull-to-refresh moves into the box, since that is what scrolls. */}
       <Screen scroll={false} style={FOOT_FLUSH}>
-        <HeaderRule />
+        {t ? (
+          <DrawHeaderBar t={t} siblings={siblings} next={next}
+                         onPickSibling={d => router.replace(`/league/${id}/draw/${d.id}`)}
+                         onNext={d => router.replace(`/league/${id}/draw/${d.id}`)} />
+        ) : null}
         {scores.loading && !scores.data ? <Loading /> : null}
         <ErrorNote error={scores.error} onRetry={scores.refetch} />
 
