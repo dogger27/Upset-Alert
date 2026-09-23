@@ -679,6 +679,25 @@ def _venue_today(tz_name: Optional[str]) -> date:
         return now.date()
 
 
+def court_run_key(entry) -> tuple:
+    """Which COURT'S RUNNING ORDER a row belongs to — the tournament and the
+    court, never the court alone.
+
+    A court name is only a name. "COURT 1", "CENTER COURT" and "GRANDSTAND"
+    are what most venues call their courts, so on any ordinary afternoon three
+    or four tournaments are each running a "COURT 1" of their own. The
+    tournament is half a court's identity here exactly as it is for an alias
+    (`display_court` is keyed on both) and for the clients' court groups
+    (mobile/courtGroups.js: "a court name means nothing without saying WHICH
+    one").
+
+    Named rather than inlined so the law can run this very function over a
+    stored day (`schedule_invariants.court_run_crosses_tournaments`), the way
+    `day_order` and `schedule.carry_surname` are run by theirs.
+    """
+    return (entry.tournament_id, entry.court or '')
+
+
 def _status_of(entry, match) -> str:
     """Live state comes from the MATCH, not from the schedule row.
 
@@ -930,9 +949,20 @@ async def schedule_day(
     # only basis on which a status is worth showing for a match we cannot see.
     statuses = {e.id: _status_of(e, matches.get(e.match_id) if e.match_id else None)
                 for e in entries}
-    court_groups: dict[str, list] = {}
+    # ONE TOURNAMENT'S COURT, NOT EVERY COURT OF THAT NAME. This day spans
+    # every tournament playing — the endpoint narrows by tournament_id only
+    # when the caller asks for it — and these groups were keyed on the court
+    # NAME alone, so the running orders of all of them were poured into one.
+    # Singapore 2026-09-23 (doc 463): COURT 1's opener, CASCINO / FENG vs
+    # COSTOULAS / GIBSON at "Not before 2:00 PM", was served COMPLETED with
+    # nothing finished and no score anywhere, because Chengdu and Hangzhou
+    # each had a live SECOND match on THEIR "COURT 1". Four tournaments shared
+    # "CENTER COURT" the same afternoon. The web page passes tournament_id and
+    # was blind to it; the app and the all-tournaments view, which fetch the
+    # whole day, were not.
+    court_groups: dict[tuple, list] = {}
     for e in entries:
-        court_groups.setdefault(e.court or '', []).append(e)
+        court_groups.setdefault(court_run_key(e), []).append(e)
     for slots in court_groups.values():
         # Only a STRICTLY later slot proves an earlier one finished. Positions
         # can collide — a sheet revised during the day renumbers only the
