@@ -17,7 +17,7 @@ import { GROUP_TONE, groupDrawsByStatus, sectionOfMany, showGroupHeadings } from
 import { C, R, S, T } from '../../../../../theme'
 import { leading } from '../../../../../fontScale.js'
 import { ScrollPane } from '../../../../../scrollPane'
-import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title, bareRight } from '../../../../../ui'
+import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title, bareRight, eyebrowType } from '../../../../../ui'
 
 export default function LeagueDraws() {
   const { id } = useLocalSearchParams()
@@ -310,10 +310,11 @@ export default function LeagueDraws() {
             header stay put. */}
         {tab === 'members' && (league.data || isGlobal) && (
           <>
-            <Eyebrow>
-              {isGlobal ? `Players (${members.length})` : `Members (${league.data?.member_count ?? members.length})`}
-              {` · ${gs.data?.year ?? new Date().getFullYear()} Grand Slam points`}
-            </Eyebrow>
+            {/* The table's title, and only that — no member count (owner,
+                2026-09-23) — on ONE line: it shrinks before it wraps. */}
+            <Text style={eyebrowType().style} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+              {`${gs.data?.year ?? new Date().getFullYear()} Grand Slam points`}
+            </Text>
             <ScrollPane overlay style={s.mScroller} contentContainerStyle={{ paddingBottom: 4 }}
                         stickyHeaderIndices={[0]}
                         refreshControl={<RefreshControl refreshing={false} onRefresh={gs.refetch}
