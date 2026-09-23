@@ -196,21 +196,25 @@ export function MatchMenu({ target, onClose, onH2H, onPredictors, onHistory }) {
                          accessibilityRole="button" accessibilityLabel={a.label}
                          accessibilityHint={a.hint}>
                 <View style={[s.slot, { backgroundColor: tint.plate }]}>
-                  <Ionicons name={a.icon} size={22} color={tint.text} />
+                  <Ionicons name={a.icon} size={19} color={tint.text} />
                 </View>
-                <View style={s.labels}>
-                  {/* ONE LINE, ALWAYS (owner, 2026-09-22). "Remove from Lock
-                      Screen" wrapped to two and pushed its own hint down the
-                      row, so one command was a head taller than the rest and
-                      the card stopped reading as a set. FitText shrinks it to
-                      the width it has instead — measured from the font's own
-                      metrics, no ellipsis, which is this project's rule for
-                      text that must not be cut. The floor is 13pt: below that
-                      a 17pt row's label stops matching its neighbours more
-                      than a wrap did. */}
-                  <FitText style={s.label} min={13}>{a.label}</FitText>
-                  <Text style={s.hint} numberOfLines={1}>{a.hint}</Text>
-                </View>
+                {/* THE COMMAND, AND NOTHING ELSE (owner, 2026-09-23: "remove
+                    the description text. Main button text only"). The hint
+                    under each label was a second line of prose in a menu whose
+                    rows are read in a second — and it was the one place in the
+                    app still printing "…", because a hint that did not fit was
+                    cut rather than shrunk.
+
+                    The words are not thrown away: they stay on the action as
+                    `accessibilityHint`, where a screen reader reads them and
+                    nothing has a width to be cut to.
+
+                    ONE LINE, ALWAYS (owner, 2026-09-22). "Remove from Lock
+                    Screen" wrapped to two and pushed the row a head taller
+                    than its neighbours. FitText shrinks it to the width it
+                    has instead — measured from the font's own metrics, never
+                    an ellipsis. */}
+                <FitText style={s.label} min={13}>{a.label}</FitText>
                 <Ionicons name="chevron-forward" size={18} color={C.faint} />
               </Pressable>
             ))}
@@ -258,14 +262,18 @@ const s = StyleSheet.create({
     backgroundColor: C.sunken, borderRadius: R.lg,
     borderWidth: 1, borderColor: C.border, overflow: 'hidden',
   },
-  action: { flexDirection: 'row', alignItems: 'center', gap: S.md, minHeight: 60, paddingHorizontal: S.md },
+  /* COMPACT, now that a row is one line (owner, 2026-09-23). 60pt of height
+     was two lines of text and the icon plate that matched them; a single
+     command needs the tap target and no more — 48 is still above Apple's 44. */
+  action: { flexDirection: 'row', alignItems: 'center', gap: S.md, minHeight: 48, paddingHorizontal: S.md },
   // The divider is the row's own top edge, so the card keeps one outline.
   actionNext: { borderTopWidth: 1, borderTopColor: C.border },
   actionPressed: { backgroundColor: C.raised },
-  slot: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  labels: { flex: 1, minWidth: 0, gap: 1 },
-  label: { fontFamily: 'Archivo_500Medium', fontSize: 17, lineHeight: leading(22), color: C.ink },
-  hint: { ...T.small, color: C.faint },
+  slot: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  // The label is the flexible half of the row: it takes what the plate and
+  // the chevron leave, and FitText fits it to that.
+  label: { flex: 1, minWidth: 0, fontFamily: 'Archivo_500Medium', fontSize: 17,
+           lineHeight: leading(22), color: C.ink },
 
   cancel: {
     borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn,
