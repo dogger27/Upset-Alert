@@ -21,7 +21,7 @@ import { useAuth } from '../../../../../../../auth'
 import { getLeague, getLeagueTournaments, getRoundScores, getPositionChances, getChancesHistory } from '../../../../../../../api'
 import { useApi } from '../../../../../../../useApi'
 import { byFinish, competitionRanks, finishText, pct } from '../../../../../../../scoring'
-import { FOOT_FLUSH, StandingsFoot, useStandingsView } from '../../../../../../../standingsTools'
+import { FOOT_FLUSH, STANDINGS_TITLE, StandingsFoot, useStandingsView } from '../../../../../../../standingsTools'
 import { othersPicksNote } from '../../../../../../../lock'
 import { C } from '../../../../../../../theme'
 import { leading } from '../../../../../../../fontScale.js'
@@ -137,7 +137,7 @@ export default function Standings() {
       {/* The tour pill beside the title, as the site's popup puts ATP / WTA
           beside the draw name: which draw this is, at a glance. */}
       {/* THE PAIR, AS A SWITCH — see the global standings screen. */}
-      <Stack.Screen options={{ title: t?.name || 'Standings',
+      <Stack.Screen options={{ title: t?.name || 'Standings', headerTitleStyle: STANDINGS_TITLE,
                                ...bareRight(() => (
                                  <TourSwitch draws={siblings} currentId={t?.id} showLevel
                                              style={headerTour}

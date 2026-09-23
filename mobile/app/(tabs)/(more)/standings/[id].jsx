@@ -15,7 +15,7 @@ import { useAuth } from '../../../../auth'
 import { getGlobalRoundScores, listTournaments, getGlobalPositionChances, getGlobalChancesHistory } from '../../../../api'
 import { useApi } from '../../../../useApi'
 import { byFinish, competitionRanks, finishText, pct } from '../../../../scoring'
-import { FOOT_FLUSH, StandingsFoot, useStandingsView } from '../../../../standingsTools'
+import { FOOT_FLUSH, STANDINGS_TITLE, StandingsFoot, useStandingsView } from '../../../../standingsTools'
 import { othersPicksNote } from '../../../../lock'
 import { C } from '../../../../theme'
 import { leading } from '../../../../fontScale.js'
@@ -139,7 +139,7 @@ export default function GlobalStandings() {
       {/* THE PAIR, AS A SWITCH: a Slam is two draws under one name, and the
           reader looking at one usually wants the other next. Replace, not
           push, so flipping tours does not stack history. */}
-      <Stack.Screen options={{ title: t?.name ? `${t.name} · Global` : 'Global standings',
+      <Stack.Screen options={{ title: t?.name ? `${t.name} · Global` : 'Global standings', headerTitleStyle: STANDINGS_TITLE,
                                ...bareRight(() => (
                                  <TourSwitch draws={siblings} currentId={t?.id} showLevel
                                              style={headerTour}
