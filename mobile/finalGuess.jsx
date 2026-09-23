@@ -291,7 +291,7 @@ function acesRows(data, sets) {
   const rows = []
   const scale = (r) => (r?.aces_per_set == null ? null : round1(r.aces_per_set * sets))
   if (q.tier_finals?.aces_per_set != null) {
-    rows.push({ label: `recent ${sets}-set ${data.tier_label} finals on ${where}`,
+    rows.push({ lead: 'Avg', label: `${sets}-set ace count from the winner of ${data.tier_label} finals on ${where}`,
                 value: String(scale(q.tier_finals)), note: `${q.tier_finals.matches} finals` })
   }
   if (q.champion_vs?.aces_per_set != null) {

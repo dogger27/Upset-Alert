@@ -220,3 +220,11 @@ def test_the_set_lengths_have_one_definition():
     assert set_lengths(5) == (3, 4, 5)
     # Anything unexpected reads as best-of-three rather than crashing a page.
     assert set_lengths(None) == (2, 3) and set_lengths(0) == (2, 3)
+
+
+def test_a_finals_ace_rate_counts_the_winners_aces_only():
+    # The question is how many aces the CHAMPION hits (owner, 2026-09-23), so
+    # the tier's reference is the winner's aces per set, not both players'.
+    # Seoul 5 over 2 sets, Hobart's winner 4 over 3, Linz 2 over 2.
+    got = tier_finals(_db(), "wta", "250", "Hard", 10, TODAY)
+    assert got["aces_per_set"] == round((5 + 4 + 2) / 7, 2)
