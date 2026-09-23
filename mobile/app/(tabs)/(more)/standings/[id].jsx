@@ -154,9 +154,6 @@ export default function GlobalStandings() {
         <HeaderRule />
         {standings.loading && !standings.data ? <Loading /> : null}
         <ErrorNote error={standings.error} onRetry={standings.refetch} />
-        {standings.data && (
-          <Muted>{entries.length} entered{t?.draw_size ? ` · ${t.draw_size} draw` : ''}</Muted>
-        )}
         {standings.data && entries.length === 0 && (
           <Card>
             <Title>No standings yet</Title>
@@ -322,7 +319,8 @@ const s = StyleSheet.create({
   /* 3pt, not 10 (owner, 2026-09-23): at the largest text size a row was
      mostly padding. The name lines' own leading already clears the glyphs. */
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3, paddingHorizontal: S.lg, gap: 8 },
-  head: { backgroundColor: C.raised, paddingVertical: 8 },
+  // The same 2pt green rule as the top and tab bars under it (owner, 2026-09-23).
+  head: { backgroundColor: C.raised, paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: C.green },
   headText: { color: C.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
   // The header the rows are sorted by.
   headOn: { color: C.greenBright },  // green alone marks the sort; no underline (owner, 2026-09-23)

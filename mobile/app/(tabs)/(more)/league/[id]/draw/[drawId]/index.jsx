@@ -348,7 +348,8 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingVertical: 3, paddingHorizontal: S.lg, gap: 8,
   },
-  head: { backgroundColor: C.raised, paddingVertical: 8 },
+  // The same 2pt green rule as the top and tab bars under it (owner, 2026-09-23).
+  head: { backgroundColor: C.raised, paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: C.green },
   headText: { color: C.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
   // The header the rows are sorted by.
   headOn: { color: C.greenBright },  // green alone marks the sort; no underline (owner, 2026-09-23)
