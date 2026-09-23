@@ -665,9 +665,16 @@ export default function ScheduleScreen() {
               Still pressable, for the same reason a pill for an idle
               tournament is: the choice is remembered for the day that has
               some. */}
-          {view === 'time' && (
+          {/* KEPT IN COURT VIEW, INVISIBLE (owner, 2026-09-23): a court's
+              timeline has no doubles filter, but taking the button away
+              shifted the Time / Court switch left under the finger that had
+              just pressed it. It holds its slot, unseen and untappable. */}
+          {(
             <Pressable onPress={() => setShowDoubles(v => !v)}
-                       style={[s.chip, showDoubles && s.chipOn, !hasDoubles && s.chipIdle]}
+                       disabled={view !== 'time'} pointerEvents={view === 'time' ? 'auto' : 'none'}
+                       accessibilityElementsHidden={view !== 'time'}
+                       importantForAccessibility={view === 'time' ? 'auto' : 'no-hide-descendants'}
+                       style={[s.chip, showDoubles && s.chipOn, !hasDoubles && s.chipIdle, view !== 'time' && { opacity: 0 }]}
                        accessibilityRole="button"
                        accessibilityLabel={hasDoubles ? 'Doubles' : 'Doubles, none this day'}
                        accessibilityState={{ selected: showDoubles }}>
