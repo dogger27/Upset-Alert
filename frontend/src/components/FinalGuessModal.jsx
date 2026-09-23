@@ -106,8 +106,10 @@ function rowsFor(ctx, which, sets) {
                  scale(q.tier_finals), `${q.tier_finals.matches} finals`])
     }
     if (q.champion_vs?.aces_per_set != null) {
-      rows.push([`${sets}-set ${a} v ${b} matches on ${surf}`, scale(q.champion_vs),
-                 met(q.champion_vs.matches)])
+      // The champion's own aces against this opponent — said so, since
+      // "A v B matches" read as both players' (owner, 2026-09-23).
+      rows.push([`${sets}-set ace count from ${a} when facing ${b} on ${surf}`, scale(q.champion_vs),
+                 met(q.champion_vs.matches), 'Avg'])
     }
     if (q.champion_on_surface?.aces_per_set != null) {
       rows.push([`${sets}-set ${a} matches on ${surf}`, scale(q.champion_on_surface),
@@ -167,12 +169,12 @@ function Reference({ ctx, which, sets, unit }) {
       {/* The block says what it is: under a question and its answer sat a run
           of sentences with numbers, and nothing said they were evidence. */}
       <p className="fg-refs-title">Reference data:</p>
-      {rows.map(([label, value, note]) => (
+      {rows.map(([label, value, note, lead]) => (
         <div className="fg-ref" key={label}>
           {/* "Avg", not "Average": the word is on every row and what follows
               it is the part that differs. The colon is what makes the figure
               below read as this sentence's answer rather than a new line. */}
-          <p className="fg-ref-label">Avg for {label}:</p>
+          <p className="fg-ref-label">{lead || 'Avg for'} {label}:</p>
           <p className="fg-ref-figures">
             <span className="fg-td-value">
               {value}{unit && <span className="fg-td-unit"> {unit}</span>}
