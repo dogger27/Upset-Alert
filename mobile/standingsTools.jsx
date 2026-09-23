@@ -224,8 +224,10 @@ export function Scrubber({ timeline, pos, onChange, numRounds, min = 0 }) {
           slider never moves under the finger when it appears. */}
       {last ? (
         <Text style={s.flash} numberOfLines={2}>
-          {roundTag(last.round_number, numRounds)}: {last.winner_name ?? '?'} def. {last.loser_name ?? '?'}
-          {last.completed_at ? <Text style={s.flashWhen}>{'\n'}{when(last.completed_at)}</Text> : null}
+          {/* Surnames, and no date (owner, 2026-09-23): the line names the
+              match the slider stopped on, and the day it was played is not
+              what anyone scrubbing is asking. */}
+          {roundTag(last.round_number, numRounds)}: {surname(last.winner_name)} def. {surname(last.loser_name)}
         </Text>
       ) : null}
       <GestureDetector gesture={pan}>
@@ -242,11 +244,6 @@ export function Scrubber({ timeline, pos, onChange, numRounds, min = 0 }) {
   )
 }
 
-function when(iso) {
-  try {
-    return new Date(iso).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
-  } catch { return '' }
-}
 
 /* ── What if ────────────────────────────────────────────────────────────── */
 
@@ -373,7 +370,6 @@ const s = StyleSheet.create({
   },
   scrub: { gap: 6 },
   flash: { ...T.small, color: C.muted, marginBottom: 2 },
-  flashWhen: { ...T.tiny, color: C.muted },
   track: { height: THUMB, justifyContent: 'center' },
   rail: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: C.border },
   fill: { position: 'absolute', left: 0, height: 4, borderRadius: 2, backgroundColor: C.greenBright },
