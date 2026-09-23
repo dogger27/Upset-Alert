@@ -31,7 +31,9 @@ export default function MoreLayout() {
         headerTintColor: C.ink,
         headerTitleStyle: { ...T.h2, color: C.ink },
         headerShadowVisible: false,
-        headerBackTitle: 'Back',
+        /* NO BACK BUTTON, ANYWHERE (owner, 2026-09-23). The edge swipe goes
+           back; the bar keeps only the title and a screen's own controls. */
+        headerBackVisible: false,
         contentStyle: { backgroundColor: C.bg },
       }}
     >
