@@ -109,11 +109,11 @@ function rowsFor(ctx, which, sets) {
       // The champion's own aces against this opponent — said so, since
       // "A v B matches" read as both players' (owner, 2026-09-23).
       rows.push([`${sets}-set ace count from ${a} when facing ${b} on ${surf}`, scale(q.champion_vs),
-                 met(q.champion_vs.matches), 'Avg'])
+                 met(q.champion_vs.matches), 'Avg', 'based on sets from'])
     }
     if (q.champion_on_surface?.aces_per_set != null) {
       rows.push([`${sets}-set ace count from ${a} on ${surf}`, scale(q.champion_on_surface),
-                 `${q.champion_on_surface.matches} matches`, 'Avg'])
+                 `${q.champion_on_surface.matches} matches`, 'Avg', 'based on sets from'])
     }
     return rows
   }
@@ -131,7 +131,7 @@ function rowsFor(ctx, which, sets) {
   }
   if (q.h2h_estimate?.by_sets?.[key] != null) {
     rows.push([`${sets}-set ${a} v ${b} matches on ${surf}, estimated`, fmtMinutes(q.h2h_estimate.by_sets[key]),
-               met(q.h2h_estimate.matches), undefined, 'based on sets from'])
+               met(q.h2h_estimate.matches)])
   }
   return rows
 }
