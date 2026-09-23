@@ -69,7 +69,15 @@ FORM_LIMIT = 30
 MAX_SEASONS = 2
 
 _TR = re.compile(r'<tr class="(head flags|one|two)[^"]*">(.*?)</tr>', re.S)
-_HEAD = re.compile(r'<td class="t-name"[^>]*>\s*<a href="([^"]*)"[^>]*>(.*?)</a>', re.S)
+# THE HEADER'S CELL, AND ITS LINK ONLY IF IT HAS ONE. Reading the anchor
+# directly lost the whole block: a header TE prints without a link — a team
+# competition, an exhibition — left the event blank for every row under it,
+# and the app drew a form line with no tournament on it (owner, 2026-09-23:
+# "why is some tournament name or info not showing up?!?"). The cell always
+# holds the name; the link is where the rung and the tour live when there is
+# one.
+_HEAD_CELL = re.compile(r'<td class="t-name"[^>]*>(.*?)</td>', re.S)
+_HEAD_LINK = re.compile(r'<a href="([^"]*)"')
 _DAY = re.compile(r'class="first time">\s*(\d{1,2})\.(\d{1,2})\.')
 _SURFACE = re.compile(r'class="s-color"><span title="([^"]*)"')
 _NAMES = re.compile(r'<td class="t-name">(.*?)</td>', re.S)
@@ -179,8 +187,11 @@ def parse_player_matches(page: str, slug: str, season: Optional[int] = None,
     out: list[dict] = []
     for kind, body in ((m.group(1), m.group(2)) for m in _TR.finditer(page)):
         if kind == "head flags":
-            h = _HEAD.search(body)
-            path, event = (h.group(1), _text(h.group(2))) if h else ("", "")
+            cell = _HEAD_CELL.search(body)
+            inner = cell.group(1) if cell else ""
+            link = _HEAD_LINK.search(inner)
+            path = link.group(1) if link else ""
+            event = _text(inner)
             continue
         if _YEAR_ROW.search(body):
             continue                      # the win/loss summary, not a match

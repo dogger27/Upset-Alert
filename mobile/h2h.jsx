@@ -125,8 +125,13 @@ export function H2HSheet({ visible, onClose, a, b, surface }) {
               ))}
               {formA.data?.length || formB.data?.length ? (
                 <View style={[s.row, rows.length > 0 && s.rowRule]}>
+                  {/* A NARROWER AXIS FOR THIS ROW ONLY (owner, 2026-09-23:
+                      "the W / L pills are still way too small"). The word is
+                      four letters and the figures elsewhere need the wide
+                      column for "#258"; here that width is better spent on
+                      the squares, which is what the row is for. */}
                   <Form form={formA.data} side={0} open={open} onOpen={setOpen} />
-                  <FitText style={s.label} min={8} align="center">form</FitText>
+                  <FitText style={[s.label, s.labelNarrow]} min={8} align="center">form</FitText>
                   <Form form={formB.data} side={1} end open={open} onOpen={setOpen} />
                 </View>
               ) : null}
@@ -285,8 +290,14 @@ const s = StyleSheet.create({
 
   /* The headline. The record is the widest thing in the row and holds the
      middle; the names take what is left, evenly, and shrink into it. */
-  head: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm },
-  who: { flex: 1, minWidth: 0, gap: 3 },
+  /* BASELINE, NOT BOTTOM (owner, 2026-09-23: "move the h2h score down more,
+     in line with the player names"). Aligning the bottoms lined up the boxes
+     rather than the type: the tally is a 30pt condensed face whose line box
+     carries descender room the names' 15pt one does not, so it floated a
+     third of a line above them. On the baseline the three read as one line,
+     which is what they are. */
+  head: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm },
+  who: { flex: 1, minWidth: 0, gap: 3, alignSelf: 'flex-end' },
   whoEnd: { alignItems: 'flex-end' },
   whoLine: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch' },
   whoLineEnd: { justifyContent: 'flex-end' },
@@ -312,6 +323,8 @@ const s = StyleSheet.create({
      (owner, 2026-09-23: "fix the …"). FitText is the second guard: whatever
      is left after the column has grown, the word shrinks into it. */
   label: { ...T.tiny, color: C.faint, width: leading(74), textAlign: 'center' },
+  // "form" is four letters; the room belongs to the squares either side.
+  labelNarrow: { width: leading(42) },
 
   figureWrap: { flex: 1, minWidth: 0, alignItems: 'flex-end' },
   figureWrapEnd: { alignItems: 'flex-start' },
