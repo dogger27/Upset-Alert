@@ -25,7 +25,7 @@ import { FOOT_FLUSH, StandingsFoot, useStandingsView } from '../../../../../../.
 import { othersPicksNote } from '../../../../../../../lock'
 import { C } from '../../../../../../../theme'
 import { leading } from '../../../../../../../fontScale.js'
-import { FitText, PlayerName, TourSwitch } from '../../../../../../../cards'
+import { PlayerName, TourSwitch, headerTour } from '../../../../../../../cards'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../../../ui'
 
 /* WHAT THE CHANCES ARE, in the reader's words, and who the ratings belong to.
@@ -137,25 +137,17 @@ export default function Standings() {
       {/* The tour pill beside the title, as the site's popup puts ATP / WTA
           beside the draw name: which draw this is, at a glance. */}
       {/* THE PAIR, AS A SWITCH — see the global standings screen. */}
-      {/* NO SYSTEM HEADER (owner, 2026-09-23: "remove the back button;
-          remove the outer border from the ATP / WTA pill"). That border is
-          iOS 26's capsule around any view placed in a nav bar, and hiding it
-          per item (hidesSharedBackground) needs a newer react-native-screens
-          than this build carries. So the page draws its own title row, with
-          no Back button; the edge swipe still goes back. */}
-      <Stack.Screen options={{ title: t?.name || 'Standings', headerShown: false }} />
+      <Stack.Screen options={{ title: t?.name || 'Standings',
+                               headerRight: () => (
+                                 <TourSwitch draws={siblings} currentId={t?.id} showLevel
+                                             style={headerTour}
+                                             onPick={d => router.replace(`/league/${id}/draw/${d.id}`)} />
+                               ) }} />
       {/* THE FOOT IS PINNED. The table scrolls in a bounded box and the
           timeline and What if sit beneath it, always on screen — a control
           for the table should not be somewhere past the table's end. The
           pull-to-refresh moves into the box, since that is what scrolls. */}
       <Screen scroll={false} style={FOOT_FLUSH}>
-        <View style={s.pageHead}>
-          <View style={s.pageTitleBox}>
-            <FitText style={s.pageTitle} min={12}>{t?.name || 'Standings'}</FitText>
-          </View>
-          <TourSwitch draws={siblings} currentId={t?.id} showLevel
-                      onPick={d => router.replace(`/league/${id}/draw/${d.id}`)} />
-        </View>
         {scores.loading && !scores.data ? <Loading /> : null}
         <ErrorNote error={scores.error} onRetry={scores.refetch} />
 
@@ -328,9 +320,6 @@ const s = StyleSheet.create({
      column further left than its header — the ✓ count sat under the "120"
      however it was aligned. One number, in both places. */
   body: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 },
-  pageHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  pageTitleBox: { flex: 1, minWidth: 0 },
-  pageTitle: { fontFamily: 'SairaCondensed_700Bold', fontSize: 22, lineHeight: leading(26), color: C.ink },
   /* The bounded box the table scrolls in; the foot sits under it. */
   scroller: { flex: 1, minHeight: 0 },
   scrollerBody: { paddingBottom: 4 },
