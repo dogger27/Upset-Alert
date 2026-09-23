@@ -161,7 +161,7 @@ function StatTable({ rows, unit }) {
                 is an aside about the figure, not a second figure, and at a
                 small gap the two read as one phrase. */}
             {r.note ? (
-              <Text style={s.tdNote} numberOfLines={1}>(Over {r.note})</Text>
+              <Text style={s.tdNote}>({r.noteLead || 'Over'} {r.note})</Text>
             ) : null}
           </View>
         </View>
@@ -336,6 +336,10 @@ function minutesRows(data, sets) {
   const est = q.h2h_estimate?.by_sets?.[key]
   if (est != null) {
     rows.push({ label: `${sets}-set ${a} v ${b} matches on ${surf}, estimated`, value: fmtMinutes(est),
+                /* The estimate is per-set minutes from their meetings, rescaled to
+                   this set count — "Over 3 H2H matches" read as three
+                   matches of this length (owner, 2026-09-23). */
+                noteLead: 'based on sets from',
                 note: `${q.h2h_estimate.matches} H2H ${q.h2h_estimate.matches === 1 ? 'match' : 'matches'}` })
   }
   return rows
