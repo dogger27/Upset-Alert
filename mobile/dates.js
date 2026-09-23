@@ -17,6 +17,14 @@ function parts(iso) {
   return { m: MONTHS[m - 1], d }
 }
 
+/* "21 Sep" — one played day, for a line that already says the year elsewhere
+   or does not need it. Same MONTHS table, so the app spells a month one way. */
+export function shortDay(iso) {
+  const p = parts(iso)
+  return p ? `${p.d} ${p.m}` : ''
+}
+
+
 export function dateRange(t) {
   const a = parts(t?.start_date)
   const b = parts(t?.end_date)
