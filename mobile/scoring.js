@@ -132,8 +132,12 @@ export function roundTag(roundNumber, numRounds) {
 
 /* A surname, particles kept ("del Potro"), the way the draw prints them. */
 const PARTICLES = new Set(['de', 'del', 'della', 'di', 'da', 'van', 'von', 'der', 'den', 'le', 'la', 'du', 'dos', 'das'])
+/* "Jr" is not a surname (memory feedback_generational_suffix_is_not_a_surname):
+   a trailing generational suffix is dropped before the last word is read. */
+const GEN_SUFFIX = /^(jr|sr|ii|iii|iv)\.?$/i
 export function surname(full) {
   const parts = String(full ?? '').trim().split(/\s+/)
+  while (parts.length > 1 && GEN_SUFFIX.test(parts[parts.length - 1])) parts.pop()
   let i = parts.length - 1
   while (i > 0 && PARTICLES.has(parts[i - 1].toLowerCase())) i -= 1
   return parts.slice(i).join(' ') || '?'
