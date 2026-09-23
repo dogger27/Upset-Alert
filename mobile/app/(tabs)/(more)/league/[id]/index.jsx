@@ -15,7 +15,7 @@ import { TourBadge } from '../../../../../cards'
 import { computeCohortInfo, getHomeSection } from '../../../../../drawStatus'
 import { GROUP_TONE, groupDrawsByStatus, sectionOfMany, showGroupHeadings } from '../../../../../drawGroups'
 import { C, R, T } from '../../../../../theme'
-import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title } from '../../../../../ui'
+import { Button, Card, CardLink, ErrorNote, Eyebrow, Loading, Muted, Screen, Title, bareRight } from '../../../../../ui'
 
 export default function LeagueDraws() {
   const { id } = useLocalSearchParams()
@@ -171,18 +171,18 @@ export default function LeagueDraws() {
            2026-09-14). The bar's right slot is where a screen's one
            configuration door goes.
 
-           Icon only. A nav-bar button is drawn inside a system capsule and
-           "Settings" beside a gear is the label twice; the accessibility
-           label carries the word for anyone who needs it. */
-        headerRight: !isGlobal && canManageLeague(league.data, me)
+           Icon only, 28pt, and bare: bareRight turns off the Liquid Glass
+           capsule iOS 26 draws round a bar item (owner, 2026-09-23). The
+           accessibility label carries the word "Settings". */
+        ...bareRight(!isGlobal && canManageLeague(league.data, me)
           ? () => (
             <Pressable onPress={() => setSettings(true)} hitSlop={10}
                        style={({ pressed }) => [s.gear, pressed && { opacity: 0.6 }]}
                        accessibilityRole="button" accessibilityLabel="League settings">
-              <Ionicons name="settings-outline" size={20} color={C.ink} />
+              <Ionicons name="settings-outline" size={28} color={C.ink} />
             </Pressable>
           )
-          : undefined,
+          : null),
       }} />
       <LeaguePicker visible={picking} onClose={() => setPicking(false)} currentId={id} />
       <Screen onRefresh={draws.refetch}>

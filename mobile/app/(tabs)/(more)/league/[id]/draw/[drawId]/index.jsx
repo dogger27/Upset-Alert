@@ -26,7 +26,7 @@ import { othersPicksNote } from '../../../../../../../lock'
 import { C } from '../../../../../../../theme'
 import { leading } from '../../../../../../../fontScale.js'
 import { PlayerName, TourSwitch, headerTour } from '../../../../../../../cards'
-import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../../../ui'
+import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title, bareRight } from '../../../../../../../ui'
 
 /* WHAT THE CHANCES ARE, in the reader's words, and who the ratings belong to.
    The heading is the natural place to ask; on a phone there is no hover, so
@@ -138,11 +138,11 @@ export default function Standings() {
           beside the draw name: which draw this is, at a glance. */}
       {/* THE PAIR, AS A SWITCH — see the global standings screen. */}
       <Stack.Screen options={{ title: t?.name || 'Standings',
-                               headerRight: () => (
+                               ...bareRight(() => (
                                  <TourSwitch draws={siblings} currentId={t?.id} showLevel
                                              style={headerTour}
                                              onPick={d => router.replace(`/league/${id}/draw/${d.id}`)} />
-                               ) }} />
+                               )) }} />
       {/* THE FOOT IS PINNED. The table scrolls in a bounded box and the
           timeline and What if sit beneath it, always on screen — a control
           for the table should not be somewhere past the table's end. The
