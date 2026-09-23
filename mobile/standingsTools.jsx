@@ -231,7 +231,7 @@ export function Scrubber({ timeline, pos, onChange, numRounds, min = 0 }) {
         </Text>
       ) : null}
       <GestureDetector gesture={pan}>
-        <View style={s.track} onLayout={e => setWidth(e.nativeEvent.layout.width)} hitSlop={{ top: 10, bottom: 10 }}
+        <View style={s.track} onLayout={e => setWidth(e.nativeEvent.layout.width)} hitSlop={{ top: 16, bottom: 16 }}
               accessibilityRole="adjustable" accessibilityLabel="Match timeline"
               accessibilityValue={{ min: lo, max, now: at }}>
           <View style={s.rail} />
@@ -368,9 +368,14 @@ const s = StyleSheet.create({
     marginTop: -S.md, marginHorizontal: -S.lg, paddingHorizontal: S.lg, paddingTop: S.sm, gap: S.sm,
     borderTopWidth: 2, borderTopColor: C.green,
   },
-  scrub: { gap: 6 },
-  flash: { ...T.small, color: C.muted, marginBottom: 2 },
-  track: { height: THUMB, justifyContent: 'center' },
+  /* TIGHT ABOVE AND BELOW THE SLIDER (owner, 2026-09-23). The track was the
+     thumb's full 28pt tall, which put 12pt of nothing either side of a 4pt
+     rail before any gap was added. It is 16pt now and the thumb, centred,
+     hangs 6pt over each edge into the text lines' own leading; hitSlop keeps
+     the grab area as tall as it was. */
+  scrub: { gap: 2 },
+  flash: { ...T.small, color: C.muted },
+  track: { height: 16, justifyContent: 'center' },
   rail: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: C.border },
   fill: { position: 'absolute', left: 0, height: 4, borderRadius: 2, backgroundColor: C.greenBright },
   thumb: {
