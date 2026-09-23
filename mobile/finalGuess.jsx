@@ -152,7 +152,7 @@ function StatTable({ rows, unit }) {
               row and the description after it is the part that differs. The
               colon is what makes the figure below read as this sentence's
               answer rather than as the next line. */}
-          <Text style={s.tdLabel} numberOfLines={2}>Avg for {r.label}:</Text>
+          <Text style={s.tdLabel} numberOfLines={2}>{r.lead || 'Avg for'} {r.label}:</Text>
           <View style={s.trFigures}>
             <Text style={s.tdValue}>
               {r.value}{unit ? <Text style={s.tdUnit}> {unit}</Text> : null}
@@ -294,7 +294,11 @@ function acesRows(data, sets) {
                 value: String(scale(q.tier_finals)), note: `${q.tier_finals.matches} finals` })
   }
   if (q.champion_vs?.aces_per_set != null) {
-    rows.push({ label: `${sets}-set ${a} v ${b} matches on ${surf}`, value: String(scale(q.champion_vs)),
+    /* WHOSE ACES (owner, 2026-09-23): "Shapovalov v Van de Zandschulp
+       matches" read as both players' aces. The figure is the champion's own
+       (player_rates reads w_ace or l_ace by who won), so the row says so. */
+    rows.push({ lead: 'Avg', label: `${sets}-set ace count from ${a} when facing ${b} on ${surf}`,
+                value: String(scale(q.champion_vs)),
                 note: `${q.champion_vs.matches} ${q.champion_vs.matches === 1 ? 'match' : 'matches'}` })
   }
   if (q.champion_on_surface?.aces_per_set != null) {
