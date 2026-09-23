@@ -1,130 +1,277 @@
 /*
- * Head-to-head, as a sheet.
+ * HEAD TO HEAD, as a sheet.
  *
- * The site puts an H2H rail beside every match; a phone has no room for a rail,
- * so the same information arrives as a sheet raised from the match itself.
+ * The site puts an H2H rail beside every match; a phone has no room for a
+ * rail, so the same information arrives as a sheet raised from the match
+ * itself. Until 2026-09-23 it arrived as a great deal less: a tally, a surface
+ * chip and a list of dates. The owner, holding the two side by side: "the h2h
+ * on our RN app sucks compared to the PWA."
  *
- * WHOSE NUMBER IS WHICH is the whole risk here. The endpoint answers in its own
- * order — slug_a / slug_b with wins_a / wins_b — and that order is NOT the order
- * the two players appear in the bracket. Reading wins_a as "the top player" is
- * wrong roughly half the time, and wrong in a way that looks perfectly
- * plausible: a 6-0 record simply points at the wrong man. So everything below
- * is resolved against slug_a rather than against position.
+ * THE DESIGN, in one line: a comparison spine, and two colours that mean the
+ * two players everywhere on the screen.
+ *
+ *   the spine   a centre column of quiet labels with each player's figure
+ *               flanking it — meetings won, meetings on this surface, ranking,
+ *               Elo, age, form. The side that leads a row wears a plate in its
+ *               OWN colour, so "who is ahead here" is answered by looking down
+ *               one column rather than by comparing two numbers six times.
+ *   the key     theme.SIDE: brand green is the player on the left, the one
+ *               warm clay is the player on the right. Learned once, from the
+ *               underline beneath each name, and then reused for the plates
+ *               and for the edge of every meeting card. The tour colours
+ *               cannot do this job — in a men's match both players are ATP
+ *               navy — which is why that pair exists.
+ *
+ * What the site has and this deliberately does not: a match-to-match pager
+ * (the app navigates by tapping another row), a surface filter (the spine
+ * already shows both lines at once), and a popup on every form square (one
+ * screen, no nested overlays — each square tells a screen reader what it was
+ * instead).
+ *
+ * WHOSE NUMBER IS WHICH is the one thing here that can be wrong without
+ * looking wrong, and it is not decided in this file: h2hView.orient resolves
+ * the payload against the left player's slug once, and nothing below ever sees
+ * the endpoint's own a/b again.
  */
 
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { getH2H } from './api'
-import { useApi } from './useApi'
-import { C, R, S, T } from './theme'
+import { useMemo } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
+import { getH2H, getPlayerForm } from './api'
+import { FlagSlot, PlayerName } from './cards'
+import { leading } from './fontScale.js'
+import { compareRows, formChips, orient } from './h2hView.js'
+import { ScrollPane } from './scrollPane'
+import { Sheet } from './sheet'
+import { C, PICK, R, S, SIDE, T } from './theme'
 import { Loading } from './ui'
+import { useApi } from './useApi'
 
-export function H2HSheet({ visible, onClose, a, b }) {
+// The two rows whose figures are places in a list rather than counts.
+const HASHED = new Set(['rank', 'elo'])
+
+export function H2HSheet({ visible, onClose, a, b, surface }) {
   // Keyed on the pair so switching matches refetches; the backend caches, so a
   // reopen is cheap and there is nothing to memoise here.
-  const key = visible && a?.te_slug && b?.te_slug ? `h2h:${a.te_slug}:${b.te_slug}` : null
-  const h2h = useApi(key, () => getH2H(a.te_slug, b.te_slug))
-  const d = h2h.data
+  const live = !!(visible && a?.te_slug && b?.te_slug)
+  const h2h = useApi(live ? `h2h:${a.te_slug}:${b.te_slug}` : null,
+                     () => getH2H(a.te_slug, b.te_slug))
+  /* FETCHED APART FROM THE MEETINGS, on purpose: form is one page of Tennis
+     Explorer per player and the head-to-head is another, so asking for them
+     together would make the whole sheet wait on the slowest of three. Each
+     fills in as it lands. */
+  const formA = useApi(live ? `form:${a.te_slug}` : null, () => getPlayerForm(a.te_slug))
+  const formB = useApi(live ? `form:${b.te_slug}` : null, () => getPlayerForm(b.te_slug))
 
-  // a is the player shown FIRST in the bracket; the payload's slug_a may be
-  // either of them. Everything downstream reads through this one flip.
-  const flipped = d ? d.slug_a !== a?.te_slug : false
-  const winsTop = d ? (flipped ? d.wins_b : d.wins_a) : null
-  const winsBot = d ? (flipped ? d.wins_a : d.wins_b) : null
+  const d = h2h.data
+  const view = useMemo(() => orient(d, a?.te_slug), [d, a?.te_slug])
+  const rows = useMemo(
+    () => compareRows({ view, surface, left: a, right: b }), [view, surface, a, b])
 
   return (
-    <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={s.scrim} onPress={onClose} />
-      <View style={s.sheet}>
-        <View style={s.grabber} />
-        <Text style={s.title}>Head to head</Text>
+    <Sheet visible={!!visible} onClose={onClose} title="Head to head">
+      {h2h.loading && !d ? <Loading /> : null}
+      {h2h.error ? <Text style={s.err}>Couldn’t load the head-to-head.</Text> : null}
 
-        {h2h.loading && !d ? <Loading /> : null}
-        {h2h.error ? <Text style={s.err}>Couldn’t load the head-to-head.</Text> : null}
-
-        {d ? (
-          <>
-            <View style={s.tallyRow}>
-              <Text style={[s.name, { textAlign: 'left' }]} numberOfLines={2}>{a?.name}</Text>
-              <Text style={s.tally}>{winsTop}–{winsBot}</Text>
-              <Text style={[s.name, { textAlign: 'right' }]} numberOfLines={2}>{b?.name}</Text>
+      {view ? (
+        <ScrollPane contentContainerStyle={s.body}>
+          {/* THE TWO NAMES, WITH THE RECORD BETWEEN THEM. Each name wears its
+              side's colour as an underline — the key the rest of the sheet is
+              read with — and shrinks through the app's own ladder rather than
+              truncating: "Botic Van de Zandschulp" becomes "Van de
+              Zandschulp" before it becomes smaller, and never becomes "Van de
+              Zandsc…". */}
+          <View style={s.head}>
+            <View style={s.who}>
+              <View style={s.whoLine}>
+                <FlagSlot codes={[a?.nationality]} />
+                <PlayerName name={a?.name} style={s.whoName} />
+              </View>
+              <View style={[s.rule, { backgroundColor: SIDE.left.line }]} />
             </View>
+            <Text style={s.record} numberOfLines={1}>
+              <Text style={{ color: SIDE.left.ink }}>{view.wins[0]}</Text>
+              <Text style={s.recordDash}>–</Text>
+              <Text style={{ color: SIDE.right.ink }}>{view.wins[1]}</Text>
+            </Text>
+            <View style={[s.who, s.whoEnd]}>
+              <View style={[s.whoLine, s.whoLineEnd]}>
+                <PlayerName name={b?.name} style={[s.whoName, s.whoNameEnd]} />
+                <FlagSlot codes={[b?.nationality]} />
+              </View>
+              <View style={[s.rule, { backgroundColor: SIDE.right.line }]} />
+            </View>
+          </View>
 
-            {/* Surface splits, each read through the same flip. */}
-            <View style={s.surfRow}>
-              {Object.entries(d.surface_wins || {}).map(([surf, pair]) => {
-                const top = flipped ? pair[1] : pair[0]
-                const bot = flipped ? pair[0] : pair[1]
+          {/* THE SPINE. The label is the axis and the figures flank it, so the
+              eye runs down one narrow column of words while the comparison
+              happens either side of it — rather than reading two numbers and
+              subtracting them, six times. */}
+          {rows.length || formA.data?.length || formB.data?.length ? (
+            <View style={s.spine}>
+              {rows.map((r, i) => (
+                <View key={r.key} style={[s.row, i > 0 && s.rowRule]}>
+                  <Figure v={r.values[0]} lit={r.better === 0} side="left" hashed={HASHED.has(r.key)} />
+                  <Text style={s.label} numberOfLines={1}>{r.label}</Text>
+                  <Figure v={r.values[1]} lit={r.better === 1} side="right" hashed={HASHED.has(r.key)} />
+                </View>
+              ))}
+              {formA.data?.length || formB.data?.length ? (
+                <View style={[s.row, rows.length > 0 && s.rowRule]}>
+                  <Form form={formA.data} />
+                  <Text style={s.label} numberOfLines={1}>form</Text>
+                  <Form form={formB.data} end />
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* THE MEETINGS. One card each, with a bar down the winner's own
+              side in the winner's own colour: a column of green edges says one
+              player has owned this rivalry before a single score is read. */}
+          {view.meetings.length ? (
+            <>
+              <Text style={s.section}>
+                {view.meetings.length === 1 ? 'Their one meeting'
+                  : `All ${view.meetings.length} meetings`}
+              </Text>
+              {view.meetings.map((m, i) => {
+                const side = m.side === 0 ? SIDE.left : SIDE.right
                 return (
-                  <View key={surf} style={s.surf}>
-                    <Text style={s.surfName}>{surf}</Text>
-                    <Text style={s.surfVal}>{top}–{bot}</Text>
+                  <View key={`${m.year}-${m.tournament}-${i}`}
+                        style={[s.meet, m.side === 1 && s.meetEnd]}>
+                    <View style={[s.edge, { backgroundColor: side.line }]} />
+                    <View style={s.meetBody}>
+                      <View style={s.meetTop}>
+                        <PlayerName name={m.side === 0 ? a?.name : b?.name}
+                                    style={[s.meetWho, { color: side.ink }]} />
+                        <Text style={s.meetScore} numberOfLines={1}>{m.score}</Text>
+                      </View>
+                      <Text style={s.meetMeta} numberOfLines={1}>
+                        {[m.tournament, m.year, m.round, m.surface].filter(Boolean).join(' · ')}
+                      </Text>
+                    </View>
                   </View>
                 )
               })}
-            </View>
-
-            <ScrollView style={s.list} contentContainerStyle={{ paddingBottom: S.lg }}>
-              {(d.matches || []).map((m, i) => {
-                // 'a'/'b' in a match row refer to the PAYLOAD's a/b, so the same
-                // flip decides whether the bracket's top player won it.
-                const topWon = flipped ? m.winner === 'b' : m.winner === 'a'
-                return (
-                  <View key={i} style={s.match}>
-                    <Text style={s.matchWho} numberOfLines={1}>
-                      {topWon ? a?.name : b?.name}
-                    </Text>
-                    <Text style={s.matchMeta} numberOfLines={1}>
-                      {[m.year, m.tournament, m.round, m.surface].filter(Boolean).join(' · ')}
-                    </Text>
-                    <Text style={s.matchScore} numberOfLines={1}>{m.score}</Text>
-                  </View>
-                )
-              })}
-              {(d.matches || []).length === 0 && (
-                <Text style={s.none}>They have never met.</Text>
-              )}
-            </ScrollView>
-          </>
-        ) : null}
-
-        <Pressable onPress={onClose} style={s.close} hitSlop={8}>
-          <Text style={s.closeText}>Close</Text>
-        </Pressable>
-      </View>
-    </Modal>
+            </>
+          ) : (
+            <Text style={s.none}>They have never met.</Text>
+          )}
+        </ScrollPane>
+      ) : null}
+    </Sheet>
   )
 }
 
+/* One figure in the spine. A plate when this side leads the row; ink alone
+   when it does not, and a quiet dash where we hold no number — a blank would
+   read as a zero, and a zero is a claim. */
+function Figure({ v, lit, side, hashed }) {
+  const tone = side === 'left' ? SIDE.left : SIDE.right
+  const end = side === 'right'
+  if (v == null) {
+    return (
+      <View style={[s.figureWrap, end && s.figureWrapEnd]}>
+        <Text style={s.figureNone}>–</Text>
+      </View>
+    )
+  }
+  return (
+    <View style={[s.figureWrap, end && s.figureWrapEnd]}>
+      <View style={[s.plate, lit && { backgroundColor: tone.plate, borderColor: tone.line }]}>
+        <Text style={[s.figure, { color: lit ? tone.ink : C.inkBody }]} numberOfLines={1}>
+          {hashed ? `#${v}` : `${v}`}
+        </Text>
+      </View>
+    </View>
+  )
+}
+
+/* Five results, newest first, in the bracket's own pick colours — a green W
+   means the same thing there. Each square tells a screen reader what it was
+   rather than opening anything. */
+function Form({ form, end = false }) {
+  const chips = formChips(form, 5)
+  return (
+    <View style={[s.formRow, end && s.formRowEnd]}>
+      {chips.map((c, i) => (
+        <View key={i} style={[s.chip, c.result === 'W' ? s.chipWon : s.chipLost]}
+              accessible accessibilityLabel={c.said}>
+          <Text style={[s.chipText,
+                        { color: c.result === 'W' ? PICK.correct.border : PICK.wrong.border }]}>
+            {c.result}
+          </Text>
+        </View>
+      ))}
+    </View>
+  )
+}
+
+const CHIP = leading(19)
+
 const s = StyleSheet.create({
-  scrim: { flex: 1, backgroundColor: '#000a' },
-  sheet: {
-    backgroundColor: C.card, borderTopLeftRadius: 18, borderTopRightRadius: 18,
-    borderTopWidth: 1, borderColor: C.border,
-    paddingHorizontal: S.md, paddingTop: S.sm, paddingBottom: S.lg,
-    maxHeight: '78%',
+  body: { paddingBottom: S.md, gap: S.md },
+
+  /* The headline. The record is the widest thing in the row and holds the
+     middle; the names take what is left, evenly, and shrink into it. */
+  head: { flexDirection: 'row', alignItems: 'flex-end', gap: S.sm },
+  who: { flex: 1, minWidth: 0, gap: 3 },
+  whoEnd: { alignItems: 'flex-end' },
+  whoLine: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch' },
+  whoLineEnd: { justifyContent: 'flex-end' },
+  whoName: { ...T.bodyBold, color: C.ink, flexShrink: 1 },
+  whoNameEnd: { textAlign: 'right' },
+  // Two points, so the key reads as a deliberate mark rather than a hairline.
+  rule: { height: 2, borderRadius: 1, alignSelf: 'stretch' },
+  record: { ...T.display, fontSize: 30, color: C.ink, flexShrink: 0 },
+  recordDash: { color: C.faint },
+
+  spine: {
+    backgroundColor: C.sunken, borderRadius: R.md,
+    borderWidth: 1, borderColor: C.border,
   },
-  grabber: {
-    width: 36, height: 4, borderRadius: 2, backgroundColor: C.border,
-    alignSelf: 'center', marginBottom: S.sm,
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, paddingHorizontal: S.sm },
+  rowRule: { borderTopWidth: 1, borderTopColor: C.border },
+  /* The axis: a fixed middle, so every figure on the left ends at the same
+     place and every figure on the right starts at one. A label that grew with
+     its own word would make the two columns wander down the card. */
+  label: { ...T.tiny, color: C.faint, width: 88, textAlign: 'center' },
+
+  figureWrap: { flex: 1, minWidth: 0, alignItems: 'flex-end' },
+  figureWrapEnd: { alignItems: 'flex-start' },
+  plate: {
+    borderRadius: R.sm, borderWidth: 1, borderColor: 'transparent',
+    paddingHorizontal: 7, paddingVertical: 1, minWidth: leading(30), alignItems: 'center',
   },
-  title: { ...T.h2, color: C.ink, textAlign: 'center', marginBottom: S.sm },
-  tallyRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
-  name: { ...T.smallMed, color: C.inkBody, flex: 1 },
-  tally: { ...T.display, color: C.ink, fontSize: 26 },
-  surfRow: { flexDirection: 'row', gap: S.sm, marginTop: S.md, flexWrap: 'wrap' },
-  surf: {
-    backgroundColor: C.raised, borderRadius: R.sm, borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center', minWidth: 62,
+  figure: { ...T.bodyBold, fontVariant: ['tabular-nums'] },
+  figureNone: { ...T.bodyBold, color: C.border },
+
+  formRow: { flex: 1, minWidth: 0, flexDirection: 'row', gap: 3, justifyContent: 'flex-end' },
+  formRowEnd: { justifyContent: 'flex-start' },
+  chip: {
+    width: CHIP, height: CHIP, borderRadius: R.xs + 1,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 1,
   },
-  surfName: { ...T.tiny, color: C.faint },
-  surfVal: { ...T.smallMed, color: C.ink },
-  list: { marginTop: S.md },
-  match: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border },
-  matchWho: { ...T.smallMed, color: C.ink },
-  matchMeta: { ...T.tiny, color: C.faint },
-  matchScore: { ...T.tiny, color: C.muted },
+  chipWon: { backgroundColor: PICK.correct.bg, borderColor: PICK.correct.border },
+  chipLost: { backgroundColor: PICK.wrong.bg, borderColor: PICK.wrong.border },
+  chipText: { fontFamily: 'Archivo_700Bold', fontSize: 10 },
+
+  section: { ...T.smallBold, color: C.muted, marginTop: S.xs },
+  /* A card the bar belongs to rather than a card with a bar in it: the edge is
+     drawn inside the rounded frame, and `row-reverse` puts it on the right
+     player's side without moving the text. */
+  meet: {
+    flexDirection: 'row', backgroundColor: C.raised, borderRadius: R.sm,
+    borderWidth: 1, borderColor: C.border, overflow: 'hidden',
+  },
+  meetEnd: { flexDirection: 'row-reverse' },
+  edge: { width: 3 },
+  meetBody: { flex: 1, minWidth: 0, paddingVertical: 6, paddingHorizontal: S.sm, gap: 1 },
+  meetTop: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm },
+  meetWho: { ...T.smallMed, flexShrink: 1 },
+  meetScore: { ...T.smallMed, color: C.ink, marginLeft: 'auto', fontVariant: ['tabular-nums'] },
+  meetMeta: { ...T.tiny, color: C.faint },
+
   none: { ...T.small, color: C.muted, textAlign: 'center', paddingVertical: S.lg },
   err: { ...T.small, color: C.bad, textAlign: 'center', paddingVertical: S.md },
-  close: { alignSelf: 'center', paddingVertical: S.sm, paddingHorizontal: S.lg },
-  closeText: { ...T.smallMed, color: C.clay },
 })
