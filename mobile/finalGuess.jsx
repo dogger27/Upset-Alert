@@ -601,14 +601,26 @@ function Scale({ value, max, maxLabel, onChange, disabled, label, rec, what, zer
   const holder = rec
     ? `${rec.player ? `${surname(rec.player)}, ` : ''}${rec.tournament} ${rec.year}`
     : null
-  const who = [what, holder].filter(Boolean).join(' — ')
+  /* WHOSE RECORD, ON A TAP OF THE NUMBER (owner, 2026-09-23). Under the
+     track it was a line of small print on every visit, answering a question
+     most readers never ask; the record number is where the question comes
+     from, so that is where it is asked. A second tap puts it away. */
+  const [shown, setShown] = useState(false)
+  const who = [what, shown ? holder : null].filter(Boolean).join(' — ')
+  const end = <Text style={[s.endValue, s.endRecord]}>{maxLabel ?? max}</Text>
   return (
     <View style={s.scale}>
       <View style={s.scaleRow}>
         <Text style={s.endValue}>0</Text>
         <ValueSlider style={s.scaleTrack} value={value} min={0} max={max} onChange={onChange}
                      disabled={disabled} accessibilityLabel={label} />
-        <Text style={[s.endValue, s.endRecord]}>{maxLabel ?? max}</Text>
+        {holder ? (
+          <Pressable onPress={() => setShown(v => !v)} hitSlop={12} accessibilityRole="button"
+                     accessibilityState={{ expanded: shown }}
+                     accessibilityLabel={`Record ${maxLabel ?? max}. Show who holds it`}>
+            {end}
+          </Pressable>
+        ) : end}
       </View>
       {zero || who ? (
         <View style={s.ends}>
