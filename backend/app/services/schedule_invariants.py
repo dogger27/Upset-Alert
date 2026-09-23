@@ -596,7 +596,33 @@ def _people_agree(xs: list, ys: list) -> bool:
                for perm in permutations(ys))
 
 
-def player_on_two_courts(rows) -> list[tuple]:
+# PLAY LIVES ON THE MATCH, NOT ALWAYS ON THE ROW. A doubles or qualifying slot
+# carries its own status, start and winner because nothing else ever sees it;
+# a main-draw SINGLES slot carries none of them — its result is written to
+# `matches`, and its schedule row stays `scheduled` with every column empty
+# from the first ball to the last. `schedule.recompute_expected_starts` knows
+# this and reads the linked match; the three laws below did not, and read the
+# row alone.
+#
+# Korea Open 2026-09-23: Back v Joint (entry 1401, CENTER COURT) finished at
+# 06:12, and match 5407 said so. The chain therefore freed the court at 06:12
+# and floored Joint's "After suitable rest" doubles on GRANDSTAND from there.
+# `rest_slot_without_its_rest` still read entry 1401 as a match yet to come,
+# invented its end as printed start + 102 minutes = 06:42, and convicted the
+# doubles at "~7:22" for not leaving 45 minutes after a moment that never
+# happened.
+#
+# So "has this row been on court?" gets ONE reading — `never_played` in
+# `check_day`, the row's own columns joined to its bracket match, the same
+# reading the pull rules and `slot_unconfirmed` use. This is the row-only
+# half, the default for a caller with no database (the pure-function tests);
+# `check_day` passes the joined reading in.
+def _row_played(r) -> bool:
+    return bool(r.started_at or r.completed_at or r.winner_side
+                or r.live_scores_json or r.status in ("live", "completed"))
+
+
+def player_on_two_courts(rows, played=_row_played) -> list[tuple]:
     """(row, other row, the person) wherever two rows still to come book one
     person on different courts into overlapping windows.
 
@@ -615,8 +641,7 @@ def player_on_two_courts(rows) -> list[tuple]:
     tournament-day when written: that one pair, of 23 that share a player.
     """
     def pending(r):
-        return not (r.started_at or r.completed_at or r.winner_side
-                    or r.live_scores_json or r.status in ("live", "completed"))
+        return not played(r)
 
     def fixed(r):
         return r.start_type == "fixed" and r.expected_source == "printed"
@@ -664,7 +689,7 @@ def player_on_two_courts(rows) -> list[tuple]:
 _LAW_REST_RE = re.compile(r'\brest\b', re.I)
 
 
-def rest_slot_ahead_of_its_match(rows) -> list[tuple]:
+def rest_slot_ahead_of_its_match(rows, played=_row_played) -> list[tuple]:
     """(rest row, the match it waits for, the person) wherever a slot worded
     "after (suitable) rest" is expected to START BEFORE its player's match on
     another court does.
@@ -686,8 +711,7 @@ def rest_slot_ahead_of_its_match(rows) -> list[tuple]:
     a start the sheet fixed, and a rest row already under way.
     """
     def pending(r):
-        return not (r.started_at or r.completed_at or r.winner_side
-                    or r.live_scores_json or r.status in ("live", "completed"))
+        return not played(r)
 
     def begins(r):
         return _naive_utc(r.started_at) or _naive_utc(r.expected_start_at)
@@ -734,7 +758,7 @@ def rest_slot_ahead_of_its_match(rows) -> list[tuple]:
 _LAW_REST_MIN = 45
 
 
-def rest_slot_without_its_rest(rows) -> list[tuple]:
+def rest_slot_without_its_rest(rows, played=_row_played) -> list[tuple]:
     """(rest row, the match it follows, the person) wherever a slot worded
     "after (suitable) rest" is expected to start less than `_LAW_REST_MIN`
     after the expected END of a match one of its players begins earlier on
@@ -755,8 +779,7 @@ def rest_slot_without_its_rest(rows) -> list[tuple]:
     already spaces it).
     """
     def pending(r):
-        return not (r.started_at or r.completed_at or r.winner_side
-                    or r.live_scores_json or r.status in ("live", "completed"))
+        return not played(r)
 
     def people(r):
         open_sides = (r.tbd_side or "ab") if r.is_tbd else ""
@@ -1854,6 +1877,13 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
             or e.printed_status or (e.status or "scheduled") != "scheduled"
             or played_match.get(e.match_id))
 
+    # The same question the other way up, for the laws that take the predicate
+    # (`player_on_two_courts` and the two rest laws). Their default is the
+    # row's own columns, which is blind to a singles match whose result lives
+    # on `matches` — see `_row_played`.
+    def _was_on_court(e) -> bool:
+        return not never_played(e)
+
     if latest_doc:
         published = doc_fetched.get(latest_doc)
         # The new sheet's own account of when each court begins. Read from the
@@ -2042,12 +2072,23 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
 
     from app.services.schedule import _side_tokens
     _opp = {"a": "b", "b": "a"}
-    fresh = [r for r in rows
-             if not (r.started_at or r.completed_at or r.winner_side
-                     or r.live_scores_json)]
+    # `never_played`, not the row's own columns: a singles row keeps its result
+    # on `matches` and stays `scheduled` forever, so the row-only reading calls
+    # a finished R16 "still to come". Pair that with the QF the next sheet
+    # prints for its winner and the two share a side with nothing in common on
+    # the other — the Cincinnati shape (2026-08-19), reported as one slot
+    # stated twice. See `_row_played`.
+    fresh = [r for r in rows if never_played(r)]
     for i, a in enumerate(fresh):
         for b in fresh[i + 1:]:
-            if a.stage != b.stage:
+            # LIKE WITH LIKE. One slot means one match: the same event
+            # (discipline), the same half of it (stage) and the same round. A
+            # round either side leaves unlabelled cannot contradict, and does
+            # not acquit.
+            if a.stage != b.stage or a.discipline != b.discipline:
+                continue
+            if (a.round_label and b.round_label
+                    and a.round_label != b.round_label):
                 continue
             if (a.last_document_id or 0) == (b.last_document_id or 0):
                 continue
@@ -2349,7 +2390,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
             break
 
     # 2026-09-18, SP Open doc 289 — see player_on_two_courts.
-    for a, b, name in player_on_two_courts(rows):
+    for a, b, name in player_on_two_courts(rows, played=_was_on_court):
         flag("player_on_two_courts", b,
              f"{name!r} is booked on {a.court!r} (entry {a.id}, "
              f"{_naive_utc(a.expected_start_at):%H:%M} UTC, "
@@ -2357,7 +2398,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
              f"{b.id}, {_naive_utc(b.expected_start_at):%H:%M} UTC) at once")
 
     # 2026-09-18, SP Open doc 313 — see rest_slot_ahead_of_its_match.
-    for r, first, name in rest_slot_ahead_of_its_match(rows):
+    for r, first, name in rest_slot_ahead_of_its_match(rows, played=_was_on_court):
         flag("rest_slot_ahead_of_its_match", r,
              f"{r.court!r} #{r.court_order} is printed {r.start_note!r} but "
              f"expected at {_naive_utc(r.expected_start_at):%H:%M} UTC, before "
@@ -2366,7 +2407,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
              f"that the rest is from")
 
     # 2026-09-23, Singapore doc 441 — see rest_slot_without_its_rest.
-    for r, first, name in rest_slot_without_its_rest(rows):
+    for r, first, name in rest_slot_without_its_rest(rows, played=_was_on_court):
         flag("rest_slot_without_its_rest", r,
              f"{r.court!r} #{r.court_order} is printed {r.start_note!r} but "
              f"expected at {_naive_utc(r.expected_start_at):%H:%M} UTC, less "
