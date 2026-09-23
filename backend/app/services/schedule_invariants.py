@@ -1950,7 +1950,27 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                      f"is not yet due, and this slot's bracket match was never "
                      f"started — it was pulled, not played, and it is still "
                      f"chaining the clocks behind it")
-            elif revisions_since(doc_fetched, e.last_document_id) >= UNCONFIRMED_GRACE:
+            elif (never_played(e)
+                  and revisions_since(doc_fetched,
+                                      e.last_document_id) >= UNCONFIRMED_GRACE):
+                # A DECIDED MATCH IS NOT AN ABANDONED ROW. Singapore
+                # 2026-09-23: Krejcikova withdrew, the 2:35 PM revision took
+                # her R16 vs Mertens off CENTER COURT, and thirteen minutes
+                # later the feed wrote the walkover — Mertens through, "w/o".
+                # A sheet is right to stop printing a match that will not be
+                # played, and the row is right to stay: it carries a result
+                # users are scored on. Reporting it as a slot nothing restated
+                # is an expected state served as an error, once per sweep,
+                # forever. `never_played` is the same reading the pull rules
+                # above use, and it is the reading that knows — a SINGLES row
+                # carries no result of its own, so the answer is on `matches`
+                # (this row reads scores_json NULL, printed_score NULL,
+                # status "scheduled" and is nonetheless over).
+                #
+                # What still alarms is what the law genuinely cannot place:
+                # Cincinnati's dropped doubles, which have no bracket match
+                # and no result anywhere, stay unconfirmed as before.
+                #
                 # ONE REVISION OF SILENCE IS THE WINDOW, NOT A FAULT. A sheet
                 # that stops printing a row has either pulled it — which
                 # `_retire_pulled_slots` acts on at the NEXT ingest — or failed
