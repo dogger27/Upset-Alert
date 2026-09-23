@@ -205,9 +205,13 @@ export function DayStrip({ days, active, onPick, right, rightWidth }) {
             overflow:hidden would clip half of it; not pressable, so a swipe
             that starts on it is still the strip's. */}
         <View style={s.legendRow} pointerEvents="none">
-          {/* No backing (owner, 2026-09-23: "transparent bg"): the words rest
-              ON the rule, just above it, so the line never runs through them. */}
+          {/* ON THE RULE, WITH THE RULE BROKEN FOR IT (owner, 2026-09-23):
+              no backing behind the words; the strip's top line is drawn here
+              as two lengths either side of them instead of as the bar's
+              border, so the text sits in a gap in the middle of the line. */}
+          <View style={s.legendLine} />
           <Text style={s.legend} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Swipe to cycle date</Text>
+          <View style={s.legendLine} />
         </View>
       </View>
     </GestureDetector>
@@ -220,12 +224,18 @@ const s = StyleSheet.create({
   /* The draw page's round bar, edge to edge: the screen pads its body S.lg
      a side, and a ruled bar that stopped short of the edges read as a box.
      overflow hidden — the row slides under the glass at both ends. */
-  legendRow: { position: 'absolute', left: 0, right: 0, top: -leading(15), alignItems: 'center' },
-  legend: { fontFamily: 'Archivo_500Medium', fontSize: 11, lineHeight: leading(15), color: C.muted },
+  /* Centred on the bar's top edge: half the caption's line box above it. */
+  legendRow: {
+    position: 'absolute', left: -S.lg, right: -S.lg, top: -leading(15) / 2,
+    height: leading(15), flexDirection: 'row', alignItems: 'center',
+  },
+  legendLine: { flex: 1, height: 1, backgroundColor: C.borderLit },
+  legend: { fontFamily: 'Archivo_500Medium', fontSize: 11, lineHeight: leading(15), color: C.muted, paddingHorizontal: 6 },
   bar: {
     marginHorizontal: -S.lg,
     backgroundColor: STRIP_BG,
-    borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.borderLit,
+    // The TOP rule is drawn by the caption row (legendRow), broken for its words.
+    borderBottomWidth: 1, borderColor: C.borderLit, paddingTop: 4,  // 3 + the 1pt the top border took
     paddingVertical: 3,
     minHeight: leading(27) + 6,   // the chosen chip plus the padding: 33pt, 13% under the 38 it was
     overflow: 'hidden',
