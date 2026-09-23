@@ -234,7 +234,14 @@ const s = StyleSheet.create({
     height: leading(15), flexDirection: 'row', alignItems: 'center',
   },
   legendLine: { flex: 1, height: 1, backgroundColor: C.borderLit },
-  legend: { fontFamily: 'Archivo_500Medium', fontSize: 11, lineHeight: leading(15), color: C.muted, paddingHorizontal: 6, flexShrink: 0 },
+  /* Reads over whatever passes beneath it (owner, 2026-09-23): the brightest
+     ink and bold, with a dark halo so the edges hold even over the chosen
+     day's green chip. */
+  legend: {
+    fontFamily: 'Archivo_700Bold', fontSize: 11, lineHeight: leading(15), color: C.ink,
+    textShadowColor: '#000', textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 },
+    paddingHorizontal: 6, flexShrink: 0,
+  },
   bar: {
     marginHorizontal: -S.lg,
     backgroundColor: STRIP_BG,
