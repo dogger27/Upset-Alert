@@ -171,7 +171,12 @@ export function useStandingsView(data, t, chancesAt = null, chancesScope = 'g',
    only a little room inside either of them. FOOT_FLUSH is the screen's half:
    its body ends 32pt above the tab bar, a gap under a section that is meant
    to sit against it. */
-export const FOOT_FLUSH = { paddingBottom: S.sm }
+export const FOOT_FLUSH = { paddingBottom: S.sm, paddingTop: S.xs }
+/* The two standings screens' title, a size up from the stack's T.h2 (owner,
+   2026-09-23: "increase text size of tournament name"). And the body's top
+   padding above is 4pt, not 16: the bar already ends in its own space, and
+   the two together sat the table a long way under the name. */
+export const STANDINGS_TITLE = { ...T.h1, color: C.ink }
 
 export function StandingsFoot({ view, minPos = 0 }) {
   if (!(!view.world && view.timeline.length > 0) && !(view.worlds && view.worlds.length > 0)) return null
