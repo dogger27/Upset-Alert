@@ -205,25 +205,33 @@ export function DayStrip({ days, active, onPick, right, rightWidth }) {
             overflow:hidden would clip half of it; not pressable, so a swipe
             that starts on it is still the strip's. */}
         <View style={s.legendRow} pointerEvents="none">
-          <Text style={s.legend} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Swipe to cycle date</Text>
+          {/* Two halves behind the words — the page's ground above the rule,
+              the strip's below — so the caption cuts the line without
+              laying a dark tab over the strip. */}
+          <View style={s.legendBox}>
+            <View style={[s.legendHalf, { top: 0, backgroundColor: C.bg }]} />
+            <View style={[s.legendHalf, { bottom: 0, backgroundColor: STRIP_BG }]} />
+            <Text style={s.legend} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>Swipe to cycle date</Text>
+          </View>
         </View>
       </View>
     </GestureDetector>
   )
 }
 
+const STRIP_BG = '#12262a'
+
 const s = StyleSheet.create({
   /* The draw page's round bar, edge to edge: the screen pads its body S.lg
      a side, and a ruled bar that stopped short of the edges read as a box.
      overflow hidden — the row slides under the glass at both ends. */
   legendRow: { position: 'absolute', left: 0, right: 0, top: -leading(8), alignItems: 'center' },
-  legend: {
-    fontFamily: 'Archivo_500Medium', fontSize: 11, lineHeight: leading(15), color: C.muted,
-    backgroundColor: C.bg, paddingHorizontal: 6,
-  },
+  legendBox: { paddingHorizontal: 6 },
+  legendHalf: { position: 'absolute', left: 0, right: 0, height: '50%' },
+  legend: { fontFamily: 'Archivo_500Medium', fontSize: 11, lineHeight: leading(15), color: C.muted },
   bar: {
     marginHorizontal: -S.lg,
-    backgroundColor: '#12262a',
+    backgroundColor: STRIP_BG,
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.borderLit,
     paddingVertical: 3,
     minHeight: leading(27) + 6,   // the chosen chip plus the padding: 33pt, 13% under the 38 it was
