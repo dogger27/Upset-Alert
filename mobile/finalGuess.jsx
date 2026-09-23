@@ -17,6 +17,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { getFinalGuess, putFinalGuess } from './api'
 import { leading } from './fontScale.js'
+import { textWidth } from './measure.js'
 import { ScrollPane } from './scrollPane'
 import { Sheet } from './sheet'
 import { Muted } from './ui'
@@ -173,9 +174,39 @@ function StatTable({ rows, unit }) {
    scoreboard face, at the top right of its question where the eye lands after
    reading it. Everything else here is hairlines and quiet type — this is the
    number the reader is actually setting, and it should be unmistakable. */
-function Plate({ value, sub }) {
+/* THE BOX DOES NOT RESIZE UNDER ITS OWN VALUE (owner, 2026-09-23: "the box
+ * around the time needs to stay the same dimensions no matter what the value
+ * inside says"). Sliding the answer redrew the plate on every step, so the
+ * question's text reflowed beside a box that breathed.
+ *
+ * Two halves to holding still, and one alone is not enough:
+ *
+ *   tabular figures  without them "2h 26m" is WIDER than "5h 41m" (80.1pt
+ *                    against 75.9), so even a fixed character count changes
+ *                    width as the digits change. With them every digit has
+ *                    one advance and a shape of the same length is the same
+ *                    width.
+ *   a reserve        the widest string THIS question can show, measured off
+ *                    the font's own advances — not a global worst case, which
+ *                    is the mistake feedback_reserve_what_is_drawn records.
+ *                    The duration plate reserves its ceiling ("3h 47m" over
+ *                    "227 min"); the aces plate reserves its own two digits.
+ *
+ * The slack covers what textWidth does not count: letterSpacing (0.3 a
+ * character on T.display) and kerning. 92 stays as the floor, so a plate that
+ * already fit keeps the size it has always had.
+ */
+const PLATE_CHROME = S.sm * 2 + 2       // the padding either side, plus the border
+const PLATE_SLACK = 4
+
+function Plate({ value, sub, reserve }) {
+  const [wide, narrow] = Array.isArray(reserve) ? reserve : [reserve, null]
+  const want = Math.max(
+    wide ? textWidth(String(wide), T.display.fontFamily, T.display.fontSize) : 0,
+    narrow ? textWidth(String(narrow), T.tiny.fontFamily, T.tiny.fontSize) : 0,
+  )
   return (
-    <View style={s.plate}>
+    <View style={[s.plate, want ? { minWidth: Math.ceil(want + PLATE_CHROME + PLATE_SLACK) } : null]}>
       <Text style={s.plateValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{value}</Text>
       {sub ? <Text style={s.plateSub} numberOfLines={1}>{sub}</Text> : null}
     </View>
@@ -314,7 +345,14 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
   const [minutes, setMinutes] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-  const acesMax = Math.max(1, data?.ceilings?.aces_max || 0)
+  /* BOTH ENDS FOLLOW THE FIRST ANSWER (owner, 2026-09-23: "the far right
+     number needs to change depending on the # of sets the user choose"). The
+     aces end was the most anyone has hit in a match of ANY length, so a
+     reader answering two sets was shown a number set in a three-setter — a
+     third more serving than their own answer allows. The holder under it
+     moves with it: it is that match's. */
+  const acesMax = Math.max(1, data?.ceilings?.aces_max_by_sets?.[String(sets)]
+                              || data?.ceilings?.aces_max || 0)
   /* THE END OF THE TRACK IS THE LONGEST MATCH OF THE LENGTH BEING PREDICTED
      (owner, 2026-09-23): "the max length of a 2-set match on hard over the
      past 3 years. Instead of currently which is: ANY number of sets over 1
@@ -361,6 +399,9 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
   useEffect(() => {
     setMinutes(m => (m == null ? m : Math.min(m, durMax)))
   }, [durMax])
+  useEffect(() => {
+    setAces(a => (a == null ? a : Math.min(a, acesMax)))
+  }, [acesMax])
 
   // A fresh open starts at the beginning rather than wherever it was left.
   useEffect(() => { if (visible) { setStep(0); setError(null) } }, [visible])
@@ -446,11 +487,12 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               <Step n={2} of={3} />
               <View style={s.qHead}>
                 <Text style={s.qTitle}>How many aces will the champion hit in the final?</Text>
-                <Plate value={String(aces)} />
+                <Plate value={String(aces)} reserve={String(acesMax)} />
               </View>
               {/* No floor label and no "the most in 12 months" — see Scale. */}
               <Scale value={aces} max={acesMax} onChange={setAces} disabled={locked}
-                     label="Aces in the final" rec={rec?.aces_record} />
+                     label="Aces in the final"
+                     rec={rec?.aces_record_by_sets?.[String(sets)] || rec?.aces_record} />
               {/* Scaled to the sets just chosen, which is why that question
                   comes first (owner, 2026-09-19). */}
               <StatTable rows={acesRows(data, sets)} unit="aces" />
@@ -462,7 +504,8 @@ export function FinalGuessSheet({ tournamentId, visible, onClose, onSaved }) {
               <Step n={3} of={3} />
               <View style={s.qHead}>
                 <Text style={s.qTitle}>What will be the match duration of the final?</Text>
-                <Plate value={fmtMinutes(minutes)} sub={`${minutes} min`} />
+                <Plate value={fmtMinutes(minutes)} sub={`${minutes} min`}
+                       reserve={[fmtMinutes(durMax), `${durMax} min`]} />
               </View>
               {/* The clock reading alone: the raw minutes under it were a
                   third line on an end that is already two (owner, 2026-09-22). */}
@@ -708,8 +751,9 @@ const s = StyleSheet.create({
     backgroundColor: C.sunken, borderRadius: R.sm,
     borderWidth: 1, borderColor: C.borderOn,
   },
-  plateValue: { ...T.display, color: C.greenBright, lineHeight: leading(32) },
-  plateSub: { ...T.tiny, color: C.faint, marginTop: -2 },
+  plateValue: { ...T.display, color: C.greenBright, lineHeight: leading(32),
+                fontVariant: ['tabular-nums'] },
+  plateSub: { ...T.tiny, color: C.faint, marginTop: -2, fontVariant: ['tabular-nums'] },
 
   /* The slider's two ends. The left is a floor nobody aims at; the right is a
      record, which is the one number here worth a name under it. */

@@ -356,3 +356,69 @@ def test_the_ceilings_payload_carries_the_per_length_ends():
     assert out["duration_max_by_sets"] == {"2": 172, "3": 255}
     assert out["duration_ceiling_years"] == 3
     assert out["duration_max_min"] > 0, "the any-length end stays as the fallback"
+
+
+# ── the aces track ends at the length being predicted too ────────────────
+
+def _aces_db():
+    """One real ace record of each length, plus the file's own junk row."""
+    import sqlite3
+    c = sqlite3.connect(":memory:")
+    c.execute("""CREATE TABLE tml_matches (tour, tourney_name, tourney_date, surface, tourney_level, best_of,
+                 winner_id, loser_id, winner_name, loser_name, score, minutes, w_ace, l_ace)""")
+    c.executemany("INSERT INTO tml_matches VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+        # The three-setter that used to end the track for everyone.
+        ("atp", "Brisbane", "2026-01-05", "Hard", "250", 3, "1", "2", "Big Serve", "Victim",
+         "6-7(4) 7-6(3) 7-6(12)", 180, 44, 8),
+        # The most in a completed two-setter: what a two-set answer should see.
+        ("atp", "Halle", "2025-06-20", "Hard", "500", 3, "3", "4", "Second Serve", "Other",
+         "7-6(3) 7-6(13)", 150, 28, 11),
+        ("atp", "Doha", "2025-02-01", "Hard", "500", 3, "5", "6", "Quiet", "Day",
+         "6-4 6-4", 80, 6, 3),
+        # The record's own junk row, named in the module's docstring.
+        ("atp", "Junk", "2025-03-01", "Hard", "250", 3, "7", "8", "Bad", "Row",
+         "6-3 6-1", 60, 128, 0),
+        # A retirement: real aces, partial sets.
+        ("atp", "Retired", "2025-04-01", "Hard", "250", 3, "9", "10", "Ret", "Ired",
+         "7-6(2) 6-6 RET", 150, 35, 4),
+        # Another surface.
+        ("atp", "Roland Garros", "2025-06-01", "Clay", "G", 3, "11", "12", "Clay", "Court",
+         "7-6(2) 7-6(4)", 160, 31, 5),
+    ])
+    return c
+
+
+def test_the_aces_track_ends_at_the_most_in_a_match_of_that_length():
+    from app.services.history.final_stats import aces_by_sets
+    maxima, records = aces_by_sets(_aces_db(), "atp", "Hard", 3, today=date(2026, 9, 23))
+    assert maxima == {"2": 28, "3": 44}
+    assert records["2"]["player"] == "Second Serve"
+    assert records["3"]["tournament"] == "Brisbane", "the holder is that match's"
+
+
+def test_the_files_own_junk_row_still_cannot_end_it():
+    """128 aces in "6-3 6-1" is in the record; the format's cap of 60 is what
+    removes it, and no per-set cap is needed above that."""
+    from app.services.history.final_stats import aces_by_sets
+    maxima, _ = aces_by_sets(_aces_db(), "atp", "Hard", 3, today=date(2026, 9, 23))
+    assert maxima["2"] == 28
+
+
+def test_a_retirement_does_not_end_the_aces_track_either():
+    from app.services.history.final_stats import aces_by_sets
+    _m, records = aces_by_sets(_aces_db(), "atp", "Hard", 3, today=date(2026, 9, 23))
+    assert "RET" not in records["2"]["score"]
+
+
+def test_the_surface_being_played_ends_the_aces_track():
+    from app.services.history.final_stats import aces_by_sets
+    maxima, _ = aces_by_sets(_aces_db(), "atp", "Hard", 3, today=date(2026, 9, 23))
+    assert maxima["2"] != 31, "a clay match ended the hard-court track"
+
+
+def test_the_payload_carries_both_ends_per_length():
+    from app.services.history.final_stats import CEILING_YEARS, ceilings
+    out = ceilings(_aces_db(), "atp", "Hard", 3, today=date(2026, 9, 23))
+    assert out["aces_max_by_sets"] == {"2": 28, "3": 44}
+    assert out["ceiling_years"] == CEILING_YEARS == 3
+    assert out["aces_max"] > 0, "the any-length end stays as the fallback"

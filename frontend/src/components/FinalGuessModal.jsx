@@ -194,7 +194,11 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
   const [sets, setSets] = useState(null)
   const [aces, setAces] = useState(null)
   const [minutes, setMinutes] = useState(null)
-  const acesMax = Math.max(1, ctx?.ceilings?.aces_max || 0)
+  /* Both ends follow the sets answer — the aces end was the most anyone has
+     hit in a match of ANY length, a third more serving than a two-setter
+     allows. See mobile/finalGuess.jsx for the rule. */
+  const acesMax = Math.max(1, ctx?.ceilings?.aces_max_by_sets?.[String(sets)]
+                              || ctx?.ceilings?.aces_max || 0)
   /* The end of the duration track is the longest match of the length being
      predicted — see mobile/finalGuess.jsx, where the rule is written out. It
      moves with the sets answer, and the old any-length end is the fallback. */
@@ -221,10 +225,13 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
     setMinutes(Math.round(Math.max(1, ctx.ceilings?.duration_max_min || 0) / 3))
   }, [ctx])     // eslint-disable-line react-hooks/exhaustive-deps
 
-  // An answer cannot outlive its scale: the ceiling moves with the set count.
+  // An answer cannot outlive its scale: both ceilings move with the set count.
   useEffect(() => {
     setMinutes(m => (m == null ? m : Math.min(m, durMax)))
   }, [durMax])
+  useEffect(() => {
+    setAces(a => (a == null ? a : Math.min(a, acesMax)))
+  }, [acesMax])
 
   const save = useMutation({
     mutationFn: () => putFinalGuess(tournamentId, {
@@ -310,7 +317,10 @@ export default function FinalGuessModal({ tournamentId, open, onClose, reason })
                   <span>0</span>
                   <span className="fg-ends-max">
                     {acesMax}
-                    {record?.aces_record && ` · ${record.aces_record.player}, ${record.aces_record.tournament} ${record.aces_record.year}`}
+                    {(() => {
+                      const r = record?.aces_record_by_sets?.[String(sets)] || record?.aces_record
+                      return r && ` · ${r.player}, ${r.tournament} ${r.year}`
+                    })()}
                   </span>
                 </div>
                 <Reference ctx={ctx} which="aces" sets={sets} unit="aces" />

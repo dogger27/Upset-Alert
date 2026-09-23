@@ -89,7 +89,9 @@ def _year_ago(today: Optional[date] = None) -> str:
 # of ONE set count, which is a much smaller population — a single year of
 # two-set finals on a given surface can miss the genuinely long one, and a
 # ceiling that moves every week is a scale the reader cannot learn.
-DURATION_CEILING_YEARS = 3
+CEILING_YEARS = 3
+# The name the clients already read, kept pointing at the one constant.
+DURATION_CEILING_YEARS = CEILING_YEARS
 # AND THE JUNK HAS TO BE CAPPED PER SET, because the ceiling now is. The
 # module's format caps (400 minutes for a best-of-three) were never meant to
 # judge one set count: "6-2 6-3 in 219 minutes" and "7-6(3) 6-3 in 221" are
@@ -103,6 +105,101 @@ DURATION_CEILING_YEARS = 3
 # stored twice), an unfinished set, and a run of Indian Wells retirements
 # whose minutes outlast the sets they record.
 MAX_MINUTES_PER_SET = 90
+
+
+def _best_by_sets(cur, wanted: set, read, cap_per_set: Optional[int] = None) -> tuple:
+    """The first row of each set count, off a cursor ALREADY ordered best-first.
+
+    The shared rule behind both slider ends: sets are not a column, they are
+    counted off Sackmann's score string, so the database cannot answer "the
+    longest two-setter" in one query. It can answer "longest first", and one
+    walk down that order picks the best of every length and stops.
+
+    `read(row, sets)` returns `(value, record)`. Two guards, both learned from
+    the record rather than assumed:
+
+      a completed score   a retirement's minutes and aces are real and its set
+                          count is partial — "6-4 6-6 RET" is two sets by the
+                          count and one match interrupted by the clock. Letters
+                          in a score are exactly RET, W/O, DEF and ABN.
+      a per-set cap       where the format's own cap cannot see the fault: 219
+                          minutes is inside a best-of-three's 400 and is not a
+                          two-setter anybody played. Checked BEFORE the set
+                          count is marked found, or one junk row hides the real
+                          answer behind it.
+    """
+    maxima: dict = {}
+    records: dict = {}
+    for row in cur:
+        score = row[1]
+        if not score or _ALPHA.search(score):
+            continue
+        n = sets_in(score)
+        if n not in wanted or str(n) in maxima:
+            continue
+        value, record = read(row, n)
+        if not value or (cap_per_set is not None and value > n * cap_per_set):
+            continue
+        maxima[str(n)] = value
+        records[str(n)] = record
+        if len(maxima) == len(wanted):
+            break
+    return maxima, records
+
+
+def aces_by_sets(conn, tour: str, surface: str, best_of: int,
+                 today: Optional[date] = None) -> tuple:
+    """The most aces one player has hit in a match of EACH set count.
+
+    "The far right number needs to change depending on the # of sets the user
+    choose! It needs to represent the max, based on the numbers the user
+    chose" (owner, 2026-09-23). The end of this track was the most aces in a
+    match of any length, so a reader answering two sets was shown a number set
+    in a three-setter — a third more serving than their own answer allows.
+
+    Scoped like the duration track it sits beside: this surface, three years.
+    Aces are a surface statistic before they are anything else, and the
+    reference rows under this very slider already say "on hard".
+
+    No per-set cap: the format's own (60 aces in a best-of-three) already
+    removes the one junk row in the file — 128 aces in "6-3 6-1" — and above
+    it the record is continuous. Across 24,444 matches since 2023 the per-set
+    rate runs 2.5 median, 8.2 at p99, 11.5 at p99.9, then the highest real
+    ones at 14 to 16 a set. There is no gap to cut at.
+    """
+    wanted = set(set_lengths(best_of))
+    cap = PLAUSIBLE.get(best_of, PLAUSIBLE[3])["aces"]
+    levels = _levels_sql(tour)
+    since = _years_ago(CEILING_YEARS, today)
+
+    def read(row, _n):
+        _m, score, name, tdate, win, lose, w_ace, l_ace = row
+        best = max(w_ace or 0, l_ace or 0)
+        who = win if (w_ace or 0) >= (l_ace or 0) else lose
+        return best, {"player": who, "aces": best, "tournament": name,
+                      "year": str(tdate)[:4], "score": score}
+
+    sql = f"""
+        SELECT max(coalesce(w_ace, 0), coalesce(l_ace, 0)), score, tourney_name,
+               tourney_date, winner_name, loser_name, w_ace, l_ace
+        FROM tml_matches
+        WHERE tour = ? AND best_of = ? AND tourney_level IN {levels}
+          AND max(coalesce(w_ace, 0), coalesce(l_ace, 0)) BETWEEN 1 AND ?
+          {{where}}
+        ORDER BY max(coalesce(w_ace, 0), coalesce(l_ace, 0)) DESC"""
+    maxima, records = _best_by_sets(
+        conn.execute(sql.format(where="AND surface = ? AND tourney_date >= ?"),
+                     (tour, best_of, cap, surface, since)), wanted, read)
+    if len(maxima) < len(wanted):
+        # A set count this surface has no example of: the format's own, so the
+        # track still has an end.
+        more, more_rec = _best_by_sets(
+            conn.execute(sql.format(where="AND tourney_date >= ?"),
+                         (tour, best_of, cap, since)),
+            wanted - {int(k) for k in maxima}, read)
+        maxima.update(more)
+        records.update(more_rec)
+    return maxima, records
 
 
 def duration_by_sets(conn, tour: str, surface: str, best_of: int,
@@ -127,42 +224,34 @@ def duration_by_sets(conn, tour: str, surface: str, best_of: int,
     wanted = set(set_lengths(best_of))
     cap = PLAUSIBLE.get(best_of, PLAUSIBLE[3])["minutes"]
     levels = _levels_sql(tour)
-    since = _years_ago(DURATION_CEILING_YEARS, today)
-    maxima: dict = {}
-    records: dict = {}
+    since = _years_ago(CEILING_YEARS, today)
 
-    def walk(where: str, params: tuple):
-        cur = conn.execute(f"""
-            SELECT minutes, score, tourney_name, tourney_date, winner_name, loser_name
-            FROM tml_matches
-            WHERE tour = ? AND best_of = ? AND tourney_level IN {levels}
-              AND minutes IS NOT NULL AND minutes > 0 AND minutes <= ?
-              {where}
-            ORDER BY minutes DESC""", params)
-        for minutes, score, name, tdate, win, lose in cur:
-            # A RETIREMENT IS NOT AN EXAMPLE OF THIS LENGTH. Its minutes are
-            # real and its set count is partial — "6-4 6-6 RET" is two sets by
-            # the count and an hour and a half of one match by the clock — so
-            # a completed score is what the end of this track is made of.
-            # Letters in a score are exactly RET, W/O, DEF and ABN.
-            if not score or _ALPHA.search(score):
-                continue
-            n = sets_in(score)
-            if minutes > n * MAX_MINUTES_PER_SET:
-                continue
-            if n in wanted and str(n) not in maxima:
-                maxima[str(n)] = int(minutes)
-                records[str(n)] = {"players": f"{win} d. {lose}", "minutes": int(minutes),
-                                   "tournament": name, "year": str(tdate)[:4], "score": score}
-                if len(maxima) == len(wanted):
-                    return True
-        return False
+    def read(row, _n):
+        minutes, score, name, tdate, win, lose = row
+        return int(minutes), {"players": f"{win} d. {lose}", "minutes": int(minutes),
+                              "tournament": name, "year": str(tdate)[:4], "score": score}
 
-    if not walk("AND surface = ? AND tourney_date >= ?", (tour, best_of, cap, surface, since)):
+    sql = f"""
+        SELECT minutes, score, tourney_name, tourney_date, winner_name, loser_name
+        FROM tml_matches
+        WHERE tour = ? AND best_of = ? AND tourney_level IN {levels}
+          AND minutes IS NOT NULL AND minutes > 0 AND minutes <= ?
+          {{where}}
+        ORDER BY minutes DESC"""
+    maxima, records = _best_by_sets(
+        conn.execute(sql.format(where="AND surface = ? AND tourney_date >= ?"),
+                     (tour, best_of, cap, surface, since)),
+        wanted, read, cap_per_set=MAX_MINUTES_PER_SET)
+    if len(maxima) < len(wanted):
         # A set count this surface has no example of in three years — a five
         # on grass, in practice. The format's own longest of that length keeps
         # the track sane rather than leaving it without an end.
-        walk("AND tourney_date >= ?", (tour, best_of, cap, since))
+        more, more_rec = _best_by_sets(
+            conn.execute(sql.format(where="AND tourney_date >= ?"),
+                         (tour, best_of, cap, since)),
+            wanted - {int(k) for k in maxima}, read, cap_per_set=MAX_MINUTES_PER_SET)
+        maxima.update(more)
+        records.update(more_rec)
     return maxima, records
 
 
@@ -232,6 +321,7 @@ def ceilings(conn, tour: str, surface: str, best_of: int,
     dur_rec = ({"players": f"{drow[2]} d. {drow[3]}", "minutes": duration_max,
                 "tournament": drow[0], "year": str(drow[1])[:4], "score": drow[5]} if drow else None)
     by_sets, rec_by_sets = duration_by_sets(conn, tour, surface, best_of, today)
+    a_by_sets, a_rec_by_sets = aces_by_sets(conn, tour, surface, best_of, today)
     return {"aces_max": int(aces_max), "aces_record": aces_rec,
             # Kept: the format's longest of any length, which is still the end
             # of the track for a client that has not been told about set
@@ -240,7 +330,10 @@ def ceilings(conn, tour: str, surface: str, best_of: int,
             # What the slider actually ends at now, per set count.
             "duration_max_by_sets": by_sets,
             "duration_record_by_sets": rec_by_sets,
-            "duration_ceiling_years": DURATION_CEILING_YEARS}
+            "aces_max_by_sets": a_by_sets,
+            "aces_record_by_sets": a_rec_by_sets,
+            "duration_ceiling_years": CEILING_YEARS,
+            "ceiling_years": CEILING_YEARS}
 
 
 def _rate(rows) -> Optional[dict]:
