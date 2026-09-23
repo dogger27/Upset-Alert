@@ -1768,6 +1768,39 @@ def _side_tokens(entry, side: str) -> list:
             if p.side == side]
 
 
+def _person_agrees(x: set, y: set) -> bool:
+    """Two printed names that are the same person — equal, or one an
+    abbreviation of the other ("V. Kopriva" inside "Vit KOPRIVA").
+
+    Hoisted out of `_superseded`'s closure when `_side_alike` came to need the
+    same reading; a module that already compares sheet names must not grow a
+    second comparison beside the first. Empty on either side is NOT agreement:
+    a name that reduced to no usable token names nobody, and letting nobody
+    match everybody is how a side of text-extraction debris would claim to be
+    a real player.
+    """
+    return bool(x and y) and (x == y or x < y or y < x)
+
+
+def _side_alike(xs: list, ys: list) -> bool:
+    """Two printed SIDES naming the same people, one player to one player.
+
+    A side's identity is its whole roster: "CHWALINSKA / KREJCIKOVA" and
+    "CHWALINSKA / ANY" are different teams however much they share, so this is
+    a one-to-one pairing rather than an intersection. For a singles side —
+    one player — it reduces to `_person_agrees`.
+    """
+    if not xs or len(xs) != len(ys):
+        return False
+    pool = list(ys)
+    for x in xs:
+        hit = next((y for y in pool if _person_agrees(x, y)), None)
+        if hit is None:
+            return False
+        pool.remove(hit)
+    return True
+
+
 def _printed_pairing(entry) -> str:
     """The row as the sheet printed it, for log lines a human has to read."""
     by = {'a': [], 'b': []}
@@ -1916,7 +1949,7 @@ def _same_pending(a, b) -> bool:
     return False
 
 
-def _superseded(old, new, latest_pool: list) -> bool:
+def _superseded(old, new, latest_pool: list, latest_sides: list = ()) -> bool:
     """True when `new` is `old`'s slot with one side replaced — a withdrawal.
 
     A lucky loser stepping in for a late withdrawal reprints the slot with one
@@ -1937,9 +1970,9 @@ def _superseded(old, new, latest_pool: list) -> bool:
     * the caller must have established that `old` was never played (no start,
       no result, bracket match undecided) — a backlog row that dropped off
       the sheet dropped off because it FINISHED.
-    * the replaced player must appear nowhere on the latest revision. A
-      player still in the tournament is on the sheet somewhere; one who
-      withdrew is not.
+    * the replaced SIDE must be gone from the latest revision — read at two
+      levels, see the guard below. A competitor still in the tournament is on
+      the sheet somewhere; one who withdrew is not.
 
     A WITHDRAWAL IS NOT THE ONLY WAY A SIDE GETS REPLACED. Re-reading the same
     sheet with a CORRECTED PARSER does it too, and then the old row's side is
@@ -1975,10 +2008,9 @@ def _superseded(old, new, latest_pool: list) -> bool:
     def union(sides):
         return set().union(set(), *sides)
 
-    def agree(x, y):
-        # Same subset-or-equal test as _same_pairing, for the same reason:
-        # one revision abbreviates ("V. Kopriva") what another spells out.
-        return bool(x and y) and (x == y or x < y or y < x)
+    # Same subset-or-equal test as _same_pairing, for the same reason: one
+    # revision abbreviates ("V. Kopriva") what another spells out.
+    agree = _person_agrees
 
     # Sides swap between revisions, and the replaced player can be on either
     # side — so try both mappings, and within each let either pair be the one
@@ -2000,9 +2032,40 @@ def _superseded(old, new, latest_pool: list) -> bool:
             # replacement side still has to name someone.
             if not new_come or (old_gone & new_come):
                 continue
-            if any(p and any(agree(p, q) for q in latest_pool)
-                   for p in A[co]):
-                continue
+            # IS THE DEPARTING SIDE REALLY OFF THE SHEET? Read at two levels,
+            # both of which must say yes.
+            #
+            # A DOUBLES TEAM IS REPLACED AS A TEAM, and one of its members can
+            # still be printed elsewhere. Singapore 2026-09-23: Krejcikova
+            # withdrew, so the alternates Friedsam/Sasnovich took over her
+            # doubles R16 against Routliffe/Sutjiadi — but her partner
+            # Chwalinska was still on the sheet, playing her own singles
+            # earlier in the day. A player-level test alone saw Chwalinska on
+            # the latest revision and refused the supersede, so the dead
+            # pairing stayed on COURT 1 as a third box on a two-match court
+            # and chained a "~4:55 PM" onto it.
+            #
+            #   * the departing SIDE is not printed as a side anywhere on the
+            #     latest revision — the team is off the sheet, rather than
+            #     merely due to play again later. That is the rain-backlog
+            #     look-alike this guard exists for, and it is the level that
+            #     actually states it: a team with two matches on the day is
+            #     printed as a side twice, so it is still there;
+            #   * AND at least one of its players is off the sheet ENTIRELY,
+            #     which is what a withdrawal leaves behind and what a mere
+            #     re-pairing never does.
+            #
+            # For SINGLES a side is one player, so both readings collapse to
+            # the old test and nothing changes; only doubles can tell them
+            # apart. A side naming NOBODY skips both — `old_gone` empty is the
+            # text-extraction wreckage described above, which is stronger
+            # evidence than a departed player, not weaker.
+            named = [p for p in A[co] if p]
+            if named:
+                if any(_side_alike(named, s) for s in latest_sides):
+                    continue
+                if all(any(agree(p, q) for q in latest_pool) for p in named):
+                    continue
             return True
     return False
 
@@ -2224,9 +2287,14 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
     # the sheet because the match is over): every name the latest revision
     # still prints, and whether each linked bracket match has a result.
     latest_doc = rows[0].last_document_id or 0
-    latest_pool = [toks for r in rows
-                   if (r.last_document_id or 0) == latest_doc
-                   for s in ('a', 'b') for toks in _side_tokens(r, s)]
+    # Both readings of "still on the sheet" that _superseded needs: every SIDE
+    # the latest revision prints (a doubles team is replaced as a team, and
+    # keeping the roster together is the only way to see that), and the flat
+    # pool of names those sides contain (a player who withdrew is in neither).
+    latest_sides = [_side_tokens(r, s) for r in rows
+                    if (r.last_document_id or 0) == latest_doc
+                    for s in ('a', 'b')]
+    latest_pool = [toks for side in latest_sides for toks in side]
     linked = [r.match_id for r in rows if r.match_id]
     match_played: dict[int, bool] = {}
     if linked:
@@ -2266,7 +2334,8 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
             # `row` is the older of the two by construction — rows are sorted
             # newest-first and `k` was kept on an earlier pass — so the
             # direction is fixed: only the older row can be the ghost.
-            if not row_played and _superseded(row, k, latest_pool):
+            if not row_played and _superseded(row, k, latest_pool,
+                                              latest_sides):
                 twin = k
                 replaced = True
                 break
@@ -2305,13 +2374,17 @@ async def _dedupe_day(db, tournament_id: int, play_date: date) -> int:
 
 
 def _slot_was_pulled(row, court_anchor, published, match_played: bool,
-                     court_in_play: bool = False) -> bool:
+                     court_in_play: bool = False, court_idle_since=None,
+                     row_start=None) -> bool:
     """Can this dropped slot be PROVEN to have been pulled, not played?
 
     `court_anchor` is the first printed start on the row's court according to
     the revision that dropped it, `published` when that revision was fetched.
     `court_in_play` says a match that revision still prints on the same court
     had started, by the results feed's clock, and not finished at `published`.
+    `court_idle_since` is when the court's last finished match ENDED, set only
+    while that court stands empty with its next printed match not yet due;
+    `row_start` is this row's own printed start, both in UTC.
     Split out from the pass below so the judgement can be tested without a
     database — see tests/test_pulled_slot.py, which runs it over the whole
     stored corpus of dropped rows.
@@ -2350,7 +2423,35 @@ def _slot_was_pulled(row, court_anchor, published, match_played: bool,
     # — so they keep waiting for the clock. And a sheet that still prints
     # final scores proves nothing: Cincinnati's reissue printed four of them
     # and dropped those doubles anyway.
-    return bool(court_in_play and getattr(row, 'match_id', None))
+    if court_in_play and getattr(row, 'match_id', None):
+        return True
+    # BETWEEN MATCHES, Singapore 2026-09-23. A court with nothing underway is
+    # not a court nobody is watching, and the rule above could only ever speak
+    # while a match was ON. Krejcikova withdrew; the 2:35 PM revision took her
+    # R16 vs Mertens ("Not before 2:30 PM") off CENTER COURT, which had
+    # finished its 1:00 PM match at 2:09 and was standing empty waiting for
+    # the 2:40. First start on the court was 11:00 AM so the clock proof was
+    # mute, nothing was in play so the mid-session proof was mute, and the row
+    # went on printing between two real matches while pushing the printed
+    # "Not before 2:40 PM" behind it out to a rendered "~4:20 PM".
+    #
+    # The proof is the same argument as the one above — the feed had eyes on
+    # this court — established by a FINISH rather than a start, plus the
+    # court's own emptiness:
+    #   * a match this sheet still prints on the court completed at a known
+    #     instant at or before publication, so the feed was writing this
+    #     court's results minutes ago and would have written this row's too;
+    #   * nothing is underway there now, and the next match the sheet prints
+    #     on it is not yet due — the tour's own statement that the court is
+    #     free, which it would not print over a match in progress;
+    #   * the row's own printed start is at or after that finish, so its turn
+    #     came during the empty stretch and not before it. Anything earlier in
+    #     the day is out of reach of this argument and keeps waiting.
+    # As with the mid-session proof, only a bracket-linked row can be read
+    # this way: the blankness of `matches` is the evidence, and doubles and
+    # qualifying rows have no row there to be blank.
+    return bool(court_idle_since and row_start and getattr(row, 'match_id', None)
+                and row_start >= court_idle_since)
 
 
 async def _retire_pulled_slots(db, tournament_id: int, play_date: date,
@@ -2451,14 +2552,23 @@ async def _retire_pulled_slots(db, tournament_id: int, play_date: date,
     # unchanged and so is its conservatism — Cincinnati's 7:43 PM reissue
     # dropped slots off a court whose own sheet said 2:00 PM, and a blank
     # sheet at that hour would still refuse, court by court.
+    def _printed_utc(r):
+        """A row's own printed start in UTC, or None when it has no clock
+        ("Followed by", "TBA"). One reading, because three rules below now
+        ask for it and a second conversion is a second timezone bug."""
+        clock = _parse_clock(r.start_time_local)
+        if not clock:
+            return None
+        return datetime.combine(play_date, clock,
+                                tzinfo=tz).astimezone(timezone.utc)
+
     anchors: dict[str, datetime] = {}
     for r in rows:
         if not blank_sheet and (r.last_document_id or 0) != doc.id:
             continue
-        clock = _parse_clock(r.start_time_local)
-        if not clock:
+        when = _printed_utc(r)
+        if when is None:
             continue
-        when = datetime.combine(play_date, clock, tzinfo=tz).astimezone(timezone.utc)
         if r.court not in anchors or when < anchors[r.court]:
             anchors[r.court] = when
 
@@ -2481,6 +2591,7 @@ async def _retire_pulled_slots(db, tournament_id: int, play_date: date,
     on_court = {r.match_id: r.court for r in rows
                 if (r.last_document_id or 0) == doc.id and r.match_id}
     in_play: set[str] = set()
+    last_done: dict[str, datetime] = {}
     if on_court:
         for mid, winner, done, began, sofa_done, sofa_began in (await db.execute(
                 select(Match.id, Match.winner_id, Match.completed_at,
@@ -2492,12 +2603,34 @@ async def _retire_pulled_slots(db, tournament_id: int, play_date: date,
             if (start and start <= published
                     and (end > published if end else not winner)):
                 in_play.add(on_court[mid])
+            if end and end <= published:
+                last_done[on_court[mid]] = max(last_done.get(on_court[mid], end),
+                                               end)
+
+    # The between-matches proof in `_slot_was_pulled`: when a court the sheet
+    # still prints has finished a match and has nothing on it, and its next
+    # printed match is not yet due, `court_idle_since` is that finish. Each
+    # clause is a separate way for the court to be un-idle, so all three must
+    # hold — an in-play court is the mid-session case above, and a court with
+    # no un-due match left is a court whose sheet says nothing about now.
+    next_due: dict[str, datetime] = {}
+    for r in rows:
+        if (r.last_document_id or 0) != doc.id:
+            continue
+        when = _printed_utc(r)
+        if when and when > published and (r.court not in next_due
+                                          or when < next_due[r.court]):
+            next_due[r.court] = when
+    court_idle = {c: when for c, when in last_done.items()
+                  if c not in in_play and c in next_due}
 
     retired: list[str] = []
     for r in stale:
         if not _slot_was_pulled(r, anchors.get(r.court), published,
                                 bool(match_played.get(r.match_id)),
-                                court_in_play=r.court in in_play):
+                                court_in_play=r.court in in_play,
+                                court_idle_since=court_idle.get(r.court),
+                                row_start=_printed_utc(r)):
             continue
         retired.append(f"{_printed_pairing(r)} ({r.court}, "
                        f"{r.round_label or '?'} {r.discipline})")

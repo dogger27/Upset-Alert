@@ -125,6 +125,45 @@ def main():
     ok &= check("no publication time means no deletion",
                 _slot_was_pulled(Row(), sp_anchor, None, False) is False)
 
+    # Singapore 2026-09-23. Document 458 published 06:36 UTC; CENTER COURT's
+    # first printed start is 11:00 AM Singapore = 03:00 UTC, so the clock is
+    # mute, and nothing was on court, so the mid-session proof is mute too.
+    # The court's 1:00 PM match (5438) finished 06:09 and the next the sheet
+    # prints there is "Not before 2:40 PM" = 06:40 — empty, watched, not yet
+    # due — while the dropped row, Mertens vs Krejcikova, is printed "Not
+    # before 2:30 PM" = 06:30, inside that stretch, bracket match never begun.
+    sg_published, sg_anchor = at("2026-09-23 06:36:09"), at("2026-09-23 03:00")
+    sg_idle, sg_row = at("2026-09-23 06:09:18"), at("2026-09-23 06:30")
+    ok &= check(
+        "a pull on a court standing empty between matches is deleted",
+        _slot_was_pulled(Row(match_id=5437), sg_anchor, sg_published, False,
+                         court_idle_since=sg_idle, row_start=sg_row) is True)
+    ok &= check(
+        "...but not a row whose own start is BEFORE the court fell idle",
+        _slot_was_pulled(Row(match_id=5437), sg_anchor, sg_published, False,
+                         court_idle_since=sg_idle,
+                         row_start=at("2026-09-23 05:00")) is False)
+    ok &= check(
+        "...nor a row with no printed clock of its own",
+        _slot_was_pulled(Row(match_id=5437), sg_anchor, sg_published, False,
+                         court_idle_since=sg_idle, row_start=None) is False)
+    ok &= check(
+        "...nor a doubles row, which has no bracket match to be blank",
+        _slot_was_pulled(Row(), sg_anchor, sg_published, False,
+                         court_idle_since=sg_idle, row_start=sg_row) is False)
+    ok &= check(
+        "...nor when its bracket match had been played",
+        _slot_was_pulled(Row(match_id=5437), sg_anchor, sg_published, True,
+                         court_idle_since=sg_idle, row_start=sg_row) is False)
+    # The caller sets `court_idle_since` only for a court standing empty with
+    # its next printed match still to come. Unset is every other state,
+    # Cincinnati's included — a court playing since 2:00 PM may well have
+    # finished the slot that went missing.
+    ok &= check(
+        "a court not proven idle is left alone",
+        _slot_was_pulled(Row(match_id=5437), cin_anchor, cin_published, False,
+                         court_idle_since=None, row_start=sg_row) is False)
+
     print("PASS" if ok else "FAIL")
     return 0 if ok else 1
 

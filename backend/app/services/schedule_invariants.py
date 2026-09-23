@@ -15,7 +15,7 @@ checklist.
 
 import re
 import unicodedata as _ud
-from datetime import timedelta as _timedelta, timezone as _tz
+from datetime import datetime as _datetime, timedelta as _timedelta, timezone as _tz
 
 from sqlalchemy import select
 
@@ -28,6 +28,12 @@ from app.services.oop_parser import COUNTRY_CODES, served_nation
 # dropping a row and `_retire_pulled_slots` acting on it at the next ingest,
 # which is a fix in progress, not a fault.
 UNCONFIRMED_GRACE = 2
+
+# Stands in for a row with NO printed clock ("Followed by", "TBA") wherever a
+# rule compares one. Always earlier than any real instant, so a row that never
+# said when it starts can never satisfy a rule that needs it to be late enough
+# — silence must not convict.
+_FAR_PAST = _datetime.min
 
 
 def revisions_since(day_doc_ids, last_document_id) -> int:
@@ -1874,6 +1880,7 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
         # disagreement between the two feeds surfaces here instead of being
         # shared.
         in_play: set = set()
+        last_done: dict = {}
         on_court = {e.match_id: e.court for e in rows
                     if (e.last_document_id or 0) == latest_doc and e.match_id}
         if on_court and published:
@@ -1885,6 +1892,36 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 if (began and began <= published
                         and (done > published if done else not won)):
                     in_play.add(on_court[mid])
+                if done and done <= published:
+                    last_done[on_court[mid]] = max(
+                        last_done.get(on_court[mid], done), done)
+        # 2026-09-23, Singapore — THE PULL ON AN EMPTY COURT. Krejcikova
+        # withdrew and the 2:35 PM revision took her R16 vs Mertens ("Not
+        # before 2:30 PM") off CENTER COURT, which had finished its 1:00 PM
+        # match at 2:09 and was standing empty waiting for the 2:40. The
+        # court's first start was 11:00 AM so the rule above was mute, nothing
+        # was in play so the mid-session rule was mute, and one revision of
+        # silence is inside `slot_unconfirmed`'s grace window — CLEAN, on a
+        # page printing a withdrawn match between two real ones and rendering
+        # the printed "Not before 2:40 PM" behind it as "~4:20 PM".
+        #
+        # The law's own reading of `_slot_was_pulled`'s between-matches proof:
+        # a court is IDLE when a match this sheet still prints there finished
+        # at or before publication, nothing is underway, and the next match it
+        # prints there is not yet due. A bracket-linked row with no trace of
+        # play whose own printed start falls in that empty stretch was pulled.
+        # Read off `started_at`/`completed_at`/`winner_id` only, as above, so
+        # a disagreement with the service's sofa_* pair surfaces here.
+        next_due: dict = {}
+        for e in rows:
+            if (e.last_document_id or 0) != latest_doc:
+                continue
+            when = _naive_utc(_printed_instant(e, venue_tz))
+            if when and published and when > published and (
+                    e.court not in next_due or when < next_due[e.court]):
+                next_due[e.court] = when
+        court_idle = {c: w for c, w in last_done.items()
+                      if c not in in_play and c in next_due}
         for e in rows:
             if (e.last_document_id or 0) >= latest_doc:
                 continue
@@ -1900,6 +1937,17 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                 flag("slot_pulled_mid_session_not_retired", e,
                      f"document {latest_doc} dropped this slot while {e.court} "
                      f"had a match in play and its bracket match was never "
+                     f"started — it was pulled, not played, and it is still "
+                     f"chaining the clocks behind it")
+            elif (never_played(e) and e.match_id and venue_tz
+                  and e.court in court_idle
+                  and (_naive_utc(_printed_instant(e, venue_tz)) or _FAR_PAST)
+                  >= court_idle[e.court]):
+                flag("slot_pulled_between_matches_not_retired", e,
+                     f"document {latest_doc} dropped this slot while {e.court} "
+                     f"stood empty between matches — the court's last match "
+                     f"finished at {court_idle[e.court]:%H:%M} UTC, its next "
+                     f"is not yet due, and this slot's bracket match was never "
                      f"started — it was pulled, not played, and it is still "
                      f"chaining the clocks behind it")
             elif revisions_since(doc_fetched, e.last_document_id) >= UNCONFIRMED_GRACE:
