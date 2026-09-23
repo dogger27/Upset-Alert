@@ -372,14 +372,8 @@ function DrawRow({ items, leagueId, isGlobal = false, compact = false }) {
   const tierText = !paired ? a.category
     : tiers[0] === tiers[1] ? tiers[0]
       : items.map(x => x.tournament.category).filter(Boolean).join(' · ')
-  const sizes = paired && b.draw_size !== a.draw_size
-    ? `${a.draw_size} / ${b.draw_size} draw` : `${a.draw_size} draw`
-  /* Pickers stay PER TOUR on a combined card: the same person often picks
-     both draws, so a sum would be a count of entries pretending to be a
-     count of people. */
-  const pickers = paired
-    ? `ATP ${items.find(x => x.tournament.gender === 'M')?.picker_count ?? 0} · WTA ${items.find(x => x.tournament.gender === 'F')?.picker_count ?? 0}`
-    : `${items[0].picker_count} ${items[0].picker_count === 1 ? 'picker' : 'pickers'}`
+  /* NO SIZE OR PICKER COUNT on the card (owner, 2026-09-23: "remove the
+     '5 entered, 32 draw' from all leagues and draws"). */
   const pooled = items.some(x => x.cash_pool_enabled)
   /* A FINISHED DRAW ASKS A SMALLER QUESTION. Open and active want the tier,
      the surface, the size and who is in — a card you read. Previous is a
@@ -429,7 +423,6 @@ function DrawRow({ items, leagueId, isGlobal = false, compact = false }) {
         <Text style={s.meta}>
           {[tierText, a.surface, a.year].filter(Boolean).join(' · ')}
         </Text>
-        <Text style={s.meta}>{sizes} · {pickers}</Text>
       </View>
       <Tours a={a} paired={paired} />
     </CardLink>
