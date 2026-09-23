@@ -351,7 +351,7 @@ const s = StyleSheet.create({
   head: { backgroundColor: C.raised, paddingVertical: 8 },
   headText: { color: C.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
   // The header the rows are sorted by.
-  headOn: { color: C.greenBright, textDecorationLine: 'underline' },
+  headOn: { color: C.greenBright },  // green alone marks the sort; no underline (owner, 2026-09-23)
   alt: { backgroundColor: '#14201c' },
   mine: { backgroundColor: '#1d3329' },
   /* The place is the headline of a standings table; it used to be the dimmest
