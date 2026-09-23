@@ -301,7 +301,9 @@ const s = StyleSheet.create({
   scroller: { flex: 1, minHeight: 0 },
   scrollerBody: { paddingBottom: 4 },
   table: { borderWidth: 1, borderColor: C.border, borderRadius: 14, overflow: 'hidden', backgroundColor: C.card },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, gap: 8 },
+  /* 3pt, not 10 (owner, 2026-09-23): at the largest text size a row was
+     mostly padding. The name lines' own leading already clears the glyphs. */
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3, paddingHorizontal: 12, gap: 8 },
   head: { backgroundColor: C.raised, paddingVertical: 8 },
   headText: { color: C.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
   // The header the rows are sorted by.
