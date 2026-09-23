@@ -306,6 +306,16 @@ NOISE_RE = re.compile(
     # PIOLINE/SANTORO" as two extra opponents, which then read as a doubles
     # match. Six files across the corpus do this.
     r'exhibition|wheelchair|legends?\b|invitational|pro-?am|'
+    # "Juniors - Boys Singles FINAL", printed over the women's doubles final
+    # on wta/2026_1038 — the event's AUDIENCE before its discipline, which is
+    # the one shape no header reader here accepts: _EVENT_HEADER_RE and
+    # _HEADER_SHAPED_RE both want the line to open on an event word, and the
+    # bare-heading rule (_BARE_EVENT_RE) wants no round word at all. So the
+    # whole line was a name, and Andreeva/Shnaider went out as a team of
+    # THREE. Anchored, because a name may carry the word and a heading opens
+    # the line with it; the only "junior" in 3,614 parsed names across both
+    # archives is this heading.
+    r'^juniors?\b|'
     r'^(?:singles|doubles|mixed)\s+(?:final|semi|quarter|qf|sf|f)\b|'
     r'^(?:MS|MD|WS|WD|XD|BS|BD|GS|GD|QS|QD)\s+(?:final|sf|qf|f|r\d+|tbf)\b|'
     r'locker-?room|director|^any match|'
