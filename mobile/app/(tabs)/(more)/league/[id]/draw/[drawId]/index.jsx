@@ -345,15 +345,17 @@ const s = StyleSheet.create({
      to fit (PlayerName shrinkOnly), and with no lineHeight of its own its line
      shrank with it, so "koounderpressure" made a shorter row than "isaac".
      A stated lineHeight survives the shrink — PlayerName overrides fontSize
-     only — so the line box, and the row, stay put. Sizes are the ones already
-     on screen (RN's default 14 for the name). */
-  name: { color: C.ink, fontWeight: '600', fontSize: 14, lineHeight: leading(19) },
+     only — so the line box, and the row, stay put. The lineHeights are the
+     SYSTEM font's natural line (no fontFamily here, so iOS draws SF: 1.19 x
+     the size, 16.7 at 14 and 14.3 at 12) rounded up — no taller than an
+     unshrunk name already made the row (owner: "no higher than it needs"). */
+  name: { color: C.ink, fontWeight: '600', fontSize: 14, lineHeight: leading(17) },
   nameMine: { color: C.clay, fontWeight: '800' },
   /* A podium place locked — third or better in every future — in gold, and
      with the money when the draw runs a cash pool. Beats the clay of "me":
      the certainty is the news. */
   namePodium: { color: C.gold, fontWeight: '800' },
-  real: { color: C.muted, fontSize: 12, lineHeight: leading(16) },
+  real: { color: C.muted, fontSize: 12, lineHeight: leading(15) },
   /* Centred, like the site: a label fills its cell and a number does not.
      The header is a bare tick now, so the column is the score columns'
      width and the name gets the rest. */
