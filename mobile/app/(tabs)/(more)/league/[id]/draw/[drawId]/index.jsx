@@ -24,6 +24,7 @@ import { byFinish, competitionRanks, finishText, pct } from '../../../../../../.
 import { FOOT_FLUSH, StandingsFoot, useStandingsView } from '../../../../../../../standingsTools'
 import { othersPicksNote } from '../../../../../../../lock'
 import { C } from '../../../../../../../theme'
+import { leading } from '../../../../../../../fontScale.js'
 import { PlayerName, TourSwitch, headerTour } from '../../../../../../../cards'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title } from '../../../../../../../ui'
 
@@ -340,13 +341,19 @@ const s = StyleSheet.create({
      thing in the row. Wider too, or a three-figure place clips at this size. */
   rank: { color: C.greenBright, width: 34, fontSize: 16, fontWeight: '700' },
   who: { flex: 1, minWidth: 0 },
-  name: { color: C.ink, fontWeight: '600' },
+  /* EVERY ROW THE SAME HEIGHT (owner, 2026-09-23). A long username is shrunk
+     to fit (PlayerName shrinkOnly), and with no lineHeight of its own its line
+     shrank with it, so "koounderpressure" made a shorter row than "isaac".
+     A stated lineHeight survives the shrink — PlayerName overrides fontSize
+     only — so the line box, and the row, stay put. Sizes are the ones already
+     on screen (RN's default 14 for the name). */
+  name: { color: C.ink, fontWeight: '600', fontSize: 14, lineHeight: leading(19) },
   nameMine: { color: C.clay, fontWeight: '800' },
   /* A podium place locked — third or better in every future — in gold, and
      with the money when the draw runs a cash pool. Beats the clay of "me":
      the certainty is the news. */
   namePodium: { color: C.gold, fontWeight: '800' },
-  real: { color: C.muted, fontSize: 12 },
+  real: { color: C.muted, fontSize: 12, lineHeight: leading(16) },
   /* Centred, like the site: a label fills its cell and a number does not.
      The header is a bare tick now, so the column is the score columns'
      width and the name gets the rest. */
