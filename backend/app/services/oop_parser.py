@@ -122,6 +122,11 @@ _EVENT_HEADER_RE = re.compile(
 _QUALI_HEADER_RE = re.compile(
     r'^(?:(?:ATP|WTA|ITF)\s+)*(?:(?P<disc>singles|doubles)\s+)?qualifying\s*[-–:]?\s*'
     r'(?:(?P<final>finals?)|round\s*(?P<n>\d))$', re.I)
+# The words a sheet builds an event header out of, in ONE place. Two copies of
+# a vocabulary drift and the failure is silent — the same reason COUNTRY_CODES
+# lives here and schedule.py imports it rather than keeping its own.
+_EVENT_WORDS = (r"men'?s|women'?s|singles|doubles|mixed|qualifying|"
+                r"qualification|main\s+draw")
 # What `round_headers` COUNTS — deliberately wider than what the two readers
 # above accept. The count used to be taken with _EVENT_HEADER_RE itself, so a
 # header spelled in a way the reader did not know was invisible to the count
@@ -132,10 +137,29 @@ _QUALI_HEADER_RE = re.compile(
 # the year-end event's advertisement (wta/2026_1106), not a box's header.
 _HEADER_SHAPED_RE = re.compile(
     r"^(?:(?:ATP|WTA|ITF)\s+)*"
-    r"(?:(?:men'?s|women'?s|singles|doubles|mixed|qualifying|qualification|"
-    r"main\s+draw)[\s\-–:]+)+"
+    rf"(?:(?:{_EVENT_WORDS})[\s\-–:]+)+"
     r"(?:(?:semi|quarter)[-\s]?finals?|finals?|round\s*(?:of\s+)?\d{1,3}|"
     r"(?:first|second|third|1st|2nd|3rd)\s+round)$", re.I)
+# THE SAME HEADER WITH NO ROUND WORD — a bare section heading. Korea's
+# 2026-09-24 sheet (doc 465) printed "Doubles" on a line of its own in each
+# court's column, the heading over a doubles section whose draw was not made
+# yet, with nothing under it. Every reader above wants a round word, NOISE_RE
+# wants one too, and `_is_name` takes any mixed-case line with two letters in
+# it — so the word was appended as a PLAYER to whichever side was open when it
+# arrived. Ostapenko's R16 singles published as a doubles match against
+# "Taylah PRESTON AUS / Doubles", and Bondar's the same on the other court:
+# four invariant violations from one word the sheet prints about itself.
+#
+# Title case is what makes this reachable. The all-caps spelling is already
+# fenced off twice — `_allcaps_name` rejects "DOUBLES" for its shape, and the
+# court-name branch tests DISC_RE — and neither lock sees "Doubles". Stated
+# here as the SHAPE (a whole line of event words and nothing else) rather than
+# as the one word, because "Singles", "Mixed Doubles" and "Qualifying" are the
+# same line printed by the same layout and would each have arrived as a player
+# in their turn.
+_BARE_EVENT_RE = re.compile(
+    rf"^(?:(?:ATP|WTA|ITF)\s+)*(?:{_EVENT_WORDS})"
+    rf"(?:[\s\-–:]+(?:{_EVENT_WORDS}))*$", re.I)
 
 
 def _round_token(text):
@@ -164,7 +188,11 @@ def _event_header(text):
     """-> (discipline, round token) when this whole line is an event header.
 
     The discipline is None when the header states none ("QUALIFYING FINAL"):
-    _apply_header then has no shape to check and takes the round alone.
+    _apply_header then has no shape to check and takes the round alone. The
+    ROUND is None when the header states none ("Doubles") — the caller drops
+    such a header rather than storing it, but the match here is what keeps the
+    line out of the names. Both can be None at once ("Qualifying"): the line is
+    still the sheet talking about itself, which is all the caller needs.
     """
     text = (text or '').strip()
     m = _EVENT_HEADER_RE.match(text)
@@ -174,6 +202,9 @@ def _event_header(text):
     if q:
         disc = q.group('disc').lower() if q.group('disc') else None
         return disc, ('Q' if q.group('final') else f"Q{q.group('n')}")
+    if _BARE_EVENT_RE.match(text):
+        d = DISC_RE.search(text)
+        return (d.group(1).lower() if d else None), None
     return None
 
 # IOC codes as the tours print them, plus the ISO variants that turn up in
@@ -609,6 +640,13 @@ def _is_name(text):
     if not text or NOISE_RE.search(text):
         return False
     if TOUR_RE.match(text) or ROUND_RE.match(text) or VS_RE.match(text):
+        return False
+    # The sheet naming its own event is never a person. `consume` reaches its
+    # header branch first, so this is the second lock on that door — but
+    # `_is_name` is also what PROVES a headless slot (the "vs" branch below),
+    # and a bare "Doubles" counting as the name it needs would open a match box
+    # out of a section heading and a stray "vs".
+    if _event_header(text):
         return False
     if _slot_of(text) or SCORE_RE.match(text):
         return False
@@ -1103,9 +1141,15 @@ def _parse_column(lines, pno, dropped=None, orphans=None):
         # overwritten — a token the sheet printed explicitly for THIS slot
         # (ROUND_RE above, or the slot line's own wording) is the closer
         # statement of the two.
+        #
+        # A header that states NOTHING — a bare "Qualifying" — is consumed and
+        # thrown away rather than stored: kept, it would be the box's header
+        # and a real "DOUBLES FINAL" printed under it could never replace it.
+        # Keeping the line OUT of the names is the whole of its job.
         header = _event_header(text)
         if header:
-            cur.header = cur.header or header
+            if any(header):
+                cur.header = cur.header or header
             return
         # Strip leading round/tour tokens the layout parks on the name line.
         text = re.sub(r'^(?:F|SF|QF|R\d{1,3}|ATP|WTA)\s+(?=[A-Za-z\[])', '', text).strip()
@@ -1230,9 +1274,15 @@ def _parse_column(lines, pno, dropped=None, orphans=None):
 
         if cur is None:
             # Before the first time marker, an all-caps line is the court name.
+            # Unless it is the sheet naming its own EVENT: "DOUBLES" was fenced
+            # off here by DISC_RE from the day a sheet printed it, and the fence
+            # was one word wide — "MIXED DOUBLES" or "QUALIFYING" over a column
+            # would have become the court every row under it claims to be on.
+            # One shape now answers for the whole heading, here and in
+            # `_event_header`, so neither spelling can be read as data.
             if (text.isupper() and not NOISE_RE.search(text)
                     and not TOUR_RE.match(text) and not ROUND_RE.match(text)
-                    and len(text) > 2 and not DISC_RE.fullmatch(text)):
+                    and len(text) > 2 and not _BARE_EVENT_RE.match(text)):
                 court = text
                 pre = []
                 continue
