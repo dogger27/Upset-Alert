@@ -14,16 +14,18 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { formCount } from './h2hView.js'
+import { FORM_GAP, formChipText, formGrid } from './h2hView.js'
 
 const SRC = readFileSync(new URL('./h2h.jsx', import.meta.url), 'utf8')
 
 /* A swatch is not a line of text: it must not take the text scale, or five of
    them outgrow the column they sit in. */
-assert.match(SRC, /^const CHIP = 18$/m,
-  'the form chip must be a fixed size, not leading()')
-assert.match(SRC, /formCount\(width\)/,
-  'the number of swatches must come from the measured width')
+assert.doesNotMatch(SRC, /^const CHIP = /m,
+  'the swatch must be measured from its row, not fixed')
+assert.match(SRC, /formGrid\(width\)/,
+  'the swatch size must come from the measured width')
+assert.doesNotMatch(SRC, /chipText: \{[^}]*fontSize: \d/,
+  'the letter grows with its box, so it cannot carry a fixed size')
 assert.match(SRC, /width: leading\(74\)/,
   'the label column must grow with the text, or a long label truncates')
 assert.doesNotMatch(SRC, /numberOfLines=\{1\}>\{r\.label\}/,
@@ -56,13 +58,18 @@ for (const scale of [1, 1.35, 1.7, 2]) {
     `at ${scale}x the longest label (${m.longest.toFixed(0)}) does not fit its column (${m.label.toFixed(0)})`)
   assert.ok(m.plate <= m.column,
     `at ${scale}x a three-digit figure (${m.plate.toFixed(0)}) does not fit its column (${m.column.toFixed(0)})`)
-  /* The count is measured at runtime, so what this checks is that the rule
-     leaves at least a readable line at every text size — and that whatever it
-     returns actually fits. */
-  const n = formCount(m.column)
-  assert.ok(n >= 3, `at ${scale}x only ${n} form swatches fit a ${m.column.toFixed(0)}pt column`)
-  assert.ok(n * 18 + (n - 1) * 3 <= m.column,
-    `at ${scale}x ${n} swatches do not fit their own column`)
+  /* Five to a row, sized from the row: what this checks is that they FILL the
+     column without overflowing it, at every text size — the gap between the
+     squares and the word in the middle is what the owner saw. */
+  const { size, per } = formGrid(m.column)
+  const used = size * per + (per - 1) * FORM_GAP
+  assert.ok(used <= m.column,
+    `at ${scale}x ${per} ${size}pt swatches (${used}) overflow their column (${m.column.toFixed(0)})`)
+  assert.ok(used >= m.column - per,
+    `at ${scale}x they leave ${(m.column - used).toFixed(0)}pt of the column empty`)
+  assert.ok(per >= 4, `at ${scale}x a form row is down to ${per} swatches`)
+  assert.ok(size >= 14 && formChipText(size) >= 9,
+    `at ${scale}x a ${size}pt swatch is too small to hold a letter`)
 }
 
 console.log('ok — h2hLayout')
