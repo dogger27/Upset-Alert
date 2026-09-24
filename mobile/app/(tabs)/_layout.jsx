@@ -28,7 +28,7 @@ import { useLastLeague } from '../../lastLeague'
 import { pruneScheduleTournaments, setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
 import { holdSelection } from '../../scheduleRows'
 import { C, S, T } from '../../theme'
-import { FONT_SCALE, leading } from '../../fontScale.js'
+import { leading } from '../../fontScale.js'
 import { textWidth } from '../../measure'
 import { FinalGuessSheet } from '../../finalGuess'
 
@@ -469,7 +469,9 @@ export default function TabLayout() {
 function badgeColumnWidth(draws) {
   const w = (draws || []).map(t => {
     const text = `${t.gender === 'F' ? 'WTA' : 'ATP'} ${categoryShort(t.category) || ''}`.trim()
-    return textWidth(text, 'Archivo_700Bold', 10 * FONT_SCALE) + 0.6 * text.length + 12
+    // textWidth applies the reader's text scale itself; the badge's 10pt
+    // is the unscaled size.
+    return textWidth(text, 'Archivo_700Bold', 10) + 0.6 * text.length + 12
   })
   return w.length ? Math.ceil(Math.max(...w)) + 2 : undefined
 }

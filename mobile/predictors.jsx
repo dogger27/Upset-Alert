@@ -24,7 +24,7 @@ import { useApi } from './useApi'
 import { C, R, S, T } from './theme'
 import { FONT_SCALE, leading } from './fontScale'
 import { Loading } from './ui'
-import { textWidth } from './measure'
+import { drawnWidth } from './measure'
 
 export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueId: initialLeagueId = null }) {
   const winner = match?.winner?.name
@@ -145,8 +145,8 @@ export function PredictorsBody({ active = true, drawId, match, meId, initialLeag
   const colW = colsW ? (colsW - 1 - 2 * S.md) / 2 : 0
   const headScale = (() => {
     if (!colW || !d) return 1
-    const need = (label, n) => textWidth(label, HEAD_FONT, HEAD_SIZE)
-      + textWidth(headNote(n, fieldSize), NOTE_FONT, NOTE_SIZE)
+    const need = (label, n) => drawnWidth(label, HEAD_FONT, HEAD_SIZE)
+      + drawnWidth(headNote(n, fieldSize), NOTE_FONT, NOTE_SIZE)
     const worst = Math.max(need(leftLabel, d.correct?.length || 0), need('Wrong', d.incorrect?.length || 0))
     // 5% held back: kerning is not in the width tables.
     return Math.min(1, (0.95 * (colW - 2)) / worst)

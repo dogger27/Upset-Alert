@@ -22,7 +22,7 @@ import { pointStats, sanitizeSnapshots, timelineMarkers } from './scoreTimeline'
 import { Sheet } from './sheet'
 import { C, R, S, T } from './theme'
 import { FONT_SCALE, leading } from './fontScale.js'
-import { textWidth } from './measure'
+import { drawnWidth } from './measure'
 import { Loading } from './ui'
 import { useApi } from './useApi'
 import { surname } from './scoring'
@@ -49,7 +49,7 @@ const CAPTION_SIZE = 14 * FONT_SCALE
 // The narrowest a timeline button may get; they share whatever the legend
 // leaves, so on most phones they are wider.
 const NAV_MIN = 38
-const NUM_W = Math.ceil(textWidth('100%', 'Archivo_700Bold', 11 * FONT_SCALE)) + 3
+const NUM_W = Math.ceil(drawnWidth('100%', 'Archivo_700Bold', 11 * FONT_SCALE)) + 3
 
 // The ticks drawn twice as tall: the moments that end something.
 const TALL = new Set(['set', 'match'])
@@ -257,7 +257,7 @@ export function ScoreHistoryBody({ visible, entry, part = 'all' }) {
   // Sized to the widest line of what is SHOWN: stacked lines in the match
   // sheet's timeline, one joined line in the standalone sheet.
   const fitFor = (texts) => (texts.length && captionW > 0
-    ? Math.min(CAPTION_SIZE, ...texts.map(t => CAPTION_SIZE * (captionW - S.xs - 2) / textWidth(t, 'Archivo_700Bold', CAPTION_SIZE)))
+    ? Math.min(CAPTION_SIZE, ...texts.map(t => CAPTION_SIZE * (captionW - S.xs - 2) / drawnWidth(t, 'Archivo_700Bold', CAPTION_SIZE)))
     : CAPTION_SIZE)
   const captionSize = fitFor(caption ? [caption] : [])
   const linesSize = fitFor(captionLines)
@@ -577,7 +577,7 @@ const LEGEND_SIZE = 11
 const LEGEND_MIN = 0.85
 function legendLines(shown, room) {
   const lineW = (items, size) => items.reduce(
-    (w, [, label]) => w + 12 + textWidth(label, 'Archivo_500Medium', size * FONT_SCALE), 0)
+    (w, [, label]) => w + 12 + drawnWidth(label, 'Archivo_500Medium', size * FONT_SCALE), 0)
     + Math.max(0, items.length - 1) * S.sm
   if (!room) return { lines: [shown], size: LEGEND_SIZE }
   const one = lineW(shown, LEGEND_SIZE)
@@ -611,7 +611,7 @@ function StatNames({ left, right }) {
   const half = (w - S.sm) / 2
   const fit = (name) => {
     if (!w || !name) return name
-    const width = textWidth(name, 'Archivo_500Medium', 13 * FONT_SCALE)
+    const width = drawnWidth(name, 'Archivo_500Medium', 13 * FONT_SCALE)
     return width <= half - 2 ? name : surname(name)
   }
   return (
