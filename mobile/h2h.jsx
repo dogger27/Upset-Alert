@@ -140,13 +140,13 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
             (the key the rest of the sheet is read with), sized by measurement
             rather than truncated. */}
         <View style={s.head}>
-          {/* FROM THE OUTSIDE IN (owner, 2026-09-24): flag, the reader's 🤞 on
-              the name's outer edge, the name, then the result's ✓ or ✗ right
-              beside it — all over the side's underline. */}
+          {/* FROM THE SCREEN'S EDGE IN (owner, 2026-09-24): the reader's 🤞
+              outermost, then the flag, the name, and the result's ✓ or ✗
+              right beside it — all over the side's underline. */}
           <View style={s.who}>
             <View style={s.whoLine}>
-              <FlagSlot codes={[a?.nationality]} />
               {pickSide === 0 ? <PickFingers /> : null}
+              <FlagSlot codes={[a?.nationality]} />
               <TwoLineName name={a?.name} won={status?.winner == null ? null : status.winner === 0} />
             </View>
             <View style={[s.rule, { backgroundColor: SIDE.left.line }]} />
@@ -154,8 +154,8 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
           <View style={[s.who, s.whoEnd]}>
             <View style={[s.whoLine, s.whoLineEnd]}>
               <TwoLineName name={b?.name} end won={status?.winner == null ? null : status.winner === 1} />
-              {pickSide === 1 ? <PickFingers /> : null}
               <FlagSlot codes={[b?.nationality]} />
+              {pickSide === 1 ? <PickFingers /> : null}
             </View>
             <View style={[s.rule, { backgroundColor: SIDE.right.line }]} />
           </View>
@@ -301,7 +301,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   )
 }
 
-/* The reader's pick, on the outer edge of that player's name. Its own box,
+/* The reader's pick, at the screen's edge, outside that player's flag. Its own box,
    as tall as the emoji needs — inline in a Text line, iOS clipped its top. */
 function PickFingers() {
   return <Text style={s.pickInline} allowFontScaling={false} accessibilityLabel="Your pick">🤞</Text>
