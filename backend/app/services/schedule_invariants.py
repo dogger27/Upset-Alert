@@ -1182,6 +1182,28 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                     flag("singles_side_stacked", e,
                          f"side {side_key}: " + " / ".join(p.raw_name or "" for p in side))
 
+        # 2026-09-25, Chengdu COURT 2 (doc 516): "Alternate vs Marcelo MELO /
+        # Ryan SEGGERMAN", a doubles R16, stored as SINGLES — the placeholder
+        # made the row tbd, and with no slash on it `_classify` read tbd as
+        # "alternatives" and called it singles. The ingest then declared the
+        # two-name side unresolved too, so `singles_side_stacked` above was
+        # satisfied and the page served "MELO or SEGGERMAN".
+        #
+        # The stored row looks the same as an honest singles "Qualifier vs
+        # X or Y", so the tell is the draw: a main-draw singles alternative is
+        # between two people IN the singles draw. A role word facing two names
+        # that resolve to no singles entry at all is a doubles pair misfiled.
+        if e.discipline == "singles" and e.stage == "main":
+            for mine, other in ((na, nb), (nb, na)):
+                if (mine and all(_names_nobody(p.raw_name or "") for p in mine)
+                        and len(other) == 2
+                        and not any(p.draw_entry_id for p in other)
+                        and not any(_names_nobody(p.raw_name or "") for p in other)):
+                    flag("placeholder_faces_unlinked_pair", e,
+                         " / ".join(p.raw_name or "" for p in mine) + " vs "
+                         + " / ".join(p.raw_name or "" for p in other)
+                         + " — two names in no singles draw: a doubles pair?")
+
         # 2026-08-24, "KRAJICEK / MEKTIC vs CABRAL": a doubles team of one,
         # because an all-caps given name was dropped by the parser. A doubles
         # side that is neither empty (slot not yet decided) nor declared
