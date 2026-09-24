@@ -24,6 +24,7 @@ import { C, R, S, T } from './theme'
 import { leading } from './fontScale.js'
 import { Loading } from './ui'
 import { useApi } from './useApi'
+import { surname } from './scoring'
 import { FitText } from './cards'
 
 const THUMB = 26
@@ -161,11 +162,20 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   const prevMoment = [...moments].reverse().find(i => i < here)
   const nextMoment = moments.find(i => i > here)
   const goTo = (i) => { if (i != null) setPos(i >= max ? null : i) }
-  /* What the thumb is sitting on, in words: every kind ticked at this spot,
-     else the point's own label. */
-  const hereKinds = new Set(markers.filter(m => m.i === here).map(m => m.kind))
-  const caption = KINDS.filter(([k]) => hereKinds.has(k)).map(([, , word]) => word).join(' · ')
-    || prevPoint
+  /* WHAT THE THUMB IS ON, IN WORDS, AND WHOSE IT IS (owner, 2026-09-24):
+     every kind ticked at this spot, grouped under the player it belongs to —
+     "Sonego: Break · Set". A marker's side is the MATCH's orientation; the
+     sheet's top row is player1 only when topIsP1. Falls back to the point's
+     own label where nothing is ticked. */
+  const who = (side) => surname(cleanName(((side === 1) === topIsP1 ? a : b)[0]))
+  const hereMarks = markers.filter(m => m.i === here)
+  const caption = [1, 2].map(side => {
+    const kinds = new Set(hereMarks.filter(m => m.side === side).map(m => m.kind))
+    const words = KINDS.filter(([k]) => kinds.has(k)).map(([, , word]) => word)
+    if (!words.length) return null
+    const name = who(side)
+    return name ? `${name}: ${words.join(' · ')}` : words.join(' · ')
+  }).filter(Boolean).join('   ') || prevPoint
   const stats = useMemo(() => pointStats(snapshots), [snapshots])
   const statsUsable = stats.counted >= 20 && stats.counted / Math.max(1, stats.transitions) >= 0.7
 
@@ -270,6 +280,12 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
             <Scrub max={max} pos={atEnd ? max : pos} onChange={v => setPos(v >= max ? null : v)}
                    onHold={setHolding} markers={markers} topIsP1={topIsP1}
                    top={initialsOf(a[0]?.name)} bottom={initialsOf(b[0]?.name)} />
+            {/* What the thumb is on — every key moment, not only aces and double
+                faults — on its own fixed line ABOVE the legend (owner,
+                2026-09-24), so nothing below jumps as it changes. */}
+            <View style={s.captionRow} accessibilityLiveRegion="polite">
+              {caption ? <FitText style={s.prevPointValue} min={9}>{caption}</FitText> : null}
+            </View>
             {/* THE MOMENT NAVIGATOR (owner, 2026-09-24): previous / next big
                 moment either side of the legend, which sits centred in a pill
                 the arrows' own height. Two lines, fixed, so the tabs below
@@ -290,10 +306,6 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                 <NavButton dir="forward" disabled={nextMoment == null} onPress={() => goTo(nextMoment)} />
               </View>
             )}
-            {/* What the thumb is on, one fixed line, so nothing below jumps. */}
-            <View style={s.captionRow} accessibilityLiveRegion="polite">
-              {caption ? <FitText style={s.prevPointValue} min={9}>{caption}</FitText> : null}
-            </View>
             {/* Tabs only when there IS a second panel — a match with no
                 Sofascore event id keeps the single panel it always had. */}
             {/* The tab bar used to require statsUsable — the POINTS panel
