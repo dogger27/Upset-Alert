@@ -52,7 +52,7 @@ import { useApi } from './useApi'
 // The two rows whose figures are places in a list rather than counts.
 const HASHED = new Set(['rank', 'elo'])
 
-export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNext }) {
+export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNext, result }) {
   // Keyed on the pair so switching matches refetches; the backend caches, so a
   // reopen is cheap and there is nothing to memoise here.
   const live = !!(visible && a?.te_slug && b?.te_slug)
@@ -116,6 +116,22 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
               <View style={[s.rule, { backgroundColor: SIDE.right.line }]} />
             </View>
           </View>
+
+          {/* THIS MATCH'S RESULT, when it has one (owner, 2026-09-24): the
+              score centred under the names, a green tick at the winner's end
+              of the row and a red cross at the loser's — the scorecard's own
+              marks and colours. */}
+          {result ? (
+            <View style={s.result}>
+              <Text style={[s.resultMark, { color: result.winner === 0 ? C.greenLit : C.lossMark }]}>
+                {result.winner === 0 ? '✓' : '✗'}
+              </Text>
+              <Text style={s.resultLine}>{result.line || (result.winner === 0 ? 'Won' : 'Lost')}</Text>
+              <Text style={[s.resultMark, { color: result.winner === 1 ? C.greenLit : C.lossMark }]}>
+                {result.winner === 1 ? '✓' : '✗'}
+              </Text>
+            </View>
+          ) : null}
 
           {/* THE SPINE. The label is the axis and the figures flank it, so the
               eye runs down one narrow column of words while the comparison
@@ -335,6 +351,9 @@ const s = StyleSheet.create({
      third of a line above them. On the baseline the three read as one line,
      which is what they are. */
   head: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm },
+  result: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingHorizontal: S.xs },
+  resultMark: { fontSize: 22, lineHeight: leading(26), width: leading(26), textAlign: 'center', fontFamily: 'Archivo_700Bold' },
+  resultLine: { ...T.score, fontSize: 24, lineHeight: leading(28), flex: 1, textAlign: 'center', color: C.ink, fontVariant: ['tabular-nums'] },
   who: { flex: 1, minWidth: 0, gap: 3, alignSelf: 'flex-end' },
   whoEnd: { alignItems: 'flex-end' },
   whoLine: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch' },

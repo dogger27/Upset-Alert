@@ -415,7 +415,7 @@ export default function DrawScreen() {
         const next = at >= 0 && at < h2hOrder.length - 1 ? h2hOrder[at + 1] : null
         return (
           <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} drawId={t?.id}
-                    surface={draw.data?.surface}
+                    surface={draw.data?.surface} result={h2h?.result}
                     onPrev={prev ? () => setH2H(prev) : null}
                     onNext={next ? () => setH2H(next) : null} />
         )

@@ -31,6 +31,7 @@ import { useLiveUpdates } from '../../live'
 import { useApi } from '../../useApi'
 import { PHASES, byTimeOfDay, effectivePhase, matchPhase, phaseCounts, footTime, isLive, isSuspended, hasStarted, matchFromEntry, rowClock, rowWhen, sideFlags, startedFirst, whenLabel } from '../../schedule'
 import { leading } from '../../fontScale.js'
+import { scoreLine, winnerSideOf } from '../../score'
 import { FitText, FlagSlot, TierBadge, TourBadge } from '../../cards'
 import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
 import { useChoosableTournaments } from '../../choosableTournaments'
@@ -965,7 +966,7 @@ export default function ScheduleScreen() {
       {/* The surface comes off the ROW: a day mixes draws, so there is no one
           surface for the page. */}
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} drawId={h2h?.drawId}
-                surface={h2h?.surface} />
+                surface={h2h?.surface} result={h2h?.result} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
           and women's draws on one day, so there is no single draw to pass. */}
       <PredictorsSheet
@@ -1184,8 +1185,12 @@ function h2hPairOf(e) {
     name: p.entry_name || p.name, te_slug: p.te_slug, nationality: p.nationality,
     ranking: p.ranking, elo_rank: p.elo_rank, date_of_birth: p.date_of_birth,
   })
+  // A finished row carries its result into the sheet, in the row's own a/b
+  // order (owner, 2026-09-24).
+  const won = e.status === 'completed' ? winnerSideOf(e) : null
+  const result = won === 0 || won === 1 ? { winner: won, line: scoreLine(e.scores, ', ') } : null
   return e.discipline === 'singles' && a?.te_slug && b?.te_slug
-    ? { a: of(a), b: of(b), surface: e.surface, drawId: e.draw_id }
+    ? { a: of(a), b: of(b), surface: e.surface, drawId: e.draw_id, result }
     : null
 }
 
