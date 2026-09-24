@@ -49,7 +49,7 @@ import { ScrollPane } from './scrollPane'
 import { Sheet } from './sheet'
 import { PredictorsBody } from './predictors'
 import { ScoreHistoryBody } from './scoreHistory'
-import { C, PICK, R, S, SIDE, T } from './theme'
+import { BETTER, C, PICK, R, S, SIDE, T } from './theme'
 import { Loading } from './ui'
 import { useApi } from './useApi'
 
@@ -316,7 +316,8 @@ function SideMarks({ won }) {
    when it does not, and a quiet dash where we hold no number — a blank would
    read as a zero, and a zero is a claim. */
 function Figure({ v, lit, side, hashed }) {
-  const tone = side === 'left' ? SIDE.left : SIDE.right
+  // The better figure wears BETTER on either side — see theme.js.
+  const tone = BETTER
   const end = side === 'right'
   if (v == null) {
     return (

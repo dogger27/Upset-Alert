@@ -95,6 +95,12 @@ export const C = {
  * The clay plate is the value the clay-court tag already uses, referenced
  * rather than repeated, so there is one dark clay in this file.
  */
+/* THE BETTER FIGURE in a comparison (owner, 2026-09-24): one colour for
+   both players, and deliberately neither green nor red — beside a result's
+   tick and cross those would read as who WON the match. A calm blue: the
+   plate a step below the card, a mid edge, light ink. */
+export const BETTER = { ink: '#9cc0ff', line: '#4d7ab5', plate: '#15233a' }
+
 export const SIDE = {
   left:  { ink: C.greenBright, line: C.greenLit, plate: C.greenDeep },
   right: { ink: C.clayLight,   line: C.clay,     plate: C.surfaces.clay.bg },
