@@ -105,6 +105,8 @@ async def _fetch(event_id: int, finished: bool) -> dict:
     except Exception as exc:                                       # noqa: BLE001
         # Includes SofascoreBlocked. A decoration is never worth an error.
         logger.info("point-by-point unavailable for %s: %s", event_id, exc)
+        from app.services.sofascore_backoff import note_failure
+        note_failure("points", event_id, exc)
         return _CACHE.get(event_id, (None, False, {}))[2]
     if len(_CACHE) >= _CACHE_MAX:
         _CACHE.pop(next(iter(_CACHE)), None)
@@ -152,6 +154,12 @@ async def points_for(event_id: Optional[int], *, finished: bool,
         # the answer still does not cover us — some points never will.
         if fresh or datetime.now(timezone.utc) - at < MIN_REFETCH:
             return data
+
+    # A recent failure for this event stands until its floor passes; every
+    # poll asking again is the stream sofascore_backoff exists to stop.
+    from app.services.sofascore_backoff import held_off
+    if held_off("points", event_id):
+        return hit[2] if hit else {}
 
     task = _INFLIGHT.get(event_id)
     if task is None or task.done():

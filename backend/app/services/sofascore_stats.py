@@ -32,6 +32,7 @@ MIN_REFETCH = timedelta(seconds=45)
 # writes takes SQLite's single writer (see the reads-must-not-write memory).
 _CACHE: dict = {}                       # event_id -> (fetched_at, final, rows)
 _CACHE_MAX = 256
+_INFLIGHT: dict = {}                    # event_id -> the one fetch under way
 
 # What we show, in order, and where each comes from. `(group, item)` names the
 # Sofascore row; `pair` names a second row supplying the denominator when the
@@ -183,11 +184,24 @@ async def stats_for(event_id: Optional[int], *, finished: bool) -> dict:
         if was_final or datetime.now(timezone.utc) - at < MIN_REFETCH:
             return cached
 
+    from app.services.sofascore_backoff import held_off, note_failure
+    if held_off("stats", event_id):
+        return hit[2] if hit else {}
+
+    # ONE REQUEST PER EVENT IN FLIGHT: two readers opening the same match
+    # share the call instead of queueing two identical ones at the gate.
+    import asyncio
     from app.services import sofascore as sf
+    task = _INFLIGHT.get(event_id)
+    if task is None or task.done():
+        task = asyncio.ensure_future(sf._get(f"/event/{event_id}/statistics"))
+        _INFLIGHT[event_id] = task
+        task.add_done_callback(lambda t, e=event_id: _INFLIGHT.pop(e, None))
     try:
-        payload = await sf._get(f"/event/{event_id}/statistics")
+        payload = await asyncio.shield(task)
     except Exception as exc:                                       # noqa: BLE001
         logger.info("statistics unavailable for %s: %s", event_id, exc)
+        note_failure("stats", event_id, exc)
         return hit[2] if hit else {}
 
     idx = _index(payload)
