@@ -1871,6 +1871,11 @@ async def _check_rankings_health() -> None:
             )
 
 
+async def _sync_email_suppressions() -> None:
+    from app.services.email_suppression import sync
+    await sync()
+
+
 async def _sync_subscriptions() -> None:
     """Sync EventStreams subscriptions with active/pending tournaments + season pages."""
     async with AsyncSessionLocal() as db:
@@ -2460,6 +2465,16 @@ def start_scheduler() -> None:
         minutes=30,
         id="refresh_active",
         misfire_grace_time=300,
+    )
+    # Addresses that bounced or reported spam, read back from Resend so
+    # send_async stops writing to them (email_suppression.py).
+    scheduler.add_job(
+        _on_shutdown_quietly(_sync_email_suppressions),
+        "interval",
+        hours=1,
+        id="sync_email_suppressions",
+        misfire_grace_time=1800,
+        next_run_time=datetime.now(timezone.utc) + timedelta(minutes=3),
     )
     scheduler.add_job(
         _on_shutdown_quietly(_sync_subscriptions),

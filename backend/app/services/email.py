@@ -239,7 +239,8 @@ def _send(params: resend.Emails.SendParams) -> Optional[Exception]:
 
 async def send_async(params: resend.Emails.SendParams, *,
                      unsubscribe_url: str = "",
-                     unsubscribe_label: str = "") -> None:
+                     unsubscribe_label: str = "",
+                     essential: bool = False) -> None:
     if not settings.resend_api_key:
         return  # Email disabled in this environment (no RESEND_API_KEY set)
     if settings.environment != "production":
@@ -250,6 +251,18 @@ async def send_async(params: resend.Emails.SendParams, *,
         return
     from app.services.system_log import app_log
     params = _finalise(params, unsubscribe_url, unsubscribe_label)
+    # An address that bounced, or whose reader reported us as spam, is not
+    # written to again: each repeat is scored against the domain, and the
+    # domain's score is what files everyone else's mail as spam.
+    from app.services.email_suppression import allowed
+    wanted = list(params.get("to") or [])
+    to_send = await allowed(wanted, essential)
+    if not to_send:
+        logger.info("Email not sent — every recipient suppressed: %r → %s",
+                    params.get("subject"), wanted)
+        return
+    if len(to_send) != len(wanted):
+        params = {**params, "to": to_send}
     exc = await asyncio.to_thread(_send, params)
     to = params.get("to", [])
     subject = params.get("subject", "")
@@ -315,7 +328,7 @@ async def send_verification(email: str, username: str, token: str, code: str) ->
             and the unconfirmed account is removed on its own.
           </p>
         {_BODY_CLOSE}{_WRAP_CLOSE}""",
-    })
+    }, essential=True)
 
 
 async def send_welcome(email: str, username: str) -> None:
@@ -383,7 +396,7 @@ async def send_password_reset(email: str, reset_token: str) -> None:
             one has been given access to your account.
           </p>
         {_BODY_CLOSE}{_WRAP_CLOSE}""",
-    })
+    }, essential=True)
 
 
 def who_joined(username: str, full_name: Optional[str]) -> str:
