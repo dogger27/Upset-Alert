@@ -422,10 +422,10 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
           values). The border and the footer's rule come along — a pink card
           with the palette's grey-green edge reads as an unfinished state, not
           a colour choice. */}
-      {/* HALF-TRANSPARENT ON THE FULL CARDS (owner, 2026-09-24): Open and
-          Active sit on the page at 50% of their tint, so the page reads
-          through them. The week cards (`compact`) keep theirs solid. */}
-      <View style={[u.card, { backgroundColor: compact ? skin.card : halfAlpha(skin.card), borderColor: skin.line }]}>
+      {/* HALF-TRANSPARENT, FILL AND EDGE, ON EVERY CARD (owner, 2026-09-24):
+          Open, Active, Next week and Last week all sit on the page at 50% of
+          their tint and their border, so the page reads through them. */}
+      <View style={[u.card, { backgroundColor: halfAlpha(skin.card), borderColor: halfAlpha(skin.line) }]}>
         {combined ? (
           // Both tours, split down the bar. Men above, as everywhere else.
           <View style={{ width: 4 }}>
