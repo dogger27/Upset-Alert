@@ -122,7 +122,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
                         odds: ua.data ? [ua.data.p_a, ua.data.p_b] : null }), [view, surface, a, b, ua.data])
 
   const nMeet = view?.meetings?.length
-  const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `Meetings ${nMeet}` : 'Meetings'],
+  const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `Meetings (${nMeet})` : 'Meetings'],
                 ...(predictMatch ? [['prediction', 'Prediction']] : []),
                 ...(played ? [['history', 'Point history'], ['stats', 'Match stats']] : [])]
 

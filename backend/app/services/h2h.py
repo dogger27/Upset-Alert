@@ -40,22 +40,10 @@ def _canonical_pair(slug1: str, slug2: str) -> tuple[str, str]:
 # HTML parser
 # ---------------------------------------------------------------------------
 
-# TE labels qualifying rounds two ways depending on the event: some tournaments
-# get plain "Q1"/"Q2"/"Q3", others get "Q-R{size}" (round-of-N within the
-# qualifying bracket, mirroring main-draw naming). Collapse the latter to the
-# former. Grand Slam quali is 3 rounds (128->64->32, producing 16 qualifiers);
-# every other tour-level event is the standard 2-round quali (32->16).
-_GRAND_SLAMS = {"australian open", "french open", "roland garros", "wimbledon", "us open"}
-_QUAL_ROUND_MAP_GS = {"Q-R128": "Q1", "Q-R64": "Q2", "Q-R32": "Q3"}
-_QUAL_ROUND_MAP_STD = {"Q-R64": "Q1", "Q-R32": "Q1", "Q-R16": "Q2", "Q-R8": "Q1"}
-
-
-def _normalize_qual_round(round_str: Optional[str], tournament: Optional[str]) -> Optional[str]:
-    if not round_str or not round_str.startswith("Q-R"):
-        return round_str
-    is_gs = bool(tournament) and tournament.strip().lower() in _GRAND_SLAMS
-    mapping = _QUAL_ROUND_MAP_GS if is_gs else _QUAL_ROUND_MAP_STD
-    return mapping.get(round_str, round_str)
+# Qualifying round labels: one reader for every Tennis Explorer page
+# (services/te_rounds.py).
+from app.services.te_rounds import normalize_qual_round as _normalize_qual_round  # noqa: E402
+from app.services.te_rounds import normalize_rounds  # noqa: E402
 
 
 def _parse_score_cell(raw: str) -> str:
@@ -462,7 +450,7 @@ async def get_h2h(slug1: str, slug2: str, db: AsyncSession) -> dict:
 
     cached = await db.get(H2HCache, (slug_a, slug_b))
     if cached and cached.fetched_at >= _week_start_utc():
-        return cached.data_json
+        return normalize_rounds(cached.data_json)
 
     # A MISS SCRAPES TENNIS EXPLORER INSIDE THE REQUEST, and the cache expires
     # every Monday, so the first viewer of any pair each week pays for it and
@@ -476,7 +464,7 @@ async def get_h2h(slug1: str, slug2: str, db: AsyncSession) -> dict:
         if cached is not None:
             logger.warning("H2H scrape failed for %s/%s, serving the cached copy: %s",
                            slug_a, slug_b, exc)
-            return cached.data_json
+            return normalize_rounds(cached.data_json)
         raise
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -488,7 +476,7 @@ async def get_h2h(slug1: str, slug2: str, db: AsyncSession) -> dict:
     )
     await db.execute(stmt)
     await db.commit()
-    return data
+    return normalize_rounds(data)
 
 
 async def prefetch_h2h_for_draw(tournament_id: int) -> None:

@@ -64,7 +64,9 @@ def test_qualifying_rounds_are_form_too(singles):
     qualifier's line empty in our own data."""
     quals = [r for r in singles if r["qualifying"]]
     assert len(quals) == 8
-    assert quals[0]["round"] == "Q-R16"
+    # Read by te_rounds, as the head-to-head reads it: TE's "Q-R16" is the
+    # last round of a two-round qualifying draw.
+    assert quals[0]["round"] == "Q2"
 
 
 def test_a_quarter_final_is_not_qualifying(singles):

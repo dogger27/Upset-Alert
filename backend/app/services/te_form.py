@@ -58,6 +58,8 @@ import re
 from datetime import date
 from typing import Optional
 
+from app.services.te_rounds import normalize_qual_round
+
 logger = logging.getLogger(__name__)
 
 # Thirty is the owner's number, and it is also what one season's page holds for
@@ -239,7 +241,9 @@ def parse_player_matches(page: str, slug: str, season: Optional[int] = None,
             "score": _score_text(score_m.group(1)),
             "event": event,
             "level": level_of(path, event),
-            "round": _text(rnd.group(2)) if rnd else "",
+            # Read the way the head-to-head reads it (te_rounds): "Q-QF" is a
+            # qualifying round, and says so as "Q2".
+            "round": normalize_qual_round(_text(rnd.group(2)), event) if rnd else "",
             "round_long": (rnd.group(1) or "") if rnd else "",
             # SAID ONCE, HERE. "Q-R16" is qualifying and "QF" is a
             # quarter-final, and a caller testing the short label's first
