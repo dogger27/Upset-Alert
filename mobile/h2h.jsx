@@ -116,7 +116,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
                 ...(predictMatch ? [['prediction', 'Prediction']] : [])]
 
   return (
-    <Sheet visible={!!visible} onClose={onClose}
+    <Sheet visible={!!visible} onClose={onClose} height="80%"
            title={status?.line || 'Upcoming'}
            titleStyle={status?.live ? { color: C.greenLit } : !status ? { color: C.muted } : null}
            titleNav={onPrev !== undefined || onNext !== undefined ? { onPrev, onNext } : undefined}>
@@ -414,9 +414,13 @@ function TwoLineName({ name, end = false }) {
 
 const s = StyleSheet.create({
   body: { paddingBottom: S.md, gap: S.md },
-  // Shrinks like the ScrollPane it wraps, never grows: the sheet sizes to
-  // its content, and flex: 1 there would collapse to nothing.
-  swipeRoot: { flexShrink: 1, minHeight: 0 },
+  /* ONE HEIGHT, WHATEVER IS IN IT (owner, 2026-09-24: "always keep the
+     drawer at FULL height"). The sheet used to size to its content, so
+     stepping to the next match collapsed it to a spinner and grew it back
+     when the data landed, and each tab was a different height. It is a
+     fixed 80% of the screen now (the point history's size) and this fills
+     it; a short tab leaves room below rather than shrinking the sheet. */
+  swipeRoot: { flex: 1, minHeight: 0 },
 
   /* The headline. The record is the widest thing in the row and holds the
      middle; the names take what is left, evenly, and shrink into it. */
