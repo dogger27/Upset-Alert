@@ -40,8 +40,20 @@ from app.services.history import db as hdb
 
 logger = logging.getLogger(__name__)
 
-CANONICAL = "http://www.tennis-data.co.uk/{path}"
+# THE FILES MOVED IN SEPTEMBER 2026. tennis-data now serves them under an
+# opaque directory ("hrjk-85HytOjkhth76j_ygh4jf7/2026/2026.xlsx") and the
+# old /2026/2026.xlsx answers 404 — which went unseen for days because the
+# archive fallback kept answering with a seven-week-old capture. The prefix
+# looks deliberate and may rotate, so it is never hardcoded: the site's own
+# index pages are read for the current link, and the old layout stays as a
+# second try in case they ever move it back.
+INDEX_PAGES = ("https://www.tennis-data.co.uk/alldata.php", "https://www.tennis-data.co.uk/data.php")
+CANONICAL = "https://www.tennis-data.co.uk/{path}"
 WAYBACK = "https://web.archive.org/web/2026id_/http://www.tennis-data.co.uk/{path}"
+# How long the current season may go without a read from tennis-data itself
+# before a quiet night is a problem rather than a hiccup. The file is updated
+# weekly, so a night or three of either host being down costs nothing.
+FRESH_READ_GRACE_DAYS = 10
 USER_AGENT = "UpsetAlert/1.0 (+https://upsetalert.ca; tennis fantasy league; one fetch a week)"
 
 # The columns that carry a price, best first. W is the winner's price.
@@ -142,23 +154,67 @@ def year_paths(season: int, tour: str) -> str:
     return f"{season}{'w' if tour == 'wta' else ''}/{season}.xlsx"
 
 
-def fetch_workbook(season: int, tour: str, client=None) -> tuple:
-    """(rows, source). The canonical host first, the archive if it is down."""
+def discover_links(client) -> dict:
+    """{"2026w/2026.xlsx": absolute url} as tennis-data's own pages link them.
+
+    Keyed by the path's tail, so the caller asks for a season the way
+    `year_paths` names it whatever directory the site has put in front.
+    Empty when neither page can be read — the caller then tries the old
+    layout and the archive, exactly as before.
+    """
+    from urllib.parse import urljoin
+    for page in INDEX_PAGES:
+        try:
+            resp = client.get(page)
+        except Exception as exc:          # noqa: BLE001 — try the other page
+            logger.info("odds: index %s unreachable: %s", page, exc)
+            continue
+        if resp.status_code != 200:
+            logger.info("odds: index %s gave %s", page, resp.status_code)
+            continue
+        links = {}
+        for href in re.findall(r"""href\s*=\s*["']?([^"'\s>]+\.xlsx?)""", resp.text, re.I):
+            m = re.search(r"(\d{4}w?/\d{4}\.xlsx?)$", href)
+            if m:
+                links.setdefault(m.group(1), urljoin(str(resp.url), href))
+        if links:
+            return links
+    return {}
+
+
+def _capture_date(url: str) -> Optional[str]:
+    """The Wayback capture's date from the URL it redirected to, if any."""
+    m = re.search(r"/web/(\d{4})(\d{2})(\d{2})\d*", url or "")
+    return f"{m.group(1)}-{m.group(2)}-{m.group(3)}" if m else None
+
+
+def fetch_workbook(season: int, tour: str, client=None, links: Optional[dict] = None) -> tuple:
+    """(rows, source, tried). The link the site publishes first, then the
+    old layout, then the archive. `tried` says what each source that failed
+    answered, so a night with no source is diagnosable from system_logs."""
     import httpx
     path = year_paths(season, tour)
     owns = client is None
     client = client or httpx.Client(timeout=120, follow_redirects=True,
                                     headers={"User-Agent": USER_AGENT})
+    tried = []
+    candidates = []
+    if links and links.get(path):
+        candidates.append((links[path], "tennis-data.co.uk"))
+    if CANONICAL.format(path=path) not in [u for u, _ in candidates]:
+        candidates.append((CANONICAL.format(path=path), "tennis-data.co.uk"))
+    candidates.append((WAYBACK.format(path=path), "web.archive.org"))
     try:
-        for url, source in ((CANONICAL.format(path=path), "tennis-data.co.uk"),
-                            (WAYBACK.format(path=path), "web.archive.org")):
+        for url, source in candidates:
             try:
                 resp = client.get(url)
             except Exception as exc:      # noqa: BLE001 — a transport problem: try the next source
-                logger.info("odds: %s unreachable: %s", source, exc)
+                logger.info("odds: %s unreachable: %s", url, exc)
+                tried.append(f"{url}: {type(exc).__name__}: {exc}"[:200])
                 continue
             if resp.status_code != 200 or len(resp.content) < 10_000:
-                logger.info("odds: %s gave %s (%d bytes)", source, resp.status_code, len(resp.content))
+                logger.info("odds: %s gave %s (%d bytes)", url, resp.status_code, len(resp.content))
+                tried.append(f"{url}: HTTP {resp.status_code}, {len(resp.content)} bytes")
                 continue
             # A PARSE FAILURE IS NOT AN UNREACHABLE HOST, and must not be
             # reported as one. This block used to catch both: openpyxl was
@@ -166,14 +222,23 @@ def fetch_workbook(season: int, tour: str, client=None) -> tuple:
             # ImportError, and logged "source unreachable" — a wrong diagnosis
             # that pointed at the network instead of at a one-line fix.
             try:
-                return parse_workbook(resp.content), source
+                rows = parse_workbook(resp.content)
             except ImportError:
                 raise
             except Exception as exc:      # noqa: BLE001
                 logger.warning("odds: %s returned %d bytes that would not parse: %s",
-                               source, len(resp.content), exc)
+                               url, len(resp.content), exc)
+                tried.append(f"{url}: {len(resp.content)} bytes would not parse: {exc}"[:200])
                 continue
-        return [], None
+            if source == "web.archive.org":
+                # An archive copy is as old as its capture, and says so only
+                # in the URL it redirected to. Name it, or a weeks-old file
+                # reads as a healthy sync.
+                captured = _capture_date(str(resp.url))
+                if captured:
+                    source = f"web.archive.org (captured {captured})"
+            return rows, source, tried
+        return [], None, tried
     finally:
         if owns:
             client.close()
@@ -203,11 +268,11 @@ def _iso(value) -> Optional[str]:
         return None
 
 
-def load_season(conn, season: int, tour: str, client=None) -> dict:
+def load_season(conn, season: int, tour: str, client=None, links: Optional[dict] = None) -> dict:
     """Fetch one season for one tour and store every priced match."""
-    rows, source = fetch_workbook(season, tour, client)
+    rows, source, tried = fetch_workbook(season, tour, client, links)
     if not rows:
-        return {"season": season, "tour": tour, "rows": 0, "source": None}
+        return {"season": season, "tour": tour, "rows": 0, "source": None, "tried": tried}
     kept = []
     for r in rows:
         d = _iso(r.get("Date"))
@@ -236,7 +301,7 @@ def load_season(conn, season: int, tour: str, client=None) -> dict:
                 best_of=excluded.best_of, surface=excluded.surface, odds_w=excluded.odds_w,
                 odds_l=excluded.odds_l, book=excluded.book, p_market=excluded.p_market,
                 source=excluded.source, comment=excluded.comment""", kept)
-    return {"season": season, "tour": tour, "rows": len(kept), "source": source}
+    return {"season": season, "tour": tour, "rows": len(kept), "source": source, "tried": tried}
 
 
 def link_to_record(conn, since: str = "2000-01-01") -> dict:
@@ -316,6 +381,7 @@ def sync(conn, seasons: Optional[list] = None, tours=("atp", "wta")) -> dict:
     this_year = date.today().year
     out = {"seasons": [], "sources": set(), "skipped": []}
     with httpx.Client(timeout=120, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
+        links = None
         for season in seasons:
             for tour in tours:
                 if season != this_year and conn.execute(
@@ -323,7 +389,10 @@ def sync(conn, seasons: Optional[list] = None, tours=("atp", "wta")) -> dict:
                         (tour, season)).fetchone()[0]:
                     out["skipped"].append(f"{tour}{season}")
                     continue
-                got = load_season(conn, season, tour, client)
+                if links is None:
+                    links = discover_links(client)
+                    out["discovered"] = len(links)
+                got = load_season(conn, season, tour, client, links=links)
                 out["seasons"].append(got)
                 if got["source"]:
                     out["sources"].add(got["source"])
@@ -336,8 +405,15 @@ def sync(conn, seasons: Optional[list] = None, tours=("atp", "wta")) -> dict:
     held, attached = conn.execute(
         "SELECT count(*), sum(tml_winner_id IS NOT NULL) FROM market_odds").fetchone()
     out["held"], out["attached"] = held, attached or 0
+    # THE LAST FRESH READ is what says whether the yardstick is current:
+    # the live season read from tennis-data itself, not an archive copy.
+    fresh = any(s["season"] == this_year and s["rows"] and s["source"] == "tennis-data.co.uk"
+                for s in out["seasons"])
     with conn:
         hdb.set_meta(conn, "market_last_sync", date.today().isoformat())
+        if fresh:
+            hdb.set_meta(conn, "market_last_fresh_read", date.today().isoformat())
+    out["last_fresh_read"] = hdb.get_meta(conn, "market_last_fresh_read")
     return out
 
 
@@ -354,19 +430,41 @@ def market_probabilities(conn, since: str, tour: Optional[str] = None) -> dict:
     return {(t, w, l): p for t, w, l, p in conn.execute(q, args)}
 
 
+def _health(out: dict, today: Optional[date] = None) -> tuple:
+    """(level, reason). A night without a source is a state the fetcher
+    passes through — tennis-data answered 503 all night once, the archive
+    has hiccups — and the store it already holds is still good. What IS a
+    fault is the yardstick going stale: no fresh read of the live season
+    for longer than the site's weekly update cycle, or nothing held at all."""
+    today = today or date.today()
+    if not out.get("held"):
+        return "warning", "the store is empty"
+    last = out.get("last_fresh_read")
+    if not last:
+        return "warning", "tennis-data.co.uk has never been read directly"
+    try:
+        age = (today - date.fromisoformat(last)).days
+    except ValueError:
+        return "warning", f"unreadable last fresh read {last!r}"
+    if age > FRESH_READ_GRACE_DAYS:
+        return "warning", f"no fresh read from tennis-data.co.uk for {age} days (since {last})"
+    return "info", f"last fresh read from tennis-data.co.uk {last}"
+
+
 async def sync_async(seasons: Optional[list] = None) -> dict:
     from app.services.system_log import app_log
     out = await hdb.run(sync, seasons)
     total = sum(s["rows"] for s in out["seasons"])
-    # NOTHING AT ALL IS A WARNING, not an info line. The yardstick going
-    # quiet is exactly the failure that would otherwise sit unnoticed until
-    # someone next asked how good the model is.
-    level = "info" if total else "warning"
+    # STALENESS IS THE WARNING, not a quiet night. The yardstick going stale
+    # is exactly the failure that would otherwise sit unnoticed until someone
+    # next asked how good the model is — but one host being down for a night
+    # while the store is current is not that, and used to alarm as if it were.
+    level, reason = _health(out)
     pct = 100 * out["attached"] / out["held"] if out.get("held") else 0
     await app_log(level, "history",
                   f"market odds: {total} priced matches read from "
-                  f"{', '.join(out['sources']) or 'NO SOURCE REACHED'}; "
+                  f"{', '.join(out['sources']) or 'no source tonight'}; "
                   f"{out['attached']} of {out['held']} held matches are linked to the record "
-                  f"({pct:.0f}%), {out['link']['linked']} newly", out,
-                  dedup_key=None if total else "market_odds_empty", dedup_hours=12)
+                  f"({pct:.0f}%), {out['link']['linked']} newly; {reason}", out,
+                  dedup_key="market_odds_stale" if level == "warning" else None, dedup_hours=12)
     return out

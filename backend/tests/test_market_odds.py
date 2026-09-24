@@ -78,9 +78,10 @@ def test_a_past_season_is_fetched_once_and_the_current_one_always(tmp_path, monk
 
     asked = []
     monkeypatch.setattr(mod, "load_season",
-                        lambda c, season, tour, client=None: (asked.append((season, tour)) or
+                        lambda c, season, tour, client=None, links=None: (asked.append((season, tour)) or
                                                               {"season": season, "tour": tour, "rows": 0, "source": None}))
     monkeypatch.setattr(mod, "link_to_record", lambda c, since: {"linked": 0, "considered": 0, "ambiguous": 0, "unmatched": 0})
+    monkeypatch.setattr(mod, "discover_links", lambda client: {})
     out = mod.sync(conn, seasons=[year - 2, year - 1, year], tours=("atp",))
     # The season already held is skipped; the empty one and the live one are not.
     assert (year - 2, "atp") not in asked
@@ -119,3 +120,81 @@ def test_reloading_a_season_keeps_the_linkage_it_already_has():
     assert got[0] == 1.15 and got[1] == 0.82          # the price moved
     assert got[2] == "S0AG" and got[3] == "N409"      # the identity did not
     assert conn.execute("SELECT count(*) FROM market_odds").fetchone()[0] == 1
+
+
+class _Resp:
+    def __init__(self, status, content=b"", text="", url=""):
+        self.status_code, self.content, self.text, self.url = status, content, text, url
+
+
+class _Client:
+    """Answers by URL; anything unlisted is a 404."""
+    def __init__(self, pages):
+        self.pages, self.asked = pages, []
+
+    def get(self, url):
+        self.asked.append(url)
+        return self.pages.get(url) or _Resp(404, b"x" * 1271, url=url)
+
+
+def test_the_published_link_is_followed_wherever_the_site_moved_the_files(monkeypatch):
+    """September 2026: the files moved under an opaque directory and the old
+    /2026/2026.xlsx went 404. The index page is the authority for the path."""
+    from app.services.history import odds as mod
+    index = ('<A HREF="hrjk-85HytOjkhth76j_ygh4jf7/2026/2026.xlsx">2026</A>'
+             '<A HREF="hrjk-85HytOjkhth76j_ygh4jf7/2026w/2026.xlsx">2026</A>'
+             '<A HREF="hrjk-85HytOjkhth76j_ygh4jf7/2012/2012.xls">2012</A>')
+    new = "https://www.tennis-data.co.uk/hrjk-85HytOjkhth76j_ygh4jf7/2026w/2026.xlsx"
+    client = _Client({mod.INDEX_PAGES[0]: _Resp(200, text=index, url=mod.INDEX_PAGES[0]),
+                      new: _Resp(200, b"x" * 20_000, url=new)})
+    links = mod.discover_links(client)
+    assert links["2026w/2026.xlsx"] == new
+    assert links["2012/2012.xls"].endswith("/hrjk-85HytOjkhth76j_ygh4jf7/2012/2012.xls")
+    monkeypatch.setattr(mod, "parse_workbook", lambda content: [{"Winner": "A", "Loser": "B", "Date": "2026-01-01"}])
+    rows, source, tried = mod.fetch_workbook(2026, "wta", client, links)
+    assert rows and source == "tennis-data.co.uk" and tried == []
+    assert client.asked[-1] == new
+
+
+def test_a_night_with_no_source_says_what_each_one_answered_and_names_an_archive_copys_age(monkeypatch):
+    from app.services.history import odds as mod
+    monkeypatch.setattr(mod, "parse_workbook", lambda content: [{"Winner": "A", "Loser": "B", "Date": "2026-01-01"}])
+    rows, source, tried = mod.fetch_workbook(2026, "atp", _Client({}), {})
+    assert rows == [] and source is None
+    assert len(tried) == 2 and all("HTTP 404" in t for t in tried)
+    wb = mod.WAYBACK.format(path="2026/2026.xlsx")
+    client = _Client({wb: _Resp(200, b"x" * 20_000,
+                                url="https://web.archive.org/web/20260803192930id_/http://www.tennis-data.co.uk/2026/2026.xlsx")})
+    rows, source, tried = mod.fetch_workbook(2026, "atp", client, {})
+    assert rows and source == "web.archive.org (captured 2026-08-03)"
+
+
+def test_a_quiet_night_is_not_an_alarm_but_a_stale_yardstick_is():
+    """2026-09-24: both hosts failed for one night with 13,849 rows held and
+    the alarm fired as if the yardstick had gone. That is a state the fetcher
+    passes through; only staleness or an empty store is a fault."""
+    from datetime import date
+    from app.services.history.odds import _health
+    today = date(2026, 9, 24)
+    assert _health({"held": 13849, "last_fresh_read": "2026-09-23"}, today)[0] == "info"
+    assert _health({"held": 13849, "last_fresh_read": "2026-09-01"}, today)[0] == "warning"
+    assert _health({"held": 13849, "last_fresh_read": None}, today)[0] == "warning"
+    assert _health({"held": 0, "last_fresh_read": "2026-09-23"}, today)[0] == "warning"
+
+
+def test_only_a_direct_read_of_the_live_season_counts_as_fresh(monkeypatch):
+    import sqlite3
+    from datetime import date
+    from app.services.history import db as hdb, odds as mod
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(hdb.SCHEMA)
+    mod.ensure_schema(conn)
+    monkeypatch.setattr(mod, "discover_links", lambda client: {})
+    monkeypatch.setattr(mod, "link_to_record", lambda c, since: {"linked": 0, "considered": 0, "ambiguous": 0, "unmatched": 0})
+    year = date.today().year
+    monkeypatch.setattr(mod, "load_season", lambda c, season, tour, client=None, links=None:
+                        {"season": season, "tour": tour, "rows": 5, "source": "web.archive.org (captured 2026-08-03)"})
+    assert mod.sync(conn, seasons=[year], tours=("atp",))["last_fresh_read"] is None
+    monkeypatch.setattr(mod, "load_season", lambda c, season, tour, client=None, links=None:
+                        {"season": season, "tour": tour, "rows": 5, "source": "tennis-data.co.uk"})
+    assert mod.sync(conn, seasons=[year], tours=("atp",))["last_fresh_read"] == date.today().isoformat()
