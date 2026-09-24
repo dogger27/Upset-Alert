@@ -397,9 +397,24 @@ def _classify(match, *, before_main: bool = False, resolved: bool = True,
     #
     # A doubles alternative names a PAIR — "O. Luz / R. Matos" — so the slash is
     # what tells them apart, not the count.
+    #
+    # A PLACEHOLDER IS NOT AN ALTERNATIVE. When every unresolved side holds only
+    # the tour's role words ("Alternate", "Qualifier/LL"), nothing on the row is
+    # offering a choice between names — the seat is open, and the other side's
+    # two names are a PAIR, exactly as `Match._side_size` reads them. Chengdu's
+    # 2026-09-25 sheet (doc 516) printed COURT 2's doubles R16 as "Alternate vs
+    # Marcelo MELO / Ryan SEGGERMAN": the tbd flag with no slash anywhere made
+    # it singles, the ingest then declared the "stacked" side unresolved too,
+    # and the page served "MELO or SEGGERMAN" with no DOUBLES badge and no
+    # round. Law: `placeholder_faces_unlinked_pair`.
     tbd = bool(getattr(match, 'tbd', False))
     two_up = any('/' in n for n in list(match.side_a) + list(match.side_b))
-    discipline = 'doubles' if (match.is_doubles and (not tbd or two_up)) else 'singles'
+    open_sides = getattr(match, 'tbd_side', None) or ''
+    only_roles = bool(open_sides) and all(
+        names and all(is_placeholder(n) for n in names)
+        for names in (match.side_a if k == 'a' else match.side_b for k in open_sides))
+    discipline = ('doubles' if (match.is_doubles and (not tbd or two_up or only_roles))
+                  else 'singles')
 
     if (discipline == 'singles' and stage == 'main' and not resolved
             and (before_main or seen_qualifying)):
