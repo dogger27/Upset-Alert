@@ -149,11 +149,12 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   // left over is shared EQUALLY — so every tab has the same margin around
   // its word (owner, 2026-09-24), not one in proportion to its length.
   const TAB_PAD = 4
+  const TAB_RULE = 1.5
   const TAB_MAX = 18 * FONT_SCALE
   const tabUnit = tabs.map(([, l]) => textWidth(l, 'Archivo_700Bold', 1))
   const tabSize = (() => {
     if (!tabsW) return 13 * FONT_SCALE
-    const room = tabsW - 2 - tabs.length * (2 * TAB_PAD + 1)   // border, padding, rules
+    const room = tabsW - 1 - tabs.length * 2 * TAB_PAD - (tabs.length - 1) * TAB_RULE   // padding, rules
     return Math.max(8, Math.min(TAB_MAX, (room - 1) / tabUnit.reduce((a, b) => a + b, 0)))
   })()
 
@@ -201,7 +202,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
         <View style={s.tabs} onLayout={e => setTabsW(e.nativeEvent.layout.width)}>
           {tabs.map(([k, label], i) => (
             <Pressable key={k} onPress={() => setTab(k)} hitSlop={4}
-                       style={[s.tabBtn, { flexGrow: 1, flexBasis: tabUnit[i] * tabSize + 2 * TAB_PAD + (i > 0 ? 1 : 0) },
+                       style={[s.tabBtn, { flexGrow: 1, flexBasis: tabUnit[i] * tabSize + 2 * TAB_PAD + (i > 0 ? TAB_RULE : 0) },
                                i > 0 && s.tabBtnRule, shownTab === k && s.tabBtnOn]}
                        accessibilityRole="tab" accessibilityState={{ selected: shownTab === k }}>
               <Text style={[s.tab, shownTab === k && s.tabOn, { fontSize: tabSize }]}
@@ -522,15 +523,21 @@ const s = StyleSheet.create({
   nameRowEnd: { justifyContent: 'flex-end' },
   /* The tabs, the Points / Serve & Return pair's idiom: words, the chosen one
      in ink with a green underline. */
-  tabs: { flexDirection: 'row', marginTop: S.sm, marginBottom: S.sm,
-          borderWidth: 1, borderColor: C.border, borderRadius: R.sm, overflow: 'hidden' },
-  tabBtn: { alignItems: 'center', justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 4,
-            borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  // The rule between two tabs.
-  tabBtnRule: { borderLeftWidth: 1, borderLeftColor: C.border },
-  tabBtnOn: { borderBottomColor: C.greenLit, backgroundColor: C.raised },
+  /* THE TAB BAR AS COURT LINES (owner, 2026-09-24: "edge to edge, more
+     dominant borders, pimp it out"). A band across the whole sheet on the
+     sunken ground, ruled top and bottom in the brightest edge the palette
+     has, the tabs split by full-height lines like a court's. The chosen tab
+     is the one lit patch: court green, white type, and a bright baseline
+     along its foot. Everything else stays quiet so that patch is the news. */
+  tabs: { flexDirection: 'row', marginTop: S.sm, marginBottom: S.sm, marginHorizontal: -S.md,
+          backgroundColor: C.sunken, borderTopWidth: 2, borderBottomWidth: 2, borderColor: C.borderLit },
+  tabBtn: { alignItems: 'center', justifyContent: 'center', paddingVertical: 11, paddingHorizontal: 4,
+            borderBottomWidth: 3, borderBottomColor: 'transparent', marginBottom: -2 },
+  // The line between two tabs, full height.
+  tabBtnRule: { borderLeftWidth: 1.5, borderLeftColor: C.borderLit },
+  tabBtnOn: { backgroundColor: C.greenDeep, borderBottomColor: C.greenBright },
   tab: { ...T.smallMed, color: C.muted },
-  tabOn: { color: C.ink, fontFamily: 'Archivo_700Bold' },
+  tabOn: { color: '#ffffff', fontFamily: 'Archivo_700Bold' },
   /* Tight to the names above and the table below (owner, 2026-09-24: "remove
      all that excess space"): the body's gap cancelled to 2pt either side. */
   resultMark: { fontSize: 20 * FONT_SCALE, lineHeight: Math.round(24 * FONT_SCALE), fontFamily: 'Archivo_700Bold' },
