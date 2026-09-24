@@ -252,3 +252,27 @@ class TournamentCompleteNotification(Base):
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+
+
+class EmailSuppression(Base):
+    """
+    An address the mail providers have told us to stop writing to.
+
+    Filled hourly from Resend's own delivery log by email_suppression.sync().
+    A hard bounce stops every email; a spam complaint stops everything the
+    reader did not ask for this minute (digests, alerts) but still lets a
+    password reset or verification code through. Mailing either kind again is
+    what a provider scores the DOMAIN on — the 2026-09 log had one address
+    bounced six times and one complainer mailed twice more.
+    """
+
+    __tablename__ = "email_suppressions"
+
+    email: Mapped[str] = mapped_column(String, primary_key=True)
+    # "bounced" | "complained" | "suppressed" (Resend's own list, which a
+    # complaint or earlier bounce put it on).
+    reason: Mapped[str] = mapped_column(String, nullable=False)
+    event_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
