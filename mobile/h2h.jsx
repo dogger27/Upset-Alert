@@ -536,8 +536,13 @@ const s = StyleSheet.create({
   // The line between two tabs, full height.
   tabBtnRule: { borderLeftWidth: 1.5, borderLeftColor: C.borderLit },
   tabBtnOn: { backgroundColor: C.greenDeep, borderBottomColor: C.greenBright },
-  tab: { ...T.smallMed, color: C.muted },
-  tabOn: { color: '#ffffff', fontFamily: 'Archivo_700Bold' },
+  /* ONE WEIGHT FOR EVERY TAB (owner, 2026-09-24: margins must be equal). The
+     cells are sized from the words in BOLD; an unchosen tab drawn in the
+     medium weight was narrower than its cell by an amount that grew with the
+     word, so long labels sat in wide margins. Colour alone says which is
+     chosen, and choosing one no longer changes any word's width. */
+  tab: { ...T.smallMed, fontFamily: 'Archivo_700Bold', color: C.faint },
+  tabOn: { color: '#ffffff' },
   /* Tight to the names above and the table below (owner, 2026-09-24: "remove
      all that excess space"): the body's gap cancelled to 2pt either side. */
   resultMark: { fontSize: 20 * FONT_SCALE, lineHeight: Math.round(24 * FONT_SCALE), fontFamily: 'Archivo_700Bold' },
