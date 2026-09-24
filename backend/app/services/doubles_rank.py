@@ -203,12 +203,17 @@ async def _rank_field(db, entries, gender: str, week: date) -> dict[tuple[int, s
         initial and a surname; with two Pels on Tennis Explorer (David, Stijn)
         the token rules rightly refuse to guess — but the initial is stated,
         and it decides. Unique or nothing."""
-        words = name.split()
-        if len(words) < 2 or not all(len(w.rstrip(".")) == 1 for w in words[:-1]):
+        # Read off the PRINTED name: _name_words drops a lone initial, so
+        # "D Pel" reaches here as "Pel". "J-J Rojer" is initials too.
+        import re as _re
+        words = [w for w in _re.split(r"\s+", (name or "").strip()) if w]
+        if len(words) >= 2 and words[-1].isupper() and len(words[-1]) == 3:
+            words = words[:-1]                       # a trailing country code
+        if len(words) < 2 or not all(_re.fullmatch(r"[A-Za-z](?:[.-][A-Za-z])*\.?", w) for w in words[:-1]):
             return None
         from app.services.rankings import _norm
         sur = _norm(words[-1])
-        inits = [w.rstrip(".").lower() for w in words[:-1]]
+        inits = [w[0].lower() for w in words[:-1]]
         cands = [tp for tp in by_surname.get(sur.split()[0] if sur else "", [])
                  if (tp.first_name or "").lower().startswith(inits[0])
                  or any(t.startswith(inits[0]) and t != sur for t in (tp.name_norm or "").split())]
@@ -224,7 +229,7 @@ async def _rank_field(db, entries, gender: str, week: date) -> dict[tuple[int, s
         name = _name_words(p.raw_name)
         if not name:
             return None
-        return _match_token_set(name, te_index) or by_initial(name)
+        return _match_token_set(name, te_index) or by_initial(p.raw_name)
 
     # A PLAYER WITH NO DOUBLES RANKING ENTERS ON HER SINGLES ONE (owner,
     # 2026-09-24: Garland/Hsieh had no badge). Tennis Explorer has Joanna
