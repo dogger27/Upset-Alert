@@ -717,20 +717,25 @@ const s = StyleSheet.create({
      something pressed. The OUTER pair — big moments — carry the brand's green
      edge and bright arrows; the one-point steps stay neutral, so which button
      does more is visible before it is pressed. */
+  /* THE LIP IS A SHADOW, NOT A BORDER. A thicker, darker bottom border on a
+     rounded box is mitred into the side edges on iOS — the corners bent into
+     a dark crescent (owner's phone, 2026-09-24). One edge colour all round,
+     and the lip drawn as a hard 2pt shadow, which follows the corners. */
   navBtn: {
     flex: 1, minWidth: NAV_MIN, borderRadius: R.sm,
     backgroundColor: C.control, borderWidth: 1, borderColor: C.borderLit,
-    borderBottomWidth: 2, borderBottomColor: C.sunken,
     alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.55, shadowRadius: 0, shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  navBtnJump: { borderColor: C.greenMid, borderBottomColor: C.greenDeep },
+  navBtnJump: { borderColor: C.greenMid },
   // Two chevrons drawn into each other: ».
   doubleArrow: { flexDirection: 'row' },
   secondArrow: { marginLeft: -11 },
   // Pressed sinks: the deep green fill, the lip gone flat.
-  navBtnPressed: { backgroundColor: C.greenDeep, borderBottomWidth: 1, marginTop: 1 },
+  navBtnPressed: { backgroundColor: C.greenDeep, shadowOffset: { width: 0, height: 0 }, transform: [{ translateY: 1 }] },
   // Nowhere to go: back to the sheet's own card, a quiet edge, no lip.
-  navBtnOff: { backgroundColor: C.card, borderColor: C.border, borderBottomColor: C.border, borderBottomWidth: 1 },
+  navBtnOff: { backgroundColor: C.card, borderColor: C.border, shadowOpacity: 0, elevation: 0 },
   /* The key to the ticks is information, not a control, so it is set INTO
      the sheet — the sunken page colour with a hairline — where the buttons
      below stand out of it. Same corner as the buttons. */
