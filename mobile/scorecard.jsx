@@ -15,7 +15,7 @@
  */
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { EntryChip, FlagSlot, PICK_W, PlayerName, PosBadge, RoundChip, entryChipWidth } from './cards'
+import { EntryChip, FlagSlot, PICK_W, PlayerName, PosBadge, RoundChip, entryChipWidth, roundChipWidth } from './cards'
 import { Bump } from './fx'
 import { useFlashOnChange } from './scoreFx'
 import { leading } from './fontScale.js'
@@ -122,13 +122,15 @@ export function MatchCard({ e, scale = 1, badges = true, round = null }) {
                  the WC pill "should be way further left"), with the 🤞 — both
                  in PlayerName's `after`, whose width is taken off the name's
                  room before it is fitted, so neither is ever cut. */
-              after={(picked || entry) ? (
-                <>
-                  {picked ? <Text style={s.pick} accessibilityLabel="You predicted this player to win">🤞</Text> : null}
-                  {entry ? <EntryChip entryType={entry} /> : null}
-                </>
-              ) : null}
-              afterW={(picked ? PICK_W : 0) + (entry ? entryChipWidth(entry) : 0)}
+              after={picked ? <Text style={s.pick} accessibilityLabel="You predicted this player to win">🤞</Text> : null}
+              afterW={picked ? PICK_W : 0}
+              /* THE ENTRY CHIP IN ITS COLUMN, just left of the round (owner,
+                 2026-09-24) — unless the name needs the room: on the line
+                 without the round, the name may borrow the round's empty
+                 slot, pushing the chip right only as far as it must. */
+              trail={entry ? <EntryChip entryType={entry} /> : null}
+              trailW={entry ? entryChipWidth(entry) : 0}
+              reserve={idx !== 0 && round ? roundChipWidth(round) + S.sm : 0}
             />
             </View>
             {/* THE ROUND, DRAWN ON THE TOP PLAYER'S LINE AND HELD OPEN ON THE
@@ -139,7 +141,9 @@ export function MatchCard({ e, scale = 1, badges = true, round = null }) {
                 chips share one right edge — see RoundChip's `ghost`. Callers
                 that pass no round — every screen but the schedule's compact
                 list — render nothing and are untouched. */}
-            <RoundChip round={round} ghost={idx !== 0} />
+            {/* The round on the top line; the other line's slot is the name's
+                `reserve` above rather than an invisible chip. */}
+            {idx === 0 ? <RoundChip round={round} /> : null}
             {end && <Text style={s.end}>{end}</Text>}
             {winner != null && (
               <Text style={[s.mark, scale < 1 && { fontSize: Math.round(13 * scale), lineHeight: leading(Math.round(16 * scale)) }, { color: winner === idx ? C.greenLit : C.lossMark }]}>
