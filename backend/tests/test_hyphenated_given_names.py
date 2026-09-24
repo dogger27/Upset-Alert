@@ -467,3 +467,14 @@ def test_a_doubles_slot_is_not_its_players_singles_slot():
         await engine.dispose()
         return out
     assert _codes(asyncio.run(go()), "pairing_duplicated") == []
+
+
+def test_a_hyphen_on_tennis_explorers_side_matches_the_joined_sheet_name():
+    # TE lists "Xu Yi-Fan"; the sheet prints "Yifan XU". The Tang/Xu doubles
+    # pair went unranked because the index only held "xu yi fan" (2026-09-24).
+    from types import SimpleNamespace as NS
+    from app.services.rankings import _build_te_index, _match_token_set, _norm
+    ps = [NS(id=4400, name_raw="Xu Yi-Fan", name_norm=_norm("Xu Yi-Fan"), te_slug="xu-f5123")]
+    idx, _, _ = _build_te_index(ps)
+    assert _match_token_set("Yifan XU", idx) == 4400
+    assert _match_token_set("Yi-Fan XU", idx) == 4400
