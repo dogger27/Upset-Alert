@@ -192,6 +192,29 @@ async def _rank_field(db, entries, gender: str, week: date) -> dict[tuple[int, s
             if de.te_player_id:
                 te_by_entry[de.id] = de.te_player_id
 
+    by_surname: dict[str, list] = {}
+    for tp in te_players:
+        for tok in (tp.name_norm or "").split():
+            by_surname.setdefault(tok, []).append(tp)
+
+    def by_initial(name: str) -> Optional[int]:
+        """"D Pel" -> the one Pel whose FIRST name starts with D (owner,
+        2026-09-24: Arends/Pel had no seed). The ATP's doubles sheet prints an
+        initial and a surname; with two Pels on Tennis Explorer (David, Stijn)
+        the token rules rightly refuse to guess — but the initial is stated,
+        and it decides. Unique or nothing."""
+        words = name.split()
+        if len(words) < 2 or not all(len(w.rstrip(".")) == 1 for w in words[:-1]):
+            return None
+        from app.services.rankings import _norm
+        sur = _norm(words[-1])
+        inits = [w.rstrip(".").lower() for w in words[:-1]]
+        cands = [tp for tp in by_surname.get(sur.split()[0] if sur else "", [])
+                 if (tp.first_name or "").lower().startswith(inits[0])
+                 or any(t.startswith(inits[0]) and t != sur for t in (tp.name_norm or "").split())]
+        ids = {tp.id for tp in cands}
+        return ids.pop() if len(ids) == 1 else None
+
     def te_id_of(p) -> Optional[int]:
         if p.draw_entry_id and p.draw_entry_id in te_by_entry:
             return te_by_entry[p.draw_entry_id]
@@ -199,7 +222,9 @@ async def _rank_field(db, entries, gender: str, week: date) -> dict[tuple[int, s
         # hyphen, and `_match_token_set` retries the joined spelling ("So-hyun"
         # is TE's "Sohyun") only when it can still see one (doc 348).
         name = _name_words(p.raw_name)
-        return _match_token_set(name, te_index) if name else None
+        if not name:
+            return None
+        return _match_token_set(name, te_index) or by_initial(name)
 
     # A PLAYER WITH NO DOUBLES RANKING ENTERS ON HER SINGLES ONE (owner,
     # 2026-09-24: Garland/Hsieh had no badge). Tennis Explorer has Joanna
