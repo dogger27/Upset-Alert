@@ -261,7 +261,10 @@ export function TierBadge({ tour, tier, name, small }) {
      react-native-web follows the browser's. */
   const set = {
     fontSize: size,
-    marginTop: Platform.OS === 'web' ? 0 : lift,
+    /* One point higher than the measured lift (owner, 2026-09-24: "sitting a
+       tiny bit too low"), seen once the plate took an edge. Fixed points: the
+       stamp does not scale with the reader's text size. */
+    marginTop: Platform.OS === 'web' ? 0 : lift - 1,
     color: TOUR[key].text,
   }
   return (
