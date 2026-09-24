@@ -280,7 +280,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
             never moves as it changes. */}
         {max > 0 && (
           <View style={s.captionRow} accessibilityLiveRegion="polite">
-            {caption ? <FitText style={s.prevPointValue} min={9}>{caption}</FitText> : null}
+            {caption ? <FitText style={s.prevPointValue} min={9} align="right">{caption}</FitText> : null}
           </View>
         )}
         <MatchCard e={row} />
@@ -604,7 +604,7 @@ const s = StyleSheet.create({
   /* A line is drawn even when empty, so the pill is always two lines tall. */
   legendLine: { flexDirection: 'row', justifyContent: 'center', gap: S.sm, minHeight: leading(15) },
   captionRow: {
-    minHeight: leading(16), alignItems: 'flex-end', justifyContent: 'center',
+    minHeight: leading(16), alignItems: 'stretch', justifyContent: 'center',   // FitText measures the full row, aligns right
     marginBottom: -S.sm, paddingRight: S.xs,   // sits tight on the card it describes
   },
   prevPointValue: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold' },
