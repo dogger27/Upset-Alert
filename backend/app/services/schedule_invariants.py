@@ -558,6 +558,30 @@ def singles_stage_contradicts_round(rows) -> list:
     return out
 
 
+def round_unlabelled_beside_labelled(rows) -> list:
+    """Rows with no round on a day whose other rows of the same event have one.
+
+    2026-09-25, Hangzhou (doc 525): the ATP sheet prints no round, so every
+    row takes its round from the feed that declined the day, matched on the
+    pair of surnames. Sofascore wrote two doubles players "Rojer J-J" and
+    "Zhang Zhi" — surname-first, as in every "/" team, but with a given name
+    longer than the one letter sofa_schedule._surname_last recognised — so
+    their surnames read "j-j" and "zhi", two rows matched nothing, and the page
+    showed nine R16 chips and two blanks. Whatever named the siblings could
+    name these; a blank beside them is a key that failed to join, not a round
+    nobody knows. Judged per (stage, discipline): a qualifying day beside an
+    unlabelled main-draw one says nothing. An unresolved slot (is_tbd) is not
+    judged: one side is unknown, so there is no pair to join on, and a doubles
+    TBD has no bracket for _fill_tbd_rounds to read either. Stored at the
+    time: these two rows, and one doubles TBD, across 80 tournament-days.
+    """
+    labelled = {(r.stage, r.discipline) for r in rows
+                if (r.round_label or "").strip()}
+    return [r for r in rows
+            if not (r.round_label or "").strip() and not r.is_tbd
+            and (r.stage, r.discipline) in labelled]
+
+
 def court_unnamed(rows) -> list:
     """Rows stored with no court at all.
 
@@ -1892,6 +1916,12 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # "Followed By" matches no order; read as the played shape, both days
     # went up as eight matches on one blank court, chained to 11:36 PM. The
     # law passed it — nothing here asked where a row IS or who ordered it.
+    # 2026-09-25, Hangzhou doc 525 — see round_unlabelled_beside_labelled.
+    for e in round_unlabelled_beside_labelled(rows):
+        flag("round_unlabelled_beside_labelled", e,
+             f"{e.stage}/{e.discipline} on {e.court!r} #{e.court_order} has no "
+             f"round while the day's other {e.stage}/{e.discipline} rows do — "
+             f"the page shows a blank chip among labelled ones")
     for e in court_unnamed(rows):
         flag("court_unnamed", e,
              f"#{e.court_order} is stored with no court — every sheet prints "
