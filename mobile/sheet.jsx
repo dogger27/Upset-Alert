@@ -1,15 +1,16 @@
 /* The bottom sheet every "ask the user something" surface shares — H2H,
    predictors, create/join a league, invite. One place, so they all open, dim
    and close the same way. */
+import { Ionicons } from '@expo/vector-icons'
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { C, S, T } from './theme'
+import { C, R, S, T } from './theme'
 
 /* `height` fixes the sheet's height instead of letting it size to its content.
    Only worth passing when the content CHANGES height while open — the score
    history's tabs swap panels with different row counts, and a bottom sheet
    grows upward, so without this the timeline slid up the screen as the reader
    switched tabs. Everything else leaves it off and keeps hugging its content. */
-export function Sheet({ visible, onClose, title, titleRight, children, height }) {
+export function Sheet({ visible, onClose, title, titleRight, titleNav, children, height }) {
   return (
     <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={s.scrim} onPress={onClose} accessibilityLabel="Close" />
@@ -33,6 +34,16 @@ export function Sheet({ visible, onClose, title, titleRight, children, height })
               <Text style={[s.title, s.titleLeft]} numberOfLines={1}
                     adjustsFontSizeToFit minimumFontScale={0.75}>{title}</Text>
               {titleRight}
+            </View>
+          ) : titleNav ? (
+            /* PREVIOUS / NEXT EITHER SIDE OF THE TITLE (owner, 2026-09-24:
+               the H2H sheet steps through a draw's matches). Equal fixed
+               sides, so the title stays centred on the sheet; a side with
+               nowhere to go keeps its place, faded. */
+            <View style={s.titleRow}>
+              <TitleArrow dir="back" onPress={titleNav.onPrev} />
+              <Text style={[s.title, { flex: 1 }]}>{title}</Text>
+              <TitleArrow dir="forward" onPress={titleNav.onNext} />
             </View>
           ) : <Text style={s.title}>{title}</Text>
         ) : null}
@@ -59,6 +70,19 @@ export function Sheet({ visible, onClose, title, titleRight, children, height })
   )
 }
 
+function TitleArrow({ dir, onPress }) {
+  const off = !onPress
+  return (
+    <Pressable onPress={onPress} disabled={off} hitSlop={8}
+               accessibilityRole="button" accessibilityState={{ disabled: off }}
+               accessibilityLabel={dir === 'back' ? 'Previous match' : 'Next match'}
+               style={({ pressed }) => [s.titleArrow, pressed && !off && s.titleArrowPressed, off && s.titleArrowOff]}>
+      <Ionicons name={dir === 'back' ? 'chevron-back' : 'chevron-forward'} size={24}
+                color={off ? C.faint : C.ink} />
+    </Pressable>
+  )
+}
+
 const s = StyleSheet.create({
   scrim: { flex: 1, backgroundColor: '#000a' },
   sheet: {
@@ -71,6 +95,13 @@ const s = StyleSheet.create({
   title: { ...T.h2, color: C.ink, textAlign: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   titleLeft: { flex: 1, textAlign: 'left' },
+  // The point timeline's key, in small: control fill, lit edge, 8pt corner.
+  titleArrow: {
+    width: 44, height: 40, borderRadius: R.sm, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: C.control, borderWidth: 1, borderColor: C.borderLit,
+  },
+  titleArrowPressed: { backgroundColor: C.greenDeep },
+  titleArrowOff: { backgroundColor: 'transparent', borderColor: C.border, opacity: 0.6 },
   footer: {
     marginHorizontal: -S.md, paddingHorizontal: S.md, alignItems: 'center',
     borderTopWidth: 1, borderTopColor: C.border,

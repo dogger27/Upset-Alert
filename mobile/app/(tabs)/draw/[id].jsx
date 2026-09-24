@@ -38,7 +38,7 @@ import { currentRound } from '../../../rounds'
 import { C, R, S, T } from '../../../theme'
 import { DrawHeaderBar } from '../../../drawHeader'
 import { Card, ErrorNote, Loading, Muted, Screen, Title } from '../../../ui'
-import { BOX_PITCH, CHIP_OVERHANG, CONNECTOR_W, ChampionGroup, GROUP_H, MatchGroup, buildBracket } from '../../../bracket'
+import { BOX_PITCH, CHIP_OVERHANG, CONNECTOR_W, ChampionGroup, GROUP_H, MatchGroup, buildBracket, h2hPairOf } from '../../../bracket'
 import { RoundScrubView, useRoundScrub } from '../../../RoundScrub'
 import { RoundStrip } from '../../../RoundStrip'
 import { setCurrentDraw } from '../../../currentDraw'
@@ -162,6 +162,13 @@ export default function DrawScreen() {
   )
   const rounds = B.rounds
   const roundIdx = useMemo(() => new Map(rounds.map(([n], i) => [n, i])), [rounds])
+  /* EVERY MATCH WITH A HEAD-TO-HEAD, IN READING ORDER (owner, 2026-09-24):
+     down each round top to bottom, then on to the top of the next — what the
+     H2H sheet's arrows step through. Matches without one (a bye, a player
+     Tennis Explorer never matched) are stepped over, not stopped on. */
+  const h2hOrder = useMemo(
+    () => rounds.flatMap(([, list]) => list.map(m => h2hPairOf(m, B)).filter(Boolean)),
+    [rounds, B])
   /* ONE renderRow PER DATA CHANGE, not per render. The scrub memoises each
      row on its match and on this function; an inline arrow here made every
      mounted match group re-render on every render of this screen — a live
@@ -402,8 +409,17 @@ export default function DrawScreen() {
           is 64 mounted Modals. The match hands it a pair and it fetches. */}
       {/* The surface is the DRAW's here — one draw to a page — and one of the
           sheet's comparison rows is "on hard". */}
-      <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} drawId={t?.id}
-                surface={draw.data?.surface} />
+      {(() => {
+        const at = h2h ? h2hOrder.findIndex(p => p.matchId === h2h.matchId) : -1
+        const prev = at > 0 ? h2hOrder[at - 1] : null
+        const next = at >= 0 && at < h2hOrder.length - 1 ? h2hOrder[at + 1] : null
+        return (
+          <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} drawId={t?.id}
+                    surface={draw.data?.surface}
+                    onPrev={prev ? () => setH2H(prev) : null}
+                    onNext={next ? () => setH2H(next) : null} />
+        )
+      })()}
       <FinalGuessSheet tournamentId={Number(id)} visible={finalGuessOpen} onClose={() => setFinalGuessOpen(false)}
                        onSaved={() => setFinalGuessKey(k => k + 1)} />
       {/* The site's scoreInsteadOfPick: a started match answers a tap with its

@@ -313,6 +313,20 @@ function h2hPlayer(e) {
 }
 
 
+/* THE PAIR A MATCH'S H2H BUTTON OPENS, or null when it has none. H2H compares
+   who REALLY meets, the cascade only until that is known (resolveRealFirst).
+   Both matched to a Tennis Explorer profile, or no button: the endpoint has
+   nothing to say about a player it never matched. Exported so the draw page
+   can step the sheet through every match that has one, in bracket order. */
+export function h2hPairOf(m, B) {
+  if (!m || m.is_bye || m.champion) return null
+  const { p1: rA, p2: rB } = B.resolved[m.id] || {}
+  const hA = m.player1 ?? (rA != null ? B.playerById[rA] : null)
+  const hB = m.player2 ?? (rB != null ? B.playerById[rB] : null)
+  if (!(hA?.name && hB?.name && hA.te_slug && hB.te_slug)) return null
+  return { a: h2hPlayer(hA), b: h2hPlayer(hB), matchId: m.id }
+}
+
 function lastNameOf(full) {
   const parts = full.trim().split(/\s+/)
   return parts.length > 1 ? parts.slice(1).join(' ') : parts[0]
@@ -614,12 +628,8 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
   // live_scores[2] is 1 or 2 for p1/p2 — the top and bottom line.
   const serving = live ? (m.live_scores?.[2] ?? m.live_point?.serving ?? null) : null
 
-  /* H2H compares who REALLY meets, the cascade only until that is known
-     (resolveRealFirst). Both matched to a Tennis Explorer profile, or no
-     button: the endpoint has nothing to say about a player it never matched. */
-  const hA = m.player1 ?? (rA != null ? B.playerById[rA] : null)
-  const hB = m.player2 ?? (rB != null ? B.playerById[rB] : null)
-  const canH2H = !!(hA?.name && hB?.name && hA.te_slug && hB.te_slug)
+  const h2hPair = h2hPairOf(m, B)
+  const canH2H = !!h2hPair
 
   const pill = live ? (suspended ? 'SUSPENDED' : 'IN PROGRESS')
     : (!decided && !m.is_bye && m.expected_start_at ? 'SCHEDULED' : null)
@@ -758,13 +768,13 @@ export function MatchGroup({ m, roundIdx, B, drawRanks, zone, onH2H, onPredictor
         </Chip>
       )}
       {canH2H && onH2H && (
-        <Chip side="right" label={`Head-to-head: ${hA.name} vs ${hB.name}`}
+        <Chip side="right" label={`Head-to-head: ${h2hPair.a.name} vs ${h2hPair.b.name}`}
               /* THE WHOLE ENTRY, not a name and a slug (2026-09-23). The
                  sheet now compares the two players — flag, ranking, Elo, age
                  — and every one of those fields is already on the draw entry
                  the bracket drew this box from. Picking two of them out was
                  the only reason the sheet could not show the rest. */
-              onPress={() => onH2H({ a: h2hPlayer(hA), b: h2hPlayer(hB) })}>
+              onPress={() => onH2H(h2hPair)}>
           <Text style={s.chipText}>H2H</Text>
         </Chip>
       )}

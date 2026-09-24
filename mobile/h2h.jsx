@@ -34,7 +34,7 @@
  * the endpoint's own a/b again.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { getH2H, getPairOdds, getPlayerForm } from './api'
 import { FitText, FlagSlot, PlayerName } from './cards'
@@ -52,7 +52,7 @@ import { useApi } from './useApi'
 // The two rows whose figures are places in a list rather than counts.
 const HASHED = new Set(['rank', 'elo'])
 
-export function H2HSheet({ visible, onClose, a, b, surface, drawId }) {
+export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNext }) {
   // Keyed on the pair so switching matches refetches; the backend caches, so a
   // reopen is cheap and there is nothing to memoise here.
   const live = !!(visible && a?.te_slug && b?.te_slug)
@@ -73,6 +73,8 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId }) {
      overlay on an overlay, so the detail arrives as a line of the card
      itself, under the form it belongs to. */
   const [open, setOpen] = useState(null)
+  // Stepping to another match (the arrows) closes the result that was open.
+  useEffect(() => { setOpen(null) }, [a?.te_slug, b?.te_slug])
   const d = h2h.data
   const view = useMemo(() => orient(d, a?.te_slug), [d, a?.te_slug])
   const rows = useMemo(
@@ -80,7 +82,8 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId }) {
                         odds: ua.data ? [ua.data.p_a, ua.data.p_b] : null }), [view, surface, a, b, ua.data])
 
   return (
-    <Sheet visible={!!visible} onClose={onClose} title="Head to head">
+    <Sheet visible={!!visible} onClose={onClose} title="Head to head"
+           titleNav={onPrev !== undefined || onNext !== undefined ? { onPrev, onNext } : undefined}>
       {h2h.loading && !d ? <Loading /> : null}
       {h2h.error ? <Text style={s.err}>Couldn’t load the head-to-head.</Text> : null}
 
