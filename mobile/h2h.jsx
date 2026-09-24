@@ -506,31 +506,34 @@ function TwoLineName({ name, end = false, won = null }) {
   const fit = (text, style) => {
     const base = style.fontSize
     if (!w || !text) return base
-    // The ✓ / ✗ rides on the surname line, so that line's width counts it.
-    const need = drawnWidth(text, style.fontFamily, base * FONT_SCALE) + (style === s.whoName && mark ? MARK_W : 0)
+    // The ✓ / ✗ stands beside BOTH lines, so each line's room is less it.
+    const room = w - 1 - (mark ? MARK_W : 0)
+    const need = drawnWidth(text, style.fontFamily, base * FONT_SCALE)
     // NO FLOOR (owner, 2026-09-24: "Kovačevi / ć"): a name that needs to be
     // smaller than 70% to fit is made smaller, never broken across lines.
     // 3% held back for kerning, which the width tables do not carry.
-    return need <= 0.97 * (w - 1) ? base : (base * 0.97 * (w - 1)) / need
+    return need <= 0.97 * room ? base : (base * 0.97 * room) / need
   }
   const line = (text, style, extra) => {
     const size = fit(text, style)
-    const t = (
-      <Text style={[style, { fontSize: size * FONT_SCALE, lineHeight: Math.round((style.lineHeight * size) / style.fontSize) },
+    return (
+      <Text style={[style, extra, { fontSize: size * FONT_SCALE, lineHeight: Math.round((style.lineHeight * size) / style.fontSize) },
                     end && s.whoNameEnd]}
             allowFontScaling={false}>{text}</Text>
     )
-    // The surname carries the mark beside it, toward the middle.
-    return (
-      <View style={[s.nameRow, end && s.nameRowEnd, extra]}>
-        {style === s.whoName && end ? mark : null}{t}{style === s.whoName && !end ? mark : null}
-      </View>
-    )
   }
+  /* THE MARK CENTRED ON THE NAME, like the flag (owner, 2026-09-24): beside
+     the two lines as a block, toward the middle, not on the surname line. */
   return (
     <View style={s.whoNames} onLayout={e => setW(e.nativeEvent.layout.width)}>
-      {first ? line(first, s.whoFirst) : null}
-      {line(last, s.whoName, first ? s.whoLast : null)}
+      <View style={[s.nameRow, end && s.nameRowEnd]}>
+        {end ? mark : null}
+        <View style={[s.nameCol, end && s.nameColEnd]}>
+          {first ? line(first, s.whoFirst) : null}
+          {line(last, s.whoName, first ? s.whoLast : null)}
+        </View>
+        {end ? null : mark}
+      </View>
     </View>
   )
 }
@@ -569,6 +572,8 @@ const s = StyleSheet.create({
   pickInline: { fontSize: 15 * FONT_SCALE, lineHeight: Math.round(22 * FONT_SCALE) },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   nameRowEnd: { justifyContent: 'flex-end' },
+  nameCol: { flexShrink: 1, minWidth: 0 },
+  nameColEnd: { alignItems: 'flex-end' },
   /* The tabs, the Points / Serve & Return pair's idiom: words, the chosen one
      in ink with a green underline. */
   /* THE TAB BAR AS COURT LINES (owner, 2026-09-24: "edge to edge, more
