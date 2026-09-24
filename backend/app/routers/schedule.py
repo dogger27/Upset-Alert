@@ -438,6 +438,15 @@ async def _qualifying_ranks(db, fields: set) -> dict:
     return out
 
 
+def _printed_country(raw: Optional[str]) -> Optional[str]:
+    """A country code the sheet printed as the name's last word — "Qiuyu YE
+    CHN" — which ingest left in the name on some passes (2026-09-24). Only a
+    code we fly a flag for, so a surname in capitals is never read as one."""
+    from app.services.rankings import COUNTRY_TO_IOC
+    m = _re.search(r"\s([A-Z]{3})$", (raw or "").strip())
+    return m.group(1) if m and m.group(1) in set(COUNTRY_TO_IOC.values()) else None
+
+
 def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_bracket: bool,
                 slugs: dict = None, extra: dict = None, by_name: dict = None,
                 extra_by_name: dict = None, pair_rank: Optional[int] = None,
@@ -511,7 +520,7 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_brack
         # flag served anyway.
         # Last, a doubles player's country from their Tennis Explorer profile
         # (doubles_rank) — for the specialist the sheet printed bare.
-        nationality=served_nation(nats.get(p.draw_entry_id), p.nationality, te_nat),
+        nationality=served_nation(nats.get(p.draw_entry_id), p.nationality, _printed_country(p.raw_name), te_nat),
         seed=seed,
         draw_rank=draw_rank,
         entry_type=etype,
