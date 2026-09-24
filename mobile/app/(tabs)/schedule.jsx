@@ -1069,7 +1069,7 @@ function LineTag({ first, alt, style, textStyle, children, fit = true }) {
         <Text style={[s.rowWhen, textStyle]} numberOfLines={1}
               adjustsFontSizeToFit minimumFontScale={0.8}>{children}</Text>
       ) : (
-        <Text style={[s.rowWhen, textStyle, s.noShrink]}>{children}</Text>
+        <Text style={[s.rowWhen, textStyle, s.noShrink]} allowFontScaling={false}>{children}</Text>
       )}
     </View>
   )
@@ -1765,10 +1765,16 @@ const s = StyleSheet.create({
   miniTagWhen: { color: C.gold },
   // The postponed pill: an outlined box on the border, in the warning ink.
   noShrink: { flexShrink: 0 },
-  miniTagCentre: { position: 'absolute', top: -9, left: 0, right: 0, alignItems: 'center', zIndex: 2 },
+  // One point lower than the clock tags' -9 (owner, 2026-09-24).
+  miniTagCentre: { position: 'absolute', top: -8, left: 0, right: 0, alignItems: 'center', zIndex: 2 },
   miniTagFlag: { borderWidth: 1, borderColor: C.warn, borderRadius: 4, overflow: 'hidden', paddingHorizontal: 6, alignItems: 'center' },
-  // A line box the pill's own inner height, so iOS cannot seat the word low.
-  miniTagFlagText: { color: C.warn, fontFamily: 'Archivo_700Bold', textAlign: 'center', lineHeight: 14 },
+  /* FIXED SIZE, SEATED HIGH (owner, 2026-09-24). The pill is a fixed 16pt,
+     so a word that grew with the reader's text size overflowed it and was
+     clipped at the bottom; allowFontScaling is off where it is drawn. A line
+     box the pill's inner height, lifted a point, because iOS seats the
+     capitals below the centre of their line. */
+  miniTagFlagText: { color: C.warn, fontFamily: 'Archivo_700Bold', textAlign: 'center',
+                     fontSize: 11, lineHeight: 14, transform: [{ translateY: -1 }] },
   miniTagTourn: { flexShrink: 1, color: C.gold },
   miniTagHalf: { position: 'absolute', left: 0, right: 0, height: 8 },
   // A clear rule between matches (owner, 2026-09-17): two lines of box score
