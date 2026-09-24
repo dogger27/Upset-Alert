@@ -46,6 +46,9 @@ const TICK = { bp: C.breakPoint, sp: C.setPoint, mp: C.matchPoint, break: C.warn
 // The moment's words over the score: the size of the sheet's other small
 // text, scaled with the reader's text size (fixed per render, not by iOS).
 const CAPTION_SIZE = 14 * FONT_SCALE
+// The narrowest a timeline button may get; they share whatever the legend
+// leaves, so on most phones they are wider.
+const NAV_MIN = 38
 const NUM_W = Math.ceil(textWidth('100%', 'Archivo_700Bold', 11 * FONT_SCALE)) + 3
 
 const KINDS = [
@@ -129,8 +132,9 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   const [tab, setTab] = useState(null)
   const [captionW, setCaptionW] = useState(0)
   const [navW, setNavW] = useState(0)
-  // What the legend's pill can hold: its 70% cap, less its padding and border.
-  const legendRoom = navW ? navW * 0.7 - 2 * S.md - 4 : 0
+  // What the legend's pill can hold: the row less four buttons at their
+  // narrowest, the gaps between the five pieces, and the pill's padding.
+  const legendRoom = navW ? navW - 4 * NAV_MIN - 4 * S.sm - 2 * S.md - 4 : 0
 
   /* Snapshots arrive in the MATCH's orientation (side 1 = the bracket's
      player1); the sheet shows the SHEET's order, which need not agree. Line
@@ -324,7 +328,10 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                 never move as kinds appear. */}
             {markers.length > 0 && (
               <View style={s.navRow} onLayout={e => setNavW(e.nativeEvent.layout.width)}>
-                <NavButton dir="back" disabled={prevMoment == null} onPress={() => goTo(prevMoment)} />
+                {/* Outer pair: big moments (two arrows). Inner pair: one point
+                    at a time (owner, 2026-09-24). */}
+                <NavButton dir="back" jump disabled={prevMoment == null} onPress={() => goTo(prevMoment)} />
+                <NavButton dir="back" disabled={here <= 0} onPress={() => goTo(Math.max(0, here - 1))} />
                 <View style={s.legendPill}>
                   {(() => {
                     const shown = KINDS.filter(([k]) => markers.some(m => m.kind === k))
@@ -335,7 +342,8 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                     ))
                   })()}
                 </View>
-                <NavButton dir="forward" disabled={nextMoment == null} onPress={() => goTo(nextMoment)} />
+                <NavButton dir="forward" disabled={here >= max} onPress={() => goTo(here + 1)} />
+                <NavButton dir="forward" jump disabled={nextMoment == null} onPress={() => goTo(nextMoment)} />
               </View>
             )}
             {/* Tabs only when there IS a second panel — a match with no
@@ -496,15 +504,24 @@ function StatNames({ left, right }) {
   )
 }
 
-function NavButton({ dir, disabled, onPress }) {
+/* `jump`: to the previous / next big moment, drawn as two arrows. Without
+   it: one point back or forward. */
+function NavButton({ dir, jump = false, disabled, onPress }) {
+  const back = dir === 'back'
+  const icon = (
+    <Ionicons name={back ? 'chevron-back' : 'chevron-forward'} size={20}
+              color={disabled ? C.faint : C.ink} />
+  )
   return (
-    <Pressable onPress={onPress} disabled={disabled} hitSlop={6}
+    <Pressable onPress={onPress} disabled={disabled} hitSlop={4}
                accessibilityRole="button"
-               accessibilityLabel={dir === 'back' ? 'Previous big moment' : 'Next big moment'}
+               accessibilityLabel={jump ? (back ? 'Previous big moment' : 'Next big moment')
+                                        : (back ? 'Previous point' : 'Next point')}
                accessibilityState={{ disabled }}
                style={({ pressed }) => [s.navBtn, pressed && s.navBtnPressed, disabled && s.navBtnOff]}>
-      <Ionicons name={dir === 'back' ? 'chevron-back' : 'chevron-forward'} size={20}
-                color={disabled ? C.faint : C.ink} />
+      {jump ? (
+        <View style={s.doubleArrow}>{icon}<View style={s.secondArrow}>{icon}</View></View>
+      ) : icon}
     </Pressable>
   )
 }
@@ -661,13 +678,16 @@ const s = StyleSheet.create({
   /* The arrows take all the width the pill leaves, out to the sheet's
      padding (owner, 2026-09-24): wide targets, the legend still centred. */
   navBtn: {
-    flex: 1, minWidth: 44, borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn,
+    flex: 1, minWidth: NAV_MIN, borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn,
     backgroundColor: C.card, alignItems: 'center', justifyContent: 'center',
   },
+  // Two chevrons drawn into each other: ».
+  doubleArrow: { flexDirection: 'row' },
+  secondArrow: { marginLeft: -11 },
   navBtnPressed: { backgroundColor: C.greenDeep },
   navBtnOff: { opacity: 0.4 },
   legendPill: {
-    flexShrink: 0, maxWidth: '70%', justifyContent: 'center', gap: 3,
+    flexShrink: 0, justifyContent: 'center', gap: 3,
     paddingHorizontal: S.md, paddingVertical: 6,
     borderWidth: 1, borderColor: C.borderOn, borderRadius: R.pill,
   },
