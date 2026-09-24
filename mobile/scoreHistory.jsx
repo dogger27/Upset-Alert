@@ -233,7 +233,7 @@ export function ScoreHistoryBody({ visible, entry, part = 'all' }) {
      own label where nothing is ticked. */
   const who = (side) => surname(cleanName(((side === 1) === topIsP1 ? a : b)[0]))
   const hereMarks = markers.filter(m => m.i === here)
-  const caption = [1, 2].map(side => {
+  const captionParts = [1, 2].map(side => {
     // Numbered where the marker carries a count (owner, 2026-09-24): "Break
     // point #4" in that game, "Set point #2" in that set, "Match point #1"
     // in the match, "Ace #7" so far — see timelineMarkers.
@@ -242,11 +242,25 @@ export function ScoreHistoryBody({ visible, entry, part = 'all' }) {
       .map(m => (m.n ? `${word} #${m.n}` : word)))
     if (!words.length) return null
     const name = who(side)
-    return name ? `${name}: ${words.join(' · ')}` : words.join(' · ')
-  }).filter(Boolean).join('   ') || prevPoint || (here === 0 ? 'Match start' : null)
-  const captionSize = caption && captionW > 0
-    ? Math.min(CAPTION_SIZE, CAPTION_SIZE * (captionW - S.xs - 2) / textWidth(caption, 'Archivo_700Bold', CAPTION_SIZE))
-    : CAPTION_SIZE
+    return { side, text: name ? `${name}: ${words.join(' · ')}` : words.join(' · ') }
+  }).filter(Boolean)
+  /* TWO PLAYERS' MOMENTS ON ONE POINT ARE TWO LINES, the SERVER'S first
+     (owner, 2026-09-24) — "Eala: Double fault #5" over "Prozorova: Break
+     point #1". The point's server is the one serving BEFORE it: a snapshot's
+     own `serving` is who serves next. */
+  const pointAt = atEnd ? max - 1 : pos
+  const pointServer = snapshots[pointAt - 1]?.serving ?? snapshots[pointAt]?.serving
+  captionParts.sort((x, y) => (x.side === pointServer ? -1 : 0) - (y.side === pointServer ? -1 : 0))
+  const captionLines = captionParts.length ? captionParts.map(c => c.text)
+    : [prevPoint || (here === 0 ? 'Match start' : null)].filter(Boolean)
+  const caption = captionLines.join('   ') || null
+  // Sized to the widest line of what is SHOWN: stacked lines in the match
+  // sheet's timeline, one joined line in the standalone sheet.
+  const fitFor = (texts) => (texts.length && captionW > 0
+    ? Math.min(CAPTION_SIZE, ...texts.map(t => CAPTION_SIZE * (captionW - S.xs - 2) / textWidth(t, 'Archivo_700Bold', CAPTION_SIZE)))
+    : CAPTION_SIZE)
+  const captionSize = fitFor(caption ? [caption] : [])
+  const linesSize = fitFor(captionLines)
   const stats = useMemo(() => pointStats(snapshots), [snapshots])
   const statsUsable = stats.counted >= 20 && stats.counted / Math.max(1, stats.transitions) >= 0.7
 
@@ -326,7 +340,9 @@ export function ScoreHistoryBody({ visible, entry, part = 'all' }) {
           there — it changes on every drag, and a number that moves sideways
           while you read it is the one thing this row must not do. The other
           two are pinned to the edges and simply absent when unknown. */}
-      {timeline && <View style={s.head}>
+      {/* The scrub's clock is the standalone sheet's; the match sheet drops it
+          (owner, 2026-09-24: "not helpful enough"). */}
+      {part === 'all' && <View style={s.head}>
         <View style={s.headSide}>
           {part === 'all' && data?.round_label ? (
             <Text style={s.roundPill}>{data.round_label}</Text>
@@ -372,17 +388,17 @@ export function ScoreHistoryBody({ visible, entry, part = 'all' }) {
         {timeline && max > 0 && (
           <>
             {part === 'timeline' && max > 0 && (
-              <View style={[s.captionRow, s.captionCentre]} accessibilityLiveRegion="polite"
+              <View style={s.captionTwo} accessibilityLiveRegion="polite"
                     onLayout={e => setCaptionW(e.nativeEvent.layout.width)}>
                 {/* NOT FitText: its adjustsFontSizeToFit backstop, in a box with
                     room to spare, drops to its floor on iOS — "Hurkacz: Match" at
                     a few points (owner's phone, 2026-09-24; the same trap as the
                     day strip's caption). Full size, measured here, and smaller
                     only when the words genuinely do not fit the line. */}
-                {caption ? (
-                  <Text style={[s.caption, captionSize < CAPTION_SIZE && { fontSize: captionSize }]}
-                        allowFontScaling={false}>{caption}</Text>
-                ) : null}
+                {captionLines.map(t => (
+                  <Text key={t} style={[s.caption, linesSize < CAPTION_SIZE && { fontSize: linesSize }]}
+                        allowFontScaling={false}>{t}</Text>
+                ))}
               </View>
             )}
             <Scrub max={max} pos={atEnd ? max : pos} onChange={v => setPos(v >= max ? null : v)}
@@ -831,8 +847,11 @@ const s = StyleSheet.create({
     height: leading(20), flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
     marginBottom: -S.sm, paddingRight: S.xs,   // sits tight on the card it describes
   },
-  // The match sheet's timeline: centred over the slider (owner, 2026-09-24).
-  captionCentre: { justifyContent: 'center', paddingRight: 0, marginBottom: -S.xs },
+  /* The match sheet's timeline caption: centred over the slider, always TWO
+     lines tall whether it holds none, one or two (owner, 2026-09-24: "do not
+     shrink or expand it"), so nothing below moves as the thumb does. */
+  captionTwo: { height: 2 * Math.round(CAPTION_SIZE * 1.3), alignItems: 'center', justifyContent: 'center',
+                marginBottom: -S.xs },
   caption: { fontFamily: 'Archivo_700Bold', fontSize: CAPTION_SIZE, color: C.ink, flexShrink: 0 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendBox: { width: 8, height: 8, borderRadius: 2 },
