@@ -55,6 +55,8 @@ import { useApi } from './useApi'
 
 // The two rows whose figures are places in a list rather than counts.
 const HASHED = new Set(['rank', 'elo'])
+// The inline 🤞 and the space beside it, for measuring the surname line.
+const PICK_W = 22 * FONT_SCALE
 
 /* THE MATCH SHEET (owner, 2026-09-24): one header for the match — its score
    as the title, the arrows, both players with their flags, and on the inside
@@ -143,15 +145,15 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
           <View style={s.who}>
             <View style={s.whoLine}>
               <FlagSlot codes={[a?.nationality]} />
-              <TwoLineName name={a?.name} />
+              <TwoLineName name={a?.name} picked={pickSide === 0} />
             </View>
             <View style={[s.rule, { backgroundColor: SIDE.left.line }]} />
           </View>
-          <SideMarks won={status?.winner == null ? null : status.winner === 0} picked={pickSide === 0} />
-          <SideMarks won={status?.winner == null ? null : status.winner === 1} picked={pickSide === 1}  end />
+          <SideMarks won={status?.winner == null ? null : status.winner === 0} />
+          <SideMarks won={status?.winner == null ? null : status.winner === 1} />
           <View style={[s.who, s.whoEnd]}>
             <View style={[s.whoLine, s.whoLineEnd]}>
-              <TwoLineName name={b?.name} end />
+              <TwoLineName name={b?.name} end picked={pickSide === 1} />
               <FlagSlot codes={[b?.nationality]} />
             </View>
             <View style={[s.rule, { backgroundColor: SIDE.right.line }]} />
@@ -298,20 +300,14 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   )
 }
 
-/* The inside of a name: the result mark (✓ / ✗, once decided) and the
-   reader's 🤞. Toward the middle on both sides, so the marks meet. */
-function SideMarks({ won, picked, end = false }) {
-  if (won == null && !picked) return <View style={s.marks} />
-  const mark = won == null ? null : (
-    <Text style={[s.resultMark, { color: won ? C.greenLit : C.lossMark }]}
-          accessibilityLabel={won ? 'Won' : 'Lost'}>{won ? '✓' : '✗'}</Text>
-  )
-  const fingers = picked
-    ? <Text style={s.pickMark} accessibilityLabel="Your pick">🤞</Text>
-    : null
+/* The inside of a name: the result mark (✓ / ✗, once decided), toward the
+   middle on both sides so the two marks face each other. */
+function SideMarks({ won }) {
+  if (won == null) return <View style={s.marks} />
   return (
     <View style={s.marks}>
-      {end ? <>{fingers}{mark}</> : <>{mark}{fingers}</>}
+      <Text style={[s.resultMark, { color: won ? C.greenLit : C.lossMark }]}
+            accessibilityLabel={won ? 'Won' : 'Lost'}>{won ? '✓' : '✗'}</Text>
     </View>
   )
 }
@@ -398,7 +394,7 @@ function Form({ form, side, end = false, open, onOpen }) {
 /* FIRST NAME OVER SURNAME (owner, 2026-09-24: "two lines for the name").
    The surname is the headline, the first name the line above it; each shrinks
    to its own width rather than wrapping or ending in "…". */
-function TwoLineName({ name, end = false }) {
+function TwoLineName({ name, end = false, picked = false }) {
   const [first, last] = nameLines(name)
   /* PLAIN TEXT, SIZED BY ARITHMETIC — no adjustsFontSizeToFit (owner,
      2026-09-24: names blank, then "miniscule"). iOS's shrink-to-fit reads a
@@ -409,15 +405,23 @@ function TwoLineName({ name, end = false }) {
   const fit = (text, style) => {
     const base = style.fontSize
     if (!w || !text) return base
-    const need = textWidth(text, style.fontFamily, base * FONT_SCALE)
+    // The 🤞 rides on the surname line, so that line's width counts it.
+    const need = textWidth(text, style.fontFamily, base * FONT_SCALE) + (style === s.whoName && picked ? PICK_W : 0)
     return need <= w - 1 ? base : Math.max(base * 0.7, (base * (w - 1)) / need)
   }
+  /* 🤞 DIRECTLY BESIDE THE NAME (owner, 2026-09-24): on the surname line,
+     after it on the left, before it on the right — so it can only belong to
+     the name it touches, never read as floating between the two players. */
   const line = (text, style, extra) => {
     const size = fit(text, style)
+    const fingers = style === s.whoName && picked
+      ? <Text style={s.pickInline} accessibilityLabel="Your pick">🤞</Text> : null
     return (
       <Text style={[style, extra, { fontSize: size * FONT_SCALE, lineHeight: Math.round((style.lineHeight * size) / style.fontSize) },
                     end && s.whoNameEnd]}
-            allowFontScaling={false}>{text}</Text>
+            allowFontScaling={false}>
+        {end && fingers ? <>{fingers}{' '}</> : null}{text}{!end && fingers ? <>{' '}{fingers}</> : null}
+      </Text>
     )
   }
   return (
@@ -449,7 +453,7 @@ const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: S.xs, marginTop: S.xs },
   // The marks' column, toward the middle; empty when there is nothing to say.
   marks: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 4 },
-  pickMark: { fontSize: 18, lineHeight: leading(24) },
+  pickInline: { fontSize: 15 * FONT_SCALE },
   /* The tabs, the Points / Serve & Return pair's idiom: words, the chosen one
      in ink with a green underline. */
   tabsScroll: { flexGrow: 0, marginTop: S.sm, marginBottom: S.sm,
