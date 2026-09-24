@@ -41,7 +41,8 @@ import { getH2H, getPairOdds, getPlayerForm } from './api'
 import { FitText, FlagSlot, PlayerName } from './cards'
 import { nameLines } from './names'
 import { shortDay } from './dates'
-import { leading } from './fontScale.js'
+import { FONT_SCALE, leading } from './fontScale.js'
+import { textWidth } from './measure'
 import { FORM_GAP, compareRows, formChipText, formChips, formDetail, formGrid, orient, roundWord, shortEvent, singlesOnly }
   from './h2hView.js'
 import { ScrollPane } from './scrollPane'
@@ -383,18 +384,30 @@ function Form({ form, side, end = false, open, onOpen }) {
    to its own width rather than wrapping or ending in "…". */
 function TwoLineName({ name, end = false }) {
   const [first, last] = nameLines(name)
-  const align = end ? 'right' : 'left'
+  /* PLAIN TEXT, SIZED BY ARITHMETIC — no adjustsFontSizeToFit (owner,
+     2026-09-24: names blank, then "miniscule"). iOS's shrink-to-fit reads a
+     box's slack or its height as a reason to shrink, and in the fixed header
+     it did both. Each line is its style's own size, made smaller only when
+     the font's own measurement says it does not fit the column's width. */
+  const [w, setW] = useState(0)
+  const fit = (text, style) => {
+    const base = style.fontSize
+    if (!w || !text) return base
+    const need = textWidth(text, style.fontFamily, base * FONT_SCALE)
+    return need <= w - 1 ? base : Math.max(base * 0.7, (base * (w - 1)) / need)
+  }
+  const line = (text, style, extra) => {
+    const size = fit(text, style)
+    return (
+      <Text style={[style, extra, { fontSize: size * FONT_SCALE, lineHeight: Math.round((style.lineHeight * size) / style.fontSize) },
+                    end && s.whoNameEnd]}
+            allowFontScaling={false}>{text}</Text>
+    )
+  }
   return (
-    <View style={s.whoNames}>
-      {/* Each line in a box of its own height: FitText's slot is flex:1, and
-          two of them in a column shared out whatever height the column had —
-          a gap between the names that grew with the row (owner, 2026-09-24:
-          "remove that gap"). The surname is pulled up by the room iOS leaves
-          above a line's capitals, so it sits directly under the first name. */}
-      {first ? <View style={[s.whoLineBox, s.whoFirstBox]}><FitText style={s.whoFirst} min={9} align={align}>{first}</FitText></View> : null}
-      <View style={[s.whoLineBox, s.whoLastBox, first ? s.whoLast : null]}>
-        <FitText style={s.whoName} min={10} align={align}>{last}</FitText>
-      </View>
+    <View style={s.whoNames} onLayout={e => setW(e.nativeEvent.layout.width)}>
+      {first ? line(first, s.whoFirst) : null}
+      {line(last, s.whoName, first ? s.whoLast : null)}
     </View>
   )
 }
@@ -434,14 +447,7 @@ const s = StyleSheet.create({
   whoLineEnd: { justifyContent: 'flex-end' },
   whoName: { ...T.bodyBold, color: C.ink, flexShrink: 1 },
   whoNames: { flex: 1, minWidth: 0 },
-  whoLineBox: { flexGrow: 0, flexShrink: 0 },
-  /* EACH LINE ITS OWN EXACT HEIGHT (owner, 2026-09-24: "the player names are
-     not showing"). FitText's slot is flex: 1; in a box with no height of its
-     own that is a height of zero, and iOS's shrink-to-fit then draws nothing.
-     Inside the old scroll view the box happened to get one; in the fixed
-     header above the tabs it did not. One line's height each, stated. */
-  whoFirstBox: { height: T.small.lineHeight },
-  whoLastBox: { height: T.bodyBold.lineHeight },
+
   whoLast: { marginTop: -leading(6) },
   whoFirst: { ...T.small, color: C.inkBody },
   whoNameEnd: { textAlign: 'right' },
