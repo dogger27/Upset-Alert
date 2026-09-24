@@ -308,10 +308,57 @@ def rounds_by_pair(matches) -> dict:
     return out
 
 
+def drop_unplaced(parts: dict, stored: list[tuple]) -> list[str]:
+    """Take out of `parts` the Sofascore rows with no court that the day's
+    stored schedule does not print either; one "A v B" per row taken out.
+
+    SOFASCORE PARKS A MATCH IT HAS NOT SCHEDULED on a day with no court. Its
+    R16 fixtures appear the moment both players are known, dated to the next
+    day at the session's opening hour and with no venue, until the order of
+    play that really schedules them is out (Chengdu 2026-09-25: Cerundolo v
+    Davidovich Fokina, Vacherot v Harris and Damm v Hurkacz at 13:00 with no
+    court, where the published sheet has four singles and none of them;
+    Hangzhou's Halys v Safiullin the same at 10:00). One such row declined the
+    whole day, so every day of both tournaments began on the PDF and stayed
+    there for hours after the feed had placed every match the sheet printed
+    (shadow: 12/12 and 11/11).
+
+    A courtless row the stored day DOES print is a match Sofascore has not
+    placed yet, not a parked one, and stays in — the day is then declined as
+    before. With nothing stored this does nothing, so a day's first sighting
+    still goes to the PDF, which then answers the question for the next tick.
+    Matched on surnames within one discipline, as `accounts_for` does: a
+    parked singles player often has a doubles match on the same day.
+    """
+    from app.services import sofa_schedule
+    printed: dict = {}
+    for disc, names in stored or []:
+        printed.setdefault(disc, set()).update(names or ())
+    if not printed:
+        return []
+    dropped = []
+    for part in parts.get("sofa") or []:
+        if part.get("courts_only"):
+            continue
+        kept = []
+        for e in json.loads(part["doc"]):
+            if not ((e.get("venue") or {}).get("name") or "").strip():
+                ms, _m = sofa_schedule.parse_sofa_day(
+                    json.dumps([e]).encode("utf-8"), discipline=part["disc"])
+                sig = _sig(ms[0]) if ms else None
+                if sig and not (sig & printed.get(part["disc"], set())):
+                    m = ms[0]
+                    dropped.append(f"{' / '.join(m.side_a or [])} v {' / '.join(m.side_b or [])}")
+                    continue
+            kept.append(e)
+        part["doc"] = json.dumps(kept, sort_keys=True, separators=(",", ":"))
+    return dropped
+
+
 async def build_day_document(db, tournament, draws, day: date, season_year: int,
                              venue_tz: Optional[str]) -> Optional[dict]:
     """One day's schedule from the feeds: {url, bytes, parser, count, atp, wta,
-    sources} ready for ingest_document, None when no feed has a row,
+    sources, unplaced} ready for ingest_document, None when no feed has a row,
     {"declined": why, ...} when the feeds have the day but cannot state it
     (see `declined`), {"thin": why, ...} when they hold less of it than the
     sheet already stored, or {"unfed": why} when nothing answered and a draw
@@ -382,6 +429,17 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
     matches, meta = parser(doc)
     if not matches:
         return None
+    # A courtless row beside placed ones may be a match Sofascore has parked
+    # on the day rather than scheduled on it — see `drop_unplaced`.
+    unplaced = []
+    if 0 < meta.get("unnamed", 0) < len(matches):
+        unplaced = drop_unplaced(parts, await _stored_slots(db, tournament.id, day))
+        if unplaced:
+            parts["sofa"] = [p for p in parts["sofa"] if json.loads(p["doc"])]
+            doc = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            matches, meta = parser(doc)
+            if not matches:
+                return None
     # A THIN DAY NEVER REPLACES A FULLER ONE. Whatever the source, a day that
     # holds fewer matches than the sheet already stored for it is a partial
     # answer, not a revision: it leaves the rest of the day owned by whatever
@@ -419,4 +477,5 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
                 "rounds": rounds_by_pair(matches)}
     return {"url": f"feeds://{'+'.join(sources)}/{day.isoformat()}", "bytes": doc, "parser": parser,
             "count": len(matches), "atp": sum(1 for m in matches if m.tour == "ATP"),
-            "wta": sum(1 for m in matches if m.tour == "WTA"), "sources": sources}
+            "wta": sum(1 for m in matches if m.tour == "WTA"), "sources": sources,
+            "unplaced": unplaced}

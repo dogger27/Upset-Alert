@@ -588,7 +588,10 @@ async def _ingest_feed_days(tournament, draws, feed_days: dict, venue_tz) -> Non
             if not (ingested or {}).get("skipped"):
                 await app_log("info", "order_of_play",
                               f"{tournament.name} {day_}: schedule from the feeds "
-                              f"({doc['count']} matches: {doc['wta']} WTA, {doc['atp']} ATP; {'+'.join(doc['sources'])})")
+                              f"({doc['count']} matches: {doc['wta']} WTA, {doc['atp']} ATP; {'+'.join(doc['sources'])})"
+                              + (f"; left out {len(doc['unplaced'])} row(s) Sofascore has parked "
+                                 f"on the day with no court and the sheet does not print: "
+                                 f"{'; '.join(doc['unplaced'][:6])}" if doc.get("unplaced") else ""))
         except Exception as exc:
             await app_log("warning", "order_of_play",
                           f"Feed schedule ingest failed for '{tournament.name}' {day_}: "
