@@ -128,7 +128,7 @@ async def _compute(db, tournament_id: int) -> dict[tuple[int, str], int]:
                ScheduleEntry.stage == "main")
     )).scalars().all()
     if not entries:
-        return {}
+        return {}, {}
 
     # `schedule_entries.tournament_id` is the TOURNAMENT; the gender, the dates
     # and the seeding week live on its DRAWS, one per gender — a combined event
@@ -148,6 +148,7 @@ async def _compute(db, tournament_id: int) -> dict[tuple[int, str], int]:
         return draws[0].gender if len(draws) == 1 else None
 
     out: dict[tuple[int, str], int] = {}
+    nations: dict[tuple[int, str, int], str] = {}
     groups: dict[str, list] = {}
     for e in entries:
         g = gender_of(e)
@@ -167,8 +168,10 @@ async def _compute(db, tournament_id: int) -> dict[tuple[int, str], int]:
             # An older week, or a week TE cut short (a hundred rows of ~1850,
             # 2026-09-17): rank with what we hold and fetch the whole week.
             _fill_week_in_background(gender, target)
-        out.update(await _rank_field(db, rows, gender, week))
-    return out
+        r, n = await _rank_field(db, rows, gender, week)
+        out.update(r)
+        nations.update(n)
+    return out, nations
 
 
 async def _rank_field(db, entries, gender: str, week: date) -> dict[tuple[int, str], int]:
@@ -239,11 +242,27 @@ async def _rank_field(db, entries, gender: str, week: date) -> dict[tuple[int, s
             where.append((e.id, side, key))
 
     ranked = rank_pairs([(k, s, tot) for k, (s, tot) in pairs.items()])
-    return {(eid, side): ranked[key] for eid, side, key in where if key in ranked}
+    ranks = {(eid, side): ranked[key] for eid, side, key in where if key in ranked}
+
+    # EACH PLAYER'S COUNTRY, off the same match (owner, 2026-09-24: "look at
+    # all those players with no flags"). The ATP's doubles sheet prints
+    # "J Schnaitter" with no country, and a doubles specialist has no singles
+    # draw entry to lend one — but the Tennis Explorer profile this function
+    # just matched for the ranking states it. Filled only where the row has
+    # none; served_nation still withholds a neutral athlete's.
+    from app.services.rankings import COUNTRY_TO_IOC
+    nat_by_te = {tp.id: tp.nationality for tp in te_players if tp.nationality}
+    nations: dict[tuple[int, str, int], str] = {}
+    for e in entries:
+        for p in e.players:
+            tid = te_id_of(p)
+            ioc = COUNTRY_TO_IOC.get((nat_by_te.get(tid) or "").strip().lower()) if tid else None
+            if ioc:
+                nations[(e.id, p.side, p.position)] = ioc
+    return ranks, nations
 
 
-async def doubles_pair_ranks(db, tournament_id: int) -> dict[tuple[int, str], int]:
-    """{(schedule_entry_id, side): inferred rank} for a tournament's doubles."""
+async def _cached(db, tournament_id: int) -> tuple[dict, dict]:
     now = time.monotonic()
     hit = _cache.get(tournament_id)
     if hit and now - hit[0] < _TTL_SECONDS:
@@ -252,6 +271,17 @@ async def doubles_pair_ranks(db, tournament_id: int) -> dict[tuple[int, str], in
         result = await _compute(db, tournament_id)
     except Exception:
         logger.exception("Doubles pair ranks failed for tournament %s", tournament_id)
-        result = {}
+        result = ({}, {})
     _cache[tournament_id] = (now, result)
     return result
+
+
+async def doubles_pair_ranks(db, tournament_id: int) -> dict[tuple[int, str], int]:
+    """{(schedule_entry_id, side): inferred rank} for a tournament's doubles."""
+    return (await _cached(db, tournament_id))[0]
+
+
+async def doubles_player_nations(db, tournament_id: int) -> dict[tuple[int, str, int], str]:
+    """{(schedule_entry_id, side, position): IOC code} from each doubles
+    player's Tennis Explorer profile — for rows the sheet printed without."""
+    return (await _cached(db, tournament_id))[1]
