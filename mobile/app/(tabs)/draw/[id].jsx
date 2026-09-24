@@ -168,7 +168,7 @@ export default function DrawScreen() {
      H2H sheet's arrows step through. Matches without one (a bye, a player
      Tennis Explorer never matched) are stepped over, not stopped on. */
   const h2hOrder = useMemo(
-    () => rounds.flatMap(([, list]) => list.map(m => h2hPairOf(m, B)).filter(Boolean)),
+    () => rounds.flatMap(([, list]) => list.map(m => h2hPairOf(m, B, { needSlugs: false })).filter(Boolean)),
     [rounds, B])
   /* ONE renderRow PER DATA CHANGE, not per render. The scrub memoises each
      row on its match and on this function; an inline arrow here made every
@@ -264,6 +264,20 @@ export default function DrawScreen() {
     save(next)
   }, [save])
 
+  /* ONE SHEET FOR A MATCH (owner, 2026-09-24): the H2H chip, the "who called
+     it" chip and a tap on a started score all open the match sheet, on the
+     tab that was asked for. A match it cannot show — its players not known
+     yet — keeps the old sheet. `open` applies the tab afresh each time. */
+  const openSheet = useCallback((m, tab) => {
+    const p = h2hPairOf(m, B, { needSlugs: false })
+    if (!p) return false
+    setH2H({ ...p, tab, open: Date.now() })
+    return true
+  }, [B])
+  const showH2H = useCallback((pair) => setH2H({ ...pair, tab: 'bio', open: Date.now() }), [])
+  const showPredictors = useCallback((m) => { if (!openSheet(m, 'prediction')) setPredictors(m) }, [openSheet])
+  const showScore = useCallback((m) => { if (!openSheet(m, 'history')) setScoreMatch(m) }, [openSheet])
+
   /* THE TIEBREAK BUTTON SITS BELOW THE FINAL (owner, 2026-09-18), so a
      reader has to come all the way to the last match to meet it. Leaving it
      alone is an answer in itself — the bracket holds last year's average —
@@ -273,13 +287,13 @@ export default function DrawScreen() {
     : (
       <>
         <MatchGroup m={m} roundIdx={roundIdx.get(m.round_number) ?? 0} B={B}
-                    drawRanks={drawRanks} zone={zone} onH2H={setH2H}
-                    onPredictors={setPredictors} onShowScore={setScoreMatch}
+                    drawRanks={drawRanks} zone={zone} onH2H={showH2H}
+                    onPredictors={showPredictors} onShowScore={showScore}
                     onPick={handlePick}
                     standout={standoutIds.has(m.id)} />
       </>
     )
-  ), [B, drawRanks, roundIdx, zone, standoutIds, handlePick])
+  ), [B, drawRanks, roundIdx, zone, standoutIds, handlePick, showH2H, showPredictors, showScore])
 
   // Follows the live round until the user picks one, then stays put — moving
   // the screen under someone because a match finished elsewhere is worse than
@@ -430,7 +444,7 @@ export default function DrawScreen() {
                     surface={draw.data?.surface} status={status} pickSide={pickSide}
                     predictMatch={hm && !hm.is_bye ? hm : null} meId={me?.id}
                     histEntry={hm && matchStarted(hm) ? entryFromMatch(hm, Number(id), drawRanks) : null}
-                    round={hm?.round_name ?? null}
+                    round={hm?.round_name ?? null} initialTab={h2h?.tab} openKey={h2h?.open}
                     onPrev={prev ? () => setH2H(prev) : null}
                     onNext={next ? () => setH2H(next) : null} />
         )

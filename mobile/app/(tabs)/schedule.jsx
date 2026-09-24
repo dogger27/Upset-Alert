@@ -12,7 +12,7 @@
  * has to be above the fold rather than sorted correctly.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams } from 'expo-router'
 import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
@@ -267,15 +267,35 @@ export default function ScheduleScreen() {
     }), [stepDay])
   /* Every tap the page hands its rows, guarded — the history, the H2H, the
      predictors — so no swipe ever opens anything. */
-  const openHist = useMemo(() => unlessSwiping(setHist), [])
+  /* ONE SHEET FOR A MATCH (owner, 2026-09-24): H2H, "who called it" and the
+     point history all open the match sheet, on the tab that was asked for.
+     A row the sheet cannot show (doubles: its header is one player a side)
+     keeps the old sheet. `open` makes each opening apply its tab afresh. */
+  const allRef = useRef([])
+  const openSheet = useCallback((e, tab) => {
+    const p = e ? h2hPairOf(e, { needSlugs: false }) : null
+    if (!p) return false
+    setH2H({ ...p, tab, open: Date.now() })
+    return true
+  }, [])
+  const showH2H = useCallback((pair) => setH2H({ ...pair, tab: 'bio', open: Date.now() }), [])
+  const showPredictors = useCallback((m) => {
+    const e = allRef.current.find(x => x.match_id === m?.id)
+    if (!openSheet(e, 'prediction')) setPredictors(m)
+  }, [openSheet])
+  // Only a row with a score to show: the sheet's Points tab exists once there is play.
+  const showHist = useCallback((e) => {
+    if (!(e && h2hPairOf(e, { needSlugs: false })?.status && openSheet(e, 'history'))) setHist(e)
+  }, [openSheet])
+  const openHist = useMemo(() => unlessSwiping(showHist), [showHist])
   /* The headings' rename sheets go through the same guard as the rest: the
      release at the end of a day swipe lands on whatever is under the finger,
      and a tournament name is 361pt wide (owner, 2026-09-20 — the day changed
      AND the rename sheet opened). */
   const openRenameCourt = useMemo(() => unlessSwiping(setRenaming), [])
   const openRenameEvent = useMemo(() => unlessSwiping(setRenamingEvent), [])
-  const openH2H = useMemo(() => unlessSwiping(setH2H), [])
-  const openPredictors = useMemo(() => unlessSwiping(setPredictors), [])
+  const openH2H = useMemo(() => unlessSwiping(showH2H), [showH2H])
+  const openPredictors = useMemo(() => unlessSwiping(showPredictors), [showPredictors])
   // A long press at the end of a swipe is still the swipe's (swipeGuard).
   const openMenu = useMemo(() => unlessSwiping(setMenuFor), [])
   const day = useApi(`schedule:${date}`, () => getScheduleDay(date))
@@ -289,6 +309,7 @@ export default function ScheduleScreen() {
   // recompute on every keystroke of state elsewhere. Memoised on the identity
   // of the fetched data instead.
   const all = useMemo(() => day.data?.entries || [], [day.data])
+  allRef.current = all
   /* ONE LINE, ONE SIZE (owner, 2026-09-21). The pills used to wrap onto a
      second row, which cost a row of the screen and moved the list down as the
      week changed. They now share a text size chosen to make the row fit the
@@ -975,13 +996,13 @@ export default function ScheduleScreen() {
       <CourtRenameSheet court={renaming} onClose={() => setRenaming(null)} />
       <TournamentRenameSheet event={renamingEvent} onClose={() => setRenamingEvent(null)} />
       <MatchMenu target={menuFor} onClose={() => setMenuFor(null)}
-                 onH2H={setH2H} onPredictors={setPredictors} onHistory={setHist} />
+                 onH2H={showH2H} onPredictors={showPredictors} onHistory={showHist} />
       {/* The surface comes off the ROW: a day mixes draws, so there is no one
           surface for the page. */}
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} drawId={h2h?.drawId}
                 surface={h2h?.surface} status={h2h?.status} pickSide={h2h?.pickSide}
                 histEntry={h2h ? (all.find(x => x.id === h2h.rowId) || null) : null}
-                round={h2h?.round}
+                round={h2h?.round} initialTab={h2h?.tab} openKey={h2h?.open}
                 predictMatch={h2h?.predictMatch} meId={me?.id} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
           and women's draws on one day, so there is no single draw to pass. */}
@@ -1191,7 +1212,7 @@ function LineTags({ first, alt, when, flag, tournament }) {
 
 /* The H2H pair a row can open — singles, both players known to Tennis
    Explorer — in the shape the H2H sheet takes. */
-function h2hPairOf(e) {
+function h2hPairOf(e, { needSlugs = true } = {}) {
   const a = (e.players || []).find(p => p.side === 'a'), b = (e.players || []).find(p => p.side === 'b')
   /* THE WHOLE PLAYER, not a name and a slug (2026-09-23): the sheet compares
      flags, rankings, Elo places and ages, and the day's rows already carry all
@@ -1214,7 +1235,9 @@ function h2hPairOf(e) {
   const pick = e.pick_entry_id
   const pickSide = pick == null ? null
     : a?.draw_entry_id === pick ? 0 : b?.draw_entry_id === pick ? 1 : null
-  return e.discipline === 'singles' && a?.te_slug && b?.te_slug
+  // The H2H button needs both players on Tennis Explorer; the match sheet
+  // itself (Prediction, Points) only needs a singles row with two players.
+  return e.discipline === 'singles' && a && b && (!needSlugs || (a.te_slug && b.te_slug))
     ? { a: of(a), b: of(b), surface: e.surface, drawId: e.draw_id, status,
         predictMatch: matchFromEntry(e), pickSide, rowId: e.id, round: e.round_label ?? null }
     : null

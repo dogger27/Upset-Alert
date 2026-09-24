@@ -70,7 +70,7 @@ const MARK_W = 26 * FONT_SCALE + 6
    Prediction tab asks about (null: no tab). */
 export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNext,
                            status = null, pickSide = null, predictMatch = null, meId = null,
-                           histEntry = null, round = null }) {
+                           histEntry = null, round = null, initialTab = null, openKey = null }) {
   // Keyed on the pair so switching matches refetches; the backend caches, so a
   // reopen is cheap and there is nothing to memoise here.
   const live = !!(visible && a?.te_slug && b?.te_slug)
@@ -92,6 +92,10 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
      itself, under the form it belongs to. */
   const [open, setOpen] = useState(null)
   const [tab, setTab] = useState('bio')
+  /* OPENED FOR A REASON (owner, 2026-09-24): the H2H chip opens Bio, "who
+     called it" Prediction, a tap on a score Points. Applied on each OPENING
+     (openKey), never on stepping to the next match, which keeps the tab. */
+  useEffect(() => { if (visible && initialTab) setTab(initialTab) }, [visible, openKey]) // eslint-disable-line react-hooks/exhaustive-deps
   /* POINT HISTORY AND MATCH STATS, once there is play to show (owner,
      2026-09-24) — a live or finished match; `histEntry` is the row the
      history sheet reads. */
@@ -141,8 +145,9 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
      for every label, the largest at which all of them fit side by side with
      just TAB_PAD either side, and each cell as wide as its own word. Measured
      in bold, the chosen tab's weight, so choosing one never overflows it. */
-  // Every cell starts at its padding and rule; only the WORD's share grows,
-  // so a short word is never squeezed below its own width.
+  // Every cell starts at its own word's width plus padding, and any room
+  // left over is shared EQUALLY — so every tab has the same margin around
+  // its word (owner, 2026-09-24), not one in proportion to its length.
   const TAB_PAD = 4
   const TAB_MAX = 18 * FONT_SCALE
   const tabUnit = tabs.map(([, l]) => textWidth(l, 'Archivo_700Bold', 1))
@@ -196,7 +201,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
         <View style={s.tabs} onLayout={e => setTabsW(e.nativeEvent.layout.width)}>
           {tabs.map(([k, label], i) => (
             <Pressable key={k} onPress={() => setTab(k)} hitSlop={4}
-                       style={[s.tabBtn, { flexGrow: tabUnit[i], flexBasis: 2 * TAB_PAD + (i > 0 ? 1 : 0) },
+                       style={[s.tabBtn, { flexGrow: 1, flexBasis: tabUnit[i] * tabSize + 2 * TAB_PAD + (i > 0 ? 1 : 0) },
                                i > 0 && s.tabBtnRule, shownTab === k && s.tabBtnOn]}
                        accessibilityRole="tab" accessibilityState={{ selected: shownTab === k }}>
               <Text style={[s.tab, shownTab === k && s.tabOn, { fontSize: tabSize }]}
@@ -214,6 +219,9 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
             <PredictorsBody drawId={predictMatch.draw_id ?? drawId} match={predictMatch} meId={meId} scroll={false} />
           ) : (
             <>
+              {!live && visible ? (
+                <Text style={s.none}>No head-to-head record: {!a?.te_slug ? a?.name : b?.name} is not on Tennis Explorer yet.</Text>
+              ) : null}
               {h2h.loading && !d ? <Loading /> : null}
               {h2h.error ? <Text style={s.err}>Couldn’t load the head-to-head.</Text> : null}
               {view && shownTab === 'bio' ? (
