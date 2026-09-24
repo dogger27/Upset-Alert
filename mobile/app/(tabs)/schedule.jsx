@@ -501,6 +501,13 @@ export default function ScheduleScreen() {
       // The bigger event first, ATP before WTA at the same tier (owner,
       // 2026-09-23) — from the day's own tier stamps, the same ones the
       // heading draws.
+      const toursOf = new Map()
+      for (const e of chrono) {
+        if (!e.tour) continue
+        if (!toursOf.has(e.tournament_name)) toursOf.set(e.tournament_name, new Set())
+        toursOf.get(e.tournament_name).add(e.tour)
+      }
+      const bothTours = new Set([...toursOf].filter(([, t]) => t.size > 1).map(([n]) => n))
       return groupPastDay(chrono, {
         byTournament, byTour, eventRank: eventRankFrom(day.data?.tournaments),
       }).map(g => ({
@@ -508,7 +515,13 @@ export default function ScheduleScreen() {
         title: g.first ? g.tournament : null,
         // The round has a line to itself here, so it is spelled out —
         // "Final", not "F" (owner, 2026-09-20). rounds.js::longRound.
-        sub: [byTour ? g.tour : null, mixed ? g.discipline : null,
+        /* NO TOUR, AND NO "SINGLES" (owner, 2026-09-24): the heading above
+           already wears the tour's stamp, and singles is the default a reader
+           assumes — only a doubles group says what it is. The tour stays
+           only where ONE tournament runs both tours that day (a Slam), since
+           there its two "R32" groups would otherwise read the same. */
+        sub: [bothTours.has(g.tournament) ? g.tour : null,
+          mixed && g.discipline !== 'Singles' ? g.discipline : null,
           g.round ? longRound(g.round) : null].filter(Boolean).join(' · '),
         list: g.list,
       }))
