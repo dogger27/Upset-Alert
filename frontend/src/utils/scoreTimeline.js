@@ -200,6 +200,34 @@ export function timelineMarkers(snapshots, opts = {}) {
     }
   }
 
+  /* ── Break point ── (opt-in: the app's timeline; owner, 2026-09-24) a
+     point after which the RECEIVER is one point from breaking: 40 against
+     less than 40, or advantage. Each chance is its own tick — 30-40 then
+     deuce then advantage-receiver is two break points. Never in a tiebreak,
+     where there is no serve to break. The tick sits on the receiver's side,
+     the player holding the chance, and on the snapshot the chance appeared
+     at, so the break (if it came) is the very next point. */
+  if (opts.breakPoints) {
+    for (let i = 0; i < snapshots.length; i++) {
+      const sn = snapshots[i]
+      if (!sn || sn.tiebreak || sn.match_tiebreak) continue
+      const srv = sn.serving
+      if (srv !== 1 && srv !== 2) continue
+      const pts = sn.point
+      if (!Array.isArray(pts)) continue
+      const rcv = srv === 1 ? 2 : 1
+      const r = RANK[String(pts[rcv - 1]).toUpperCase().replace(/^AD$/, 'A')]
+      const v = RANK[String(pts[srv - 1]).toUpperCase().replace(/^AD$/, 'A')]
+      if (r == null || v == null) continue
+      const bp = (r === 3 && v < 3) || r === 4
+      if (!bp) continue
+      // The same state twice in a row is one chance reported twice.
+      const pv = snapshots[i - 1]
+      if (pv && String(pv.point) === String(pts) && String(pv.games) === String(sn.games)) continue
+      out.push({ i, kind: 'bp', side: rcv })
+    }
+  }
+
   /* ── Ace and double fault ── the label the point itself carried.
      About one point in twenty has one, and with no tick on the rail a reader
      drags straight past every single one and concludes the labels were never

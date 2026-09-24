@@ -81,3 +81,19 @@ test('a label on a duplicate state survives the duplicate being dropped', () => 
   assert.equal(s.length, 1)
   assert.equal(s[0].point_label, 'Ace')
 })
+
+test('break points: each chance the receiver holds, never in a tiebreak, opt-in', () => {
+  const h = [
+    snap([['0'], ['0']], ['0', '0'], 1),
+    snap([['0'], ['0']], ['15', '40'], 1),    // receiver (2) holds a BP
+    snap([['0'], ['0']], ['30', '40'], 1),    // a second chance
+    snap([['0'], ['0']], ['40', '40'], 1),
+    snap([['0'], ['0']], ['40', 'A'], 1),     // a third
+    snap([['0'], ['0']], ['A', '40'], 1),     // game point, not a BP
+    snap([['1'], ['0']], ['0', '0'], 2),
+    snap([['6'], ['6']], ['3', '6'], 1, { tiebreak: true }),
+  ]
+  const bp = timelineMarkers(h, { breakPoints: true }).filter(x => x.kind === 'bp')
+  assert.deepEqual(bp.map(x => [x.i, x.side]), [[1, 2], [2, 2], [4, 2]])
+  assert.equal(timelineMarkers(h).some(x => x.kind === 'bp'), false)
+})
