@@ -42,6 +42,21 @@ function split(name) {
   return [parts.slice(0, start), parts.slice(start)]
 }
 
+const GEN_SUFFIX = /^(jr|sr|ii|iii|iv)\.?$/i
+
+/* A NAME ON TWO LINES, [first names, surname] (owner, 2026-09-24: the H2H
+   headline). Particles stay with the surname — "Botic" / "van de Zandschulp" —
+   and so does a generational suffix: "Martin Damm Jr" is "Martin" over
+   "Damm Jr", never "Martin Damm" over "Jr" (memory: "Jr" is not a surname).
+   One word is all surname, with an empty first line. */
+export function nameLines(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean)
+  let tail = []
+  while (parts.length > 2 && GEN_SUFFIX.test(parts[parts.length - 1])) tail = [parts.pop(), ...tail]
+  const [given, surname] = split(parts.join(' '))
+  return [given.join(' '), [...surname, ...tail].join(' ')]
+}
+
 /**
  * The rungs, longest first. Always at least one entry, and never an empty
  * string — a name that is a single token has nothing to shorten and simply

@@ -38,6 +38,7 @@ import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { getH2H, getPlayerForm } from './api'
 import { FitText, FlagSlot, PlayerName } from './cards'
+import { nameLines } from './names'
 import { shortDay } from './dates'
 import { leading } from './fontScale.js'
 import { FORM_GAP, compareRows, formChipText, formChips, formDetail, formGrid, orient, roundWord, shortEvent, singlesOnly }
@@ -92,7 +93,7 @@ export function H2HSheet({ visible, onClose, a, b, surface }) {
             <View style={s.who}>
               <View style={s.whoLine}>
                 <FlagSlot codes={[a?.nationality]} />
-                <PlayerName name={a?.name} style={s.whoName} />
+                <TwoLineName name={a?.name} />
               </View>
               <View style={[s.rule, { backgroundColor: SIDE.left.line }]} />
             </View>
@@ -103,7 +104,7 @@ export function H2HSheet({ visible, onClose, a, b, surface }) {
             </Text>
             <View style={[s.who, s.whoEnd]}>
               <View style={[s.whoLine, s.whoLineEnd]}>
-                <PlayerName name={b?.name} style={[s.whoName, s.whoNameEnd]} />
+                <TwoLineName name={b?.name} end />
                 <FlagSlot codes={[b?.nationality]} />
               </View>
               <View style={[s.rule, { backgroundColor: SIDE.right.line }]} />
@@ -285,6 +286,20 @@ function Form({ form, side, end = false, open, onOpen }) {
    (h2hView.formChipSize), which is the only way it can fill the column on a
    wide phone and still fit on one with large text. */
 
+/* FIRST NAME OVER SURNAME (owner, 2026-09-24: "two lines for the name").
+   The surname is the headline, the first name the line above it; each shrinks
+   to its own width rather than wrapping or ending in "…". */
+function TwoLineName({ name, end = false }) {
+  const [first, last] = nameLines(name)
+  const align = end ? 'right' : 'left'
+  return (
+    <View style={s.whoNames}>
+      {first ? <FitText style={s.whoFirst} min={9} align={align}>{first}</FitText> : null}
+      <FitText style={s.whoName} min={10} align={align}>{last}</FitText>
+    </View>
+  )
+}
+
 const s = StyleSheet.create({
   body: { paddingBottom: S.md, gap: S.md },
 
@@ -302,6 +317,8 @@ const s = StyleSheet.create({
   whoLine: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch' },
   whoLineEnd: { justifyContent: 'flex-end' },
   whoName: { ...T.bodyBold, color: C.ink, flexShrink: 1 },
+  whoNames: { flex: 1, minWidth: 0 },
+  whoFirst: { ...T.small, color: C.inkBody },
   whoNameEnd: { textAlign: 'right' },
   // Two points, so the key reads as a deliberate mark rather than a hairline.
   rule: { height: 2, borderRadius: 1, alignSelf: 'stretch' },
