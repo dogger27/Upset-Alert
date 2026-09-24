@@ -985,6 +985,16 @@ export function PosBadge({ seed, drawRank }) {
    at 18.7pt, so the pair is as near identical as the face allows. */
 const ENTRY_LABEL = { A: 'ALT' }
 
+/* An entry chip's width as drawn — label, padding, border and the margin
+   before it — so a caller can take it off a name's room before fitting. */
+export function entryChipWidth(entryType) {
+  if (!entryType) return 0
+  const code = String(entryType).toUpperCase()
+  const label = ENTRY_LABEL[code] || code
+  const size = label.length > 2 ? 9.5 : 11
+  return textWidth(label, 'Archivo_700Bold', size) + 2 * leading(5) + 2 + leading(6) + 2
+}
+
 export function EntryChip({ entryType }) {
   if (!entryType) return null
   const code = String(entryType).toUpperCase()
@@ -1238,6 +1248,8 @@ export function FlagSlot({ codes, slots = 1 }) {
 // The 🤞 as drawn (14pt, ~1.25em wide) plus the 4pt gap before it — no more
 // (owner, 2026-09-24: Ostapenko shrunk for a wider reservation than it needs).
 const AFTER_PX = 21
+// The 🤞's allowance at the reader's text size, for callers that add to it.
+export const PICK_W = AFTER_PX * FONT_SCALE
 /* `flags`: a doubles pair's two countries, one BEFORE EACH NAME (owner,
    2026-09-17) - "🇺🇸 Stearns / 🇺🇸 Stephens" - rather than two flags side by
    side ahead of the pair. The glyphs are not in the metric tables, so each
@@ -1253,7 +1265,7 @@ export function withFlags(text, glyphs) {
   const parts = String(text).split(' / ')
   return parts.map((part, i) => (glyphs[i] ? `${glyphs[i]} ${part}` : part)).join(' / ')
 }
-export function PlayerName({ name, doubles = false, shrinkOnly = false, style, after = null, flags = null }) {
+export function PlayerName({ name, doubles = false, shrinkOnly = false, style, after = null, afterW = null, flags = null }) {
   /* shrinkOnly: a USERNAME. It cannot be initialised or reduced to a surname —
      "koounderpressure" has neither — but the last two rungs still apply:
      shrink first, and only then "…". Truncating a handle is the same loss as
@@ -1276,7 +1288,8 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style, a
     // right on the line should shorten rather than gamble.
     // 3% held back as well: with iOS's own shrink no longer behind this (see
     // below), the tables' missing kerning must be covered here.
-    const room = 0.97 * (avail - 1 - (after ? AFTER_PX * FONT_SCALE : 0))
+    // `afterW`: what the caller put after the name, measured; else the 🤞's.
+    const room = 0.97 * (avail - 1 - (after ? (afterW ?? AFTER_PX * FONT_SCALE) : 0))
     /* THE FLAGS GO BEFORE THE TYPE SHRINKS (owner, 2026-09-17): every rung
        is tried wearing the flags, then every rung without them, and only
        then does the shortest rung shrink. A flag is decoration; a name that

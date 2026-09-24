@@ -15,7 +15,7 @@
  */
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { EntryChip, FlagSlot, PlayerName, PosBadge, RoundChip } from './cards'
+import { EntryChip, FlagSlot, PICK_W, PlayerName, PosBadge, RoundChip, entryChipWidth } from './cards'
 import { Bump } from './fx'
 import { useFlashOnChange } from './scoreFx'
 import { leading } from './fontScale.js'
@@ -98,6 +98,7 @@ export function MatchCard({ e, scale = 1, badges = true, round = null }) {
         const ink = lost ? C.muted : C.ink
         // Your pick to win, marked after the name: the server stamps the row
         // with the draw entry you chose (singles only — nobody picks doubles).
+        const entry = sideEntryType(e.players, side)
         const picked = !doubles && e.pick_entry_id != null
           && (e.players || []).some(p => p.side === side && p.draw_entry_id === e.pick_entry_id)
         return (
@@ -117,28 +118,19 @@ export function MatchCard({ e, scale = 1, badges = true, round = null }) {
                  rows together, and still clear of the ~1.2 floor where
                  descenders start to clip. */
               style={[T.bodyMed, { color: ink, flexShrink: 1, lineHeight: leading(19) }, scale < 1 && { fontSize: Math.round(T.bodyMed.fontSize * scale), lineHeight: leading(Math.round(19 * scale)) }]}
-              after={picked ? <Text style={s.pick} accessibilityLabel="You predicted this player to win">🤞</Text> : null}
+              /* THE ENTRY CHIP RIDES RIGHT AFTER THE NAME (owner, 2026-09-24:
+                 the WC pill "should be way further left"), with the 🤞 — both
+                 in PlayerName's `after`, whose width is taken off the name's
+                 room before it is fitted, so neither is ever cut. */
+              after={(picked || entry) ? (
+                <>
+                  {picked ? <Text style={s.pick} accessibilityLabel="You predicted this player to win">🤞</Text> : null}
+                  {entry ? <EntryChip entryType={entry} /> : null}
+                </>
+              ) : null}
+              afterW={(picked ? PICK_W : 0) + (entry ? entryChipWidth(entry) : 0)}
             />
             </View>
-            {/* AFTER the name slot, not inside it. nameWrap is flex:1, so the
-                chip's width comes out of the name's budget before PlayerName
-                measures — and PlayerName's own ladder then shortens or shrinks
-                to whatever is left. That is the whole of "decrease the font
-                size when necessary": it is already the rule, it just has to be
-                given the real width (owner, 2026-09-14). */}
-            {/* ON THE LINE WITHOUT THE ROUND, the entry chip takes the round's
-                empty slot (owner, 2026-09-24: "the WC card can be pushed far
-                to the right") — the name gets the room the chip used to take.
-                The ghost still holds the slot's width; the chip sits over it,
-                right-aligned, on the round column. */}
-            {idx !== 0 && round && sideEntryType(e.players, side) ? (
-              <View>
-                <RoundChip round={round} ghost />
-                <View style={s.entryInRound}><EntryChip entryType={sideEntryType(e.players, side)} /></View>
-              </View>
-            ) : (
-            <>
-            <EntryChip entryType={sideEntryType(e.players, side)} />
             {/* THE ROUND, DRAWN ON THE TOP PLAYER'S LINE AND HELD OPEN ON THE
                 OTHER (owner, 2026-09-21). Here rather than beside the card so
                 it is laid out by the same row as the entry chip to its left:
@@ -148,8 +140,6 @@ export function MatchCard({ e, scale = 1, badges = true, round = null }) {
                 that pass no round — every screen but the schedule's compact
                 list — render nothing and are untouched. */}
             <RoundChip round={round} ghost={idx !== 0} />
-            </>
-            )}
             {end && <Text style={s.end}>{end}</Text>}
             {winner != null && (
               <Text style={[s.mark, scale < 1 && { fontSize: Math.round(13 * scale), lineHeight: leading(Math.round(16 * scale)) }, { color: winner === idx ? C.greenLit : C.lossMark }]}>
@@ -209,7 +199,6 @@ const s = StyleSheet.create({
      instead; the name is the one part with a ladder to climb down. */
   sets: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto', flexShrink: 0 },
   nameWrap: { flex: 1, minWidth: 0 },
-  entryInRound: { position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center' },
   setBox: { flexDirection: 'row', alignItems: 'flex-start', minWidth: 16, justifyContent: 'center' },
   setWide: { minWidth: 26 },
   set: { ...T.score },
