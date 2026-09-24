@@ -20,7 +20,7 @@ import { getEntryScoreHistory, getMatchScoreHistory, getMatchStatistics } from '
 import { MatchCard } from './scorecard'
 import { pointStats, sanitizeSnapshots, timelineMarkers } from './scoreTimeline'
 import { Sheet } from './sheet'
-import { C, R, S, T } from './theme'
+import { BETTER, C, R, S, T } from './theme'
 import { FONT_SCALE, leading } from './fontScale.js'
 import { drawnWidth } from './measure'
 import { Loading } from './ui'
@@ -691,11 +691,11 @@ function Stats({ stats, pos, topIsP1, left, right }) {
               number column wide enough that the column clipped its own text;
               the percentage is the comparison, the raw count is detail. The
               site keeps the count at desktop widths. */}
-          <Text style={s.statNum}>{lt ? `${pct(lw, lt)}%` : '—'}</Text>
+          <Text style={[s.statNum, lead(lt ? pct(lw, lt) : null, rt ? pct(rw, rt) : null) === 0 && s.statBetter]}>{lt ? `${pct(lw, lt)}%` : '—'}</Text>
           <View style={s.barL}><View style={[s.barFill, { backgroundColor: C.h2hP1, width: `${lt ? pct(lw, lt) : 0}%` }]} /></View>
           <Text style={s.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{label}</Text>
           <View style={s.barR}><View style={[s.barFill, { backgroundColor: C.h2hP2, width: `${rt ? pct(rw, rt) : 0}%` }]} /></View>
-          <Text style={[s.statNum, { textAlign: 'right' }]}>{rt ? `${pct(rw, rt)}%` : '—'}</Text>
+          <Text style={[s.statNum, { textAlign: 'right' }, lead(lt ? pct(lw, lt) : null, rt ? pct(rw, rt) : null) === 1 && s.statBetter]}>{rt ? `${pct(rw, rt)}%` : '—'}</Text>
         </View>
       ))}
     </View>
@@ -705,6 +705,17 @@ function Stats({ stats, pos, topIsP1, left, right }) {
 /* Sofascore's serve/return tally. Same five-column grid as Stats so the two
    tabs read as one table with two pages — but WHOLE MATCH, said plainly at the
    top because the panel next door moves with the slider and this one cannot. */
+/* WHO WON THE ROW (owner, 2026-09-24): the side whose figure is better —
+   higher, or lower where fewer is better — or null for a tie or a missing
+   figure. Marked in theme.BETTER, the Bio tab's blue, never a player's
+   colour. */
+const FEWER_WINS = new Set(['Double faults'])
+const NO_WINNER = new Set(['Return games played'])
+function lead(l, r, fewerWins = false) {
+  if (l == null || r == null || l === r) return null
+  return (l > r) !== fewerWins ? 0 : 1
+}
+
 function SofaStats({ rows, topIsP1, loading, left, right, splitSuspect }) {
   if (loading && rows.length === 0) return <Loading />
   if (rows.length === 0) {
@@ -731,15 +742,17 @@ function SofaStats({ rows, topIsP1, loading, left, right, splitSuspect }) {
         const peak = Math.max(l[0], rt[0], 1)
         const width = (v) => (ratio ? pct(v) : Math.round((100 * v[0]) / peak))
         const head = r.section !== section ? (section = r.section) : null
+        const lv = ratio ? pct(l) : l[0], rv = ratio ? pct(rt) : rt[0]
+        const win = NO_WINNER.has(r.label) ? null : lead(lv, rv, FEWER_WINS.has(r.label))
         return (
           <View key={r.label}>
             {head ? <Text style={s.statSection}>{head}</Text> : null}
             <View style={s.statRow}>
-              <Text style={s.statNum}>{ratio ? `${pct(l)}%` : l[0]}</Text>
+              <Text style={[s.statNum, win === 0 && s.statBetter]}>{ratio ? `${pct(l)}%` : l[0]}</Text>
               <View style={s.barL}><View style={[s.barFill, { backgroundColor: C.h2hP1, width: `${width(l)}%` }]} /></View>
               <Text style={s.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{r.label}</Text>
               <View style={s.barR}><View style={[s.barFill, { backgroundColor: C.h2hP2, width: `${width(rt)}%` }]} /></View>
-              <Text style={[s.statNum, { textAlign: 'right' }]}>{ratio ? `${pct(rt)}%` : rt[0]}</Text>
+              <Text style={[s.statNum, { textAlign: 'right' }, win === 1 && s.statBetter]}>{ratio ? `${pct(rt)}%` : rt[0]}</Text>
             </View>
           </View>
         )
@@ -873,7 +886,10 @@ const s = StyleSheet.create({
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   /* As wide as the widest value it can hold — "100%" — at the reader's text
      size. A fixed 40 cut it to "10…" at a larger size (owner, 2026-09-24). */
-  statNum: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', width: NUM_W },
+  statNum: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', width: NUM_W + 8,
+             paddingHorizontal: 4, borderWidth: 1, borderColor: 'transparent', borderRadius: 4, overflow: 'hidden' },
+  // The row's winner: the Bio tab's blue plate.
+  statBetter: { color: BETTER.ink, backgroundColor: BETTER.plate, borderColor: BETTER.line },
   /* FIXED, not flexShrink. Unsized, the label took its own natural width and
      the bars (flex: 1) absorbed whatever was left — so every row had a
      different bar length and the two tabs, whose labels differ, disagreed with
