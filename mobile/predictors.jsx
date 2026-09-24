@@ -304,7 +304,8 @@ function Column({ label, tone, people, fieldSize, meId, friends, cap, showPicks,
             const me = meId != null && p.id === meId
             return (
               <Text key={p.id} style={[s.person, showPicks && s.personIndented, me && s.personMe]}>
-                {p.username}{me ? ' 🤞' : ''}
+                {/* You in clay; no 🤞 — the header already marks your pick. */}
+                {p.username}
               </Text>
             )
           })}
