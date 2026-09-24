@@ -140,6 +140,8 @@ const CAP = 15
    margin does not is a stamp in a tighter box, not a bigger one. */
 const SMALL = 1.5
 const CAP_SMALL = 9 * SMALL
+const PLATE_W_SMALL = 115
+const PLATE_W = Math.ceil(18 + (PLATE_W_SMALL - 18) * (CAP / CAP_SMALL))
 /* A CREST IS NOT A TIER STAMP, so it is not held to the tier stamps' height.
    These are the tournaments' own marks, mostly square where a tier stamp is a
    6:1 strip, so the strip's 15pt left them a third the size of the type beside
@@ -279,6 +281,14 @@ export function TierBadge({ tour, tier, name, small }) {
        the border of the tournament card"; the full-strength one, and before
        it the bright ink at 1.5pt, were too bright). */
     <View style={[u.stamp, u.stampSet, small && u.stampSmall,
+                  /* ONE WIDTH FOR EVERY PLATE OF A SIZE (owner, 2026-09-24:
+                     China's pair and Japan's single were different widths).
+                     The widest label, "WTA 1000", measured 114.3pt small on the
+                     rendered page; the full plate is that scaled by the
+                     lettering (CAP / CAP_SMALL). The lettering never scales
+                     with text size (allowFontScaling off), so a fixed width
+                     holds; the row centres the label in it. */
+                  { minWidth: small ? PLATE_W_SMALL : PLATE_W },
                   { height: plate, backgroundColor: mix(TOUR[key].plate, '#000000', 0.7),
                     borderWidth: 1, borderColor: halfAlpha(TOUR[key].line) }]}>
       <Text style={[u.stampMark, set]} allowFontScaling={false}>{mark}</Text>
