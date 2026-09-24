@@ -1057,13 +1057,20 @@ function rowColumns(list, past, innerW) {
    half backgrounds - the row above's over the top half, this row's under the
    bottom - so the zebra stays honest on both sides. The first row's line is
    the card's own edge, which clips, so its tag sits inside. */
-function LineTag({ first, alt, style, textStyle, children }) {
+/* `fit={false}` for a word with a width of its own: shrink-to-fit Text in a
+   centring box is measured by iOS at next to no width, and the Postponed
+   pill drew empty (2026-09-24 — the day strip's caption, again). */
+function LineTag({ first, alt, style, textStyle, children, fit = true }) {
   return (
     <View style={[s.miniTag, style]} pointerEvents="none">
       <View style={[s.miniTagHalf, { top: 0, backgroundColor: first ? C.bg : alt ? C.card : C.raised }]} />
       <View style={[s.miniTagHalf, { bottom: 0, backgroundColor: alt ? C.raised : C.card }]} />
-      <Text style={[s.rowWhen, textStyle]} numberOfLines={1}
-            adjustsFontSizeToFit minimumFontScale={0.8}>{children}</Text>
+      {fit ? (
+        <Text style={[s.rowWhen, textStyle]} numberOfLines={1}
+              adjustsFontSizeToFit minimumFontScale={0.8}>{children}</Text>
+      ) : (
+        <Text style={[s.rowWhen, textStyle, s.noShrink]}>{children}</Text>
+      )}
     </View>
   )
 }
@@ -1152,7 +1159,7 @@ function LineTags({ first, alt, when, flag, tournament }) {
         in it. Its own layer, so the tags either side keep their places. */}
     {flag ? (
       <View style={s.miniTagCentre} pointerEvents="none">
-        <LineTag first={first} alt={alt} style={s.miniTagFlag} textStyle={s.miniTagFlagText}>{flag}</LineTag>
+        <LineTag first={first} alt={alt} style={s.miniTagFlag} textStyle={s.miniTagFlagText} fit={false}>{flag}</LineTag>
       </View>
     ) : null}
     <View style={s.miniTagRow} pointerEvents="none">
@@ -1757,6 +1764,7 @@ const s = StyleSheet.create({
      shrinking to fit the half-strip they get. */
   miniTagWhen: { color: C.gold },
   // The postponed pill: an outlined box on the border, in the warning ink.
+  noShrink: { flexShrink: 0 },
   miniTagCentre: { position: 'absolute', top: -9, left: 0, right: 0, alignItems: 'center', zIndex: 2 },
   miniTagFlag: { borderWidth: 1, borderColor: C.warn, borderRadius: 4, overflow: 'hidden', paddingHorizontal: 6, alignItems: 'center' },
   // A line box the pill's own inner height, so iOS cannot seat the word low.
