@@ -55,8 +55,8 @@ import { useApi } from './useApi'
 
 // The two rows whose figures are places in a list rather than counts.
 const HASHED = new Set(['rank', 'elo'])
-// The inline 🤞 and the space beside it, for measuring the surname line.
-const PICK_W = 22 * FONT_SCALE
+// The ✓ / ✗ and the gap before it, for measuring the surname line.
+const MARK_W = 26 * FONT_SCALE + 6
 
 /* THE MATCH SHEET (owner, 2026-09-24): one header for the match — its score
    as the title, the arrows, both players with their flags, and on the inside
@@ -136,24 +136,25 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
       <GestureHandlerRootView style={s.swipeRoot}>
       <GestureDetector gesture={swipe}>
       <View style={s.swipeRoot}>
-        {/* THE PLAYERS, on every tab. Each name wears its side's colour as an
-            underline — the key the rest of the sheet is read with — and
-            shrinks through the app's own ladder rather than truncating. On
-            the INSIDE of each name, facing the middle: the result's tick or
-            cross, and 🤞 on the one the reader picked. */}
+        {/* THE PLAYERS, on every tab: each name over its side's coloured underline
+            (the key the rest of the sheet is read with), sized by measurement
+            rather than truncated. */}
         <View style={s.head}>
+          {/* FROM THE OUTSIDE IN (owner, 2026-09-24): flag, the reader's 🤞 on
+              the name's outer edge, the name, then the result's ✓ or ✗ right
+              beside it — all over the side's underline. */}
           <View style={s.who}>
             <View style={s.whoLine}>
               <FlagSlot codes={[a?.nationality]} />
-              <TwoLineName name={a?.name} picked={pickSide === 0} />
+              {pickSide === 0 ? <PickFingers /> : null}
+              <TwoLineName name={a?.name} won={status?.winner == null ? null : status.winner === 0} />
             </View>
             <View style={[s.rule, { backgroundColor: SIDE.left.line }]} />
           </View>
-          <SideMarks won={status?.winner == null ? null : status.winner === 0} />
-          <SideMarks won={status?.winner == null ? null : status.winner === 1} />
           <View style={[s.who, s.whoEnd]}>
             <View style={[s.whoLine, s.whoLineEnd]}>
-              <TwoLineName name={b?.name} end picked={pickSide === 1} />
+              <TwoLineName name={b?.name} end won={status?.winner == null ? null : status.winner === 1} />
+              {pickSide === 1 ? <PickFingers /> : null}
               <FlagSlot codes={[b?.nationality]} />
             </View>
             <View style={[s.rule, { backgroundColor: SIDE.right.line }]} />
@@ -300,15 +301,17 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   )
 }
 
-/* The inside of a name: the result mark (✓ / ✗, once decided), toward the
-   middle on both sides so the two marks face each other. */
-function SideMarks({ won }) {
-  if (won == null) return <View style={s.marks} />
+/* The reader's pick, on the outer edge of that player's name. Its own box,
+   as tall as the emoji needs — inline in a Text line, iOS clipped its top. */
+function PickFingers() {
+  return <Text style={s.pickInline} allowFontScaling={false} accessibilityLabel="Your pick">🤞</Text>
+}
+
+/* The result's mark, beside the surname. */
+function ResultMark({ won }) {
   return (
-    <View style={s.marks}>
-      <Text style={[s.resultMark, { color: won ? C.greenLit : C.lossMark }]}
-            accessibilityLabel={won ? 'Won' : 'Lost'}>{won ? '✓' : '✗'}</Text>
-    </View>
+    <Text style={[s.resultMark, { color: won ? C.greenLit : C.lossMark }]} allowFontScaling={false}
+          accessibilityLabel={won ? 'Won' : 'Lost'}>{won ? '✓' : '✗'}</Text>
   )
 }
 
@@ -395,7 +398,7 @@ function Form({ form, side, end = false, open, onOpen }) {
 /* FIRST NAME OVER SURNAME (owner, 2026-09-24: "two lines for the name").
    The surname is the headline, the first name the line above it; each shrinks
    to its own width rather than wrapping or ending in "…". */
-function TwoLineName({ name, end = false, picked = false }) {
+function TwoLineName({ name, end = false, won = null }) {
   const [first, last] = nameLines(name)
   /* PLAIN TEXT, SIZED BY ARITHMETIC — no adjustsFontSizeToFit (owner,
      2026-09-24: names blank, then "miniscule"). iOS's shrink-to-fit reads a
@@ -403,34 +406,25 @@ function TwoLineName({ name, end = false, picked = false }) {
      it did both. Each line is its style's own size, made smaller only when
      the font's own measurement says it does not fit the column's width. */
   const [w, setW] = useState(0)
+  const mark = won == null ? null : <ResultMark won={won} />
   const fit = (text, style) => {
     const base = style.fontSize
     if (!w || !text) return base
-    // The 🤞 rides on the surname line, so that line's width counts it.
-    const need = textWidth(text, style.fontFamily, base * FONT_SCALE) + (style === s.whoName && picked ? PICK_W : 0)
+    // The ✓ / ✗ rides on the surname line, so that line's width counts it.
+    const need = textWidth(text, style.fontFamily, base * FONT_SCALE) + (style === s.whoName && mark ? MARK_W : 0)
     return need <= w - 1 ? base : Math.max(base * 0.7, (base * (w - 1)) / need)
   }
-  /* 🤞 DIRECTLY BESIDE THE NAME (owner, 2026-09-24): on the surname line,
-     after it on the left, before it on the right — so it can only belong to
-     the name it touches, never read as floating between the two players. */
-  const fingersOn = (style) => style === s.whoName && picked
   const line = (text, style, extra) => {
     const size = fit(text, style)
-    const name = (
-      <Text style={[style, fingersOn(style) ? null : extra,
-                    { fontSize: size * FONT_SCALE, lineHeight: Math.round((style.lineHeight * size) / style.fontSize) },
+    const t = (
+      <Text style={[style, { fontSize: size * FONT_SCALE, lineHeight: Math.round((style.lineHeight * size) / style.fontSize) },
                     end && s.whoNameEnd]}
             allowFontScaling={false}>{text}</Text>
     )
-    if (!fingersOn(style)) return name
-    /* ITS OWN BOX, NOT INLINE (owner, 2026-09-24: the 🤞 was cut off). Inside
-       the surname's Text it took that line's height, shorter than the emoji,
-       and iOS clipped its top. Beside the name in a row, it is as tall as it
-       needs, centred on the surname. */
-    const fingers = <Text style={s.pickInline} allowFontScaling={false} accessibilityLabel="Your pick">🤞</Text>
+    // The surname carries the mark beside it, toward the middle.
     return (
       <View style={[s.nameRow, end && s.nameRowEnd, extra]}>
-        {end ? fingers : null}{name}{end ? null : fingers}
+        {style === s.whoName && end ? mark : null}{t}{style === s.whoName && !end ? mark : null}
       </View>
     )
   }
@@ -464,11 +458,9 @@ const s = StyleSheet.create({
      carries descender room the names' 15pt one does not, so it floated a
      third of a line above them. On the baseline the three read as one line,
      which is what they are. */
-  head: { flexDirection: 'row', alignItems: 'center', gap: S.xs, marginTop: S.xs },
-  // The marks' column, toward the middle; empty when there is nothing to say.
-  marks: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 4 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: S.lg, marginTop: S.xs },
   pickInline: { fontSize: 15 * FONT_SCALE, lineHeight: Math.round(22 * FONT_SCALE) },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   nameRowEnd: { justifyContent: 'flex-end' },
   /* The tabs, the Points / Serve & Return pair's idiom: words, the chosen one
      in ink with a green underline. */
@@ -481,7 +473,7 @@ const s = StyleSheet.create({
   tabOn: { color: C.ink, fontFamily: 'Archivo_700Bold' },
   /* Tight to the names above and the table below (owner, 2026-09-24: "remove
      all that excess space"): the body's gap cancelled to 2pt either side. */
-  resultMark: { fontSize: 22, lineHeight: leading(24), width: leading(26), textAlign: 'center', fontFamily: 'Archivo_700Bold' },
+  resultMark: { fontSize: 20 * FONT_SCALE, lineHeight: Math.round(24 * FONT_SCALE), fontFamily: 'Archivo_700Bold' },
   who: { flex: 1, minWidth: 0, gap: 3, alignSelf: 'flex-end' },
   whoEnd: { alignItems: 'flex-end' },
   whoLine: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch' },
