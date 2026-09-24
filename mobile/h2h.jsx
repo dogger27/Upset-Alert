@@ -35,7 +35,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { getH2H, getPairOdds, getPlayerForm } from './api'
 import { FitText, FlagSlot, PlayerName } from './cards'
@@ -48,6 +48,7 @@ import { FORM_GAP, compareRows, formChipText, formChips, formDetail, formGrid, o
 import { ScrollPane } from './scrollPane'
 import { Sheet } from './sheet'
 import { PredictorsBody } from './predictors'
+import { ScoreHistoryBody } from './scoreHistory'
 import { C, PICK, R, S, SIDE, T } from './theme'
 import { Loading } from './ui'
 import { useApi } from './useApi'
@@ -65,7 +66,8 @@ const HASHED = new Set(['rank', 'elo'])
    for the side the reader picked; `predictMatch` the site-shaped match the
    Prediction tab asks about (null: no tab). */
 export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNext,
-                           status = null, pickSide = null, predictMatch = null, meId = null }) {
+                           status = null, pickSide = null, predictMatch = null, meId = null,
+                           histEntry = null }) {
   // Keyed on the pair so switching matches refetches; the backend caches, so a
   // reopen is cheap and there is nothing to memoise here.
   const live = !!(visible && a?.te_slug && b?.te_slug)
@@ -87,22 +89,28 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
      itself, under the form it belongs to. */
   const [open, setOpen] = useState(null)
   const [tab, setTab] = useState('bio')
+  /* POINT HISTORY AND MATCH STATS, once there is play to show (owner,
+     2026-09-24) — a live or finished match; `histEntry` is the row the
+     history sheet reads. */
+  const played = !!histEntry && !!status
   // A tab this match does not have falls back to Bio.
-  const shownTab = tab === 'prediction' && !predictMatch ? 'bio' : tab
+  const shownTab = (tab === 'prediction' && !predictMatch) || ((tab === 'history' || tab === 'stats') && !played)
+    ? 'bio' : tab
   /* SWIPE BETWEEN MATCHES (owner, 2026-09-24), the arrows' twin: left for
      the next match, right for the one before. Sideways only — 20pt across
      before it is ours, and any 12pt of vertical first hands the finger to
      the scroll — so reading down the sheet never changes the match. On
      only where the arrows are (the draw); the schedule's sheet has none. */
   const swipe = useMemo(() => Gesture.Pan()
-    .enabled(!!(onPrev || onNext))
+    // Not on the timeline: dragging its slider sideways must never change match.
+    .enabled(!!(onPrev || onNext) && shownTab !== 'history')
     .activeOffsetX([-20, 20])
     .failOffsetY([-12, 12])
     .runOnJS(true)
     .onEnd(e => {
       if ((e.translationX < -60 || e.velocityX < -600) && onNext) onNext()
       else if ((e.translationX > 60 || e.velocityX > 600) && onPrev) onPrev()
-    }), [onPrev, onNext])
+    }), [onPrev, onNext, shownTab])
   // Stepping to another match (the arrows) closes the result that was open.
   useEffect(() => { setOpen(null) }, [a?.te_slug, b?.te_slug])
   const d = h2h.data
@@ -113,7 +121,8 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
 
   const nMeet = view?.meetings?.length
   const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `Meetings ${nMeet}` : 'Meetings'],
-                ...(predictMatch ? [['prediction', 'Prediction']] : [])]
+                ...(predictMatch ? [['prediction', 'Prediction']] : []),
+                ...(played ? [['history', 'Point history'], ['stats', 'Match stats']] : [])]
 
   return (
     <Sheet visible={!!visible} onClose={onClose} height="80%"
@@ -149,15 +158,21 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
           </View>
         </View>
 
-        <View style={s.tabs}>
+        {/* Sideways-scrolling when five tabs outgrow the width — never cut. */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabsScroll}
+                    contentContainerStyle={s.tabs}>
           {tabs.map(([k, label]) => (
             <Pressable key={k} onPress={() => setTab(k)} hitSlop={6} style={[s.tabBtn, shownTab === k && s.tabBtnOn]}
                        accessibilityRole="tab" accessibilityState={{ selected: shownTab === k }}>
               <Text style={[s.tab, shownTab === k && s.tabOn]}>{label}</Text>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
 
+        {shownTab === 'history' || shownTab === 'stats' ? (
+          <ScoreHistoryBody visible={!!visible} entry={histEntry}
+                            part={shownTab === 'history' ? 'timeline' : 'stats'} />
+        ) : (
         <ScrollPane contentContainerStyle={s.body}>
           {shownTab === 'prediction' ? (
             <PredictorsBody drawId={predictMatch.draw_id ?? drawId} match={predictMatch} meId={meId} scroll={false} />
@@ -275,6 +290,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
             </>
           )}
         </ScrollPane>
+        )}
       </View>
       </GestureDetector>
       </GestureHandlerRootView>
@@ -436,9 +452,10 @@ const s = StyleSheet.create({
   pickMark: { fontSize: 18, lineHeight: leading(24) },
   /* The tabs, the Points / Serve & Return pair's idiom: words, the chosen one
      in ink with a green underline. */
-  tabs: { flexDirection: 'row', gap: S.lg, borderBottomWidth: 1, borderBottomColor: C.border,
-          marginTop: S.sm, marginBottom: S.sm },
-  tabBtn: { paddingVertical: 6, marginBottom: -1, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabsScroll: { flexGrow: 0, marginTop: S.sm, marginBottom: S.sm,
+                borderBottomWidth: 1, borderBottomColor: C.border },
+  tabs: { flexDirection: 'row', gap: S.lg },
+  tabBtn: { paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabBtnOn: { borderBottomColor: C.greenLit },
   tab: { ...T.smallMed, color: C.muted },
   tabOn: { color: C.ink, fontFamily: 'Archivo_700Bold' },

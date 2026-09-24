@@ -86,7 +86,26 @@ export function matchStarted(m) {
   return !!m && !m.is_bye && !!(m.winner || m.live_scores || m.live_point || m.scores || m.status === 'completed')
 }
 
+/* THE HISTORY SHEET: the body below, in a sheet of its own — what a tap on
+   a started match's score opens. */
 export function ScoreHistorySheet({ visible, onClose, entry }) {
+  return (
+    <Sheet visible={visible} onClose={onClose} height="80%">
+      <ScoreHistoryBody visible={visible} entry={entry} part="all" />
+    </Sheet>
+  )
+}
+
+/* THE POINT HISTORY ITSELF, in parts (owner, 2026-09-24: the match sheet
+   shows it as two tabs). `part`:
+     'all'      — this sheet's own layout: the timeline, then the Points /
+                  Serve & Return tabs under it;
+     'timeline' — the timeline alone: when/duration row, the moment caption,
+                  the score card, the slider, legend and buttons;
+     'stats'    — the match's figures, whole match: Points over Serve &
+                  Return, stacked.
+   Renders its own ScrollView, whose scroll is held off while the slider is. */
+export function ScoreHistoryBody({ visible, entry, part = 'all' }) {
   // A row with no bracket match — qualifying singles, doubles — keeps its
   // history under its own schedule-entry id; the response shape is identical.
   const entryOnly = !!entry && !entry.match_id
@@ -235,7 +254,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   const sofa = useApi(
     canAskStats ? `match-stats:${entry.draw_id}:${entry.match_id}` : null,
     () => getMatchStatistics(entry.draw_id, entry.match_id),
-    { enabled: canAskStats && shownTab === 'serve' },
+    { enabled: canAskStats && (part === 'stats' || shownTab === 'serve') },
   )
   const sofaRows = sofa.data?.periods?.ALL || []
   /* Sofascore counts nearly every serve as a FIRST serve while a match is in
@@ -288,13 +307,14 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
      scroller absorbs the difference.
      (Comment out here, not between `return (` and the element — a comment in
      that position has broken the Metro bundle before.) */
+  const timeline = part !== 'stats'
   return (
-    <Sheet visible={visible} onClose={onClose} height="80%">
+    <>
       {/* Round, scrub time, duration. The TIME keeps the centre and stays
           there — it changes on every drag, and a number that moves sideways
           while you read it is the one thing this row must not do. The other
           two are pinned to the edges and simply absent when unknown. */}
-      <View style={s.head}>
+      {timeline && <View style={s.head}>
         <View style={s.headSide}>
           {data?.round_label ? (
             <Text style={s.roundPill}>{data.round_label}</Text>
@@ -304,7 +324,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
         <View style={[s.headSide, { alignItems: 'flex-end' }]}>
           {headRight ? <Text style={s.headDur} numberOfLines={1}>{headRight}</Text> : null}
         </View>
-      </View>
+      </View>}
       {/* The scroll is OFF while the slider is held. Refusing to hand the
           responder over is enough on iOS; Android's ScrollView can still take
           a vertical drag, and the symptom is the whole sheet moving under the
@@ -316,7 +336,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
             above the score, right-justified over the set columns (owner,
             2026-09-24). A fixed line whenever there is a history, so the card
             never moves as it changes. */}
-        {max > 0 && (
+        {timeline && max > 0 && (
           <View style={s.captionRow} accessibilityLiveRegion="polite"
                 onLayout={e => setCaptionW(e.nativeEvent.layout.width)}>
             {/* NOT FitText: its adjustsFontSizeToFit backstop, in a box with
@@ -330,10 +350,10 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
             ) : null}
           </View>
         )}
-        <MatchCard e={row} />
+        {timeline && <MatchCard e={row} />}
         {hist.loading && !data ? <Loading /> : null}
         {hist.error ? <Text style={s.err}>Couldn’t load the match history.</Text> : null}
-        {max > 0 && (
+        {timeline && max > 0 && (
           <>
             <Scrub max={max} pos={atEnd ? max : pos} onChange={v => setPos(v >= max ? null : v)}
                    onHold={setHolding} markers={markers} topIsP1={topIsP1}
@@ -374,7 +394,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                 entirely and put Serve & Return out of reach even though its
                 figures were sitting there. It asks about the tabs now, not
                 about one of them. */}
-            {canAskStats && (
+            {part === 'all' && canAskStats && (
               <View style={s.tabs}>
                 {[['points', 'Points'], ['serve', 'Serve & Return']].map(([k, label]) => (
                   <Text key={k} onPress={() => setTab(k)} accessibilityRole="button"
@@ -382,24 +402,45 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                 ))}
               </View>
             )}
-            {shownTab === 'points' && (statsUsable ? (
+            {part === 'all' && shownTab === 'points' && (statsUsable ? (
               <Stats stats={stats} pos={Math.min(atEnd ? stats.at.length - 1 : pos, stats.at.length - 1)}
                      topIsP1={topIsP1} left={cleanName(a[0])} right={cleanName(b[0])} />
             ) : (
               <Text style={s.err}>Not enough point-by-point history for this match.</Text>
             ))}
-            {shownTab === 'serve' && canAskStats && (
+            {part === 'all' && shownTab === 'serve' && canAskStats && (
               <SofaStats rows={sofaRows} topIsP1={topIsP1} loading={sofa.loading}
                          splitSuspect={splitSuspect}
                          left={cleanName(a[0])} right={cleanName(b[0])} />
             )}
           </>
         )}
-        {data && max === 0 && !hist.loading ? (
+        {/* MATCH STATS, STACKED: the whole match's figures, points first,
+            then Sofascore's serve and return. */}
+        {part === 'stats' && (
+          <>
+            <Text style={s.statsHead}>Points</Text>
+            {statsUsable ? (
+              <Stats stats={stats} pos={stats.at.length - 1}
+                     topIsP1={topIsP1} left={cleanName(a[0])} right={cleanName(b[0])} />
+            ) : (
+              <Text style={s.err}>{data && !hist.loading ? 'Not enough point-by-point history for this match.' : ''}</Text>
+            )}
+            {canAskStats && (
+              <>
+                <Text style={s.statsHead}>Serve & Return</Text>
+                <SofaStats rows={sofaRows} topIsP1={topIsP1} loading={sofa.loading}
+                           splitSuspect={splitSuspect}
+                           left={cleanName(a[0])} right={cleanName(b[0])} />
+              </>
+            )}
+          </>
+        )}
+        {timeline && data && max === 0 && !hist.loading ? (
           <Text style={s.err}>No point-by-point history was recorded for this match.</Text>
         ) : null}
       </ScrollView>
-    </Sheet>
+    </>
   )
 }
 
@@ -686,6 +727,7 @@ const s = StyleSheet.create({
   },
   headDur: { ...T.tiny, color: C.faint },
   err: { ...T.small, color: C.muted, textAlign: 'center' },
+  statsHead: { ...T.h2, color: C.ink, marginTop: S.sm },
   scrubRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginTop: S.xs },
   names: { width: 28, height: 44, justifyContent: 'space-between' },
   nameTop: { ...T.tiny, color: C.h2hP1, fontFamily: 'Archivo_700Bold' },
