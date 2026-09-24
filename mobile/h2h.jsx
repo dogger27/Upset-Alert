@@ -48,7 +48,8 @@ import { FORM_GAP, compareRows, formChipText, formChips, formDetail, formGrid, o
 import { ScrollPane } from './scrollPane'
 import { Sheet } from './sheet'
 import { PredictorsBody } from './predictors'
-import { ScoreHistoryBody } from './scoreHistory'
+import { ScoreHistoryBody, clockOf, prettyDuration, useHistory } from './scoreHistory'
+import { shortRound } from './rounds'
 import { BETTER, C, PICK, R, S, SIDE, T } from './theme'
 import { Loading } from './ui'
 import { useApi } from './useApi'
@@ -69,7 +70,7 @@ const MARK_W = 26 * FONT_SCALE + 6
    Prediction tab asks about (null: no tab). */
 export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNext,
                            status = null, pickSide = null, predictMatch = null, meId = null,
-                           histEntry = null }) {
+                           histEntry = null, round = null }) {
   // Keyed on the pair so switching matches refetches; the backend caches, so a
   // reopen is cheap and there is nothing to memoise here.
   const live = !!(visible && a?.te_slug && b?.te_slug)
@@ -122,6 +123,15 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
                         odds: ua.data ? [ua.data.p_a, ua.data.p_b] : null }), [view, surface, a, b, ua.data])
 
   const [tabsW, setTabsW] = useState(0)
+  /* BETWEEN THE NAMES (owner, 2026-09-24): the round, and under it how long
+     the match took — or, while it is on, when it started. The duration comes
+     with the point history, fetched by the same key the Points tab uses. */
+  const { hist: histQ } = useHistory(histEntry, !!visible && played)
+  const hd = histQ.data
+  const roundText = shortRound(round) || hd?.round_label || null
+  const durText = status?.live
+    ? (hd?.started_at ? `Started ${clockOf(hd.started_at)}` : null)
+    : prettyDuration(hd?.duration_min && hd.duration_min <= 900 ? hd.duration_min : null)
   const nMeet = view?.meetings?.length
   const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `Meetings (${nMeet})` : 'Meetings'],
                 ...(predictMatch ? [['prediction', 'Prediction']] : []),
@@ -166,6 +176,10 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
               <TwoLineName name={a?.name} won={status?.winner == null ? null : status.winner === 0} />
             </View>
             <View style={[s.rule, { backgroundColor: SIDE.left.line }]} />
+          </View>
+          <View style={s.mid}>
+            {roundText ? <Text style={s.midRound} allowFontScaling={false}>{roundText}</Text> : null}
+            {durText ? <Text style={s.midDur} allowFontScaling={false}>{durText}</Text> : null}
           </View>
           <View style={[s.who, s.whoEnd]}>
             <View style={[s.whoLine, s.whoLineEnd]}>
@@ -477,7 +491,15 @@ const s = StyleSheet.create({
      carries descender room the names' 15pt one does not, so it floated a
      third of a line above them. On the baseline the three read as one line,
      which is what they are. */
-  head: { flexDirection: 'row', alignItems: 'center', gap: S.lg, marginTop: S.xs },
+  head: { flexDirection: 'row', alignItems: 'center', gap: S.sm, marginTop: S.xs },
+  // The round over the duration, between the two players.
+  mid: { alignItems: 'center', gap: 4, flexShrink: 0 },
+  midRound: {
+    fontFamily: 'Archivo_700Bold', fontSize: 12 * FONT_SCALE, color: C.inkBody, letterSpacing: 0.4,
+    paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: C.borderOn, borderRadius: R.pill,
+    overflow: 'hidden',
+  },
+  midDur: { fontFamily: 'Archivo_500Medium', fontSize: 12 * FONT_SCALE, color: C.faint },
   pickInline: { fontSize: 15 * FONT_SCALE, lineHeight: Math.round(22 * FONT_SCALE) },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   nameRowEnd: { justifyContent: 'flex-end' },

@@ -430,6 +430,7 @@ export default function DrawScreen() {
                     surface={draw.data?.surface} status={status} pickSide={pickSide}
                     predictMatch={hm && !hm.is_bye ? hm : null} meId={me?.id}
                     histEntry={hm && matchStarted(hm) ? entryFromMatch(hm, Number(id), drawRanks) : null}
+                    round={hm?.round_name ?? null}
                     onPrev={prev ? () => setH2H(prev) : null}
                     onNext={next ? () => setH2H(next) : null} />
         )

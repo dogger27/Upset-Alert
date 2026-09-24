@@ -33,7 +33,7 @@ const THUMB = 26
    side by side, and a clay double fault was indistinguishable from the amber
    break there. Violet instead: nothing else on this rail is close to it. */
 /* Local device time, the way every other clock in this sheet is written. */
-function clockOf(iso) {
+export function clockOf(iso) {
   try {
     return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   } catch { return '' }
@@ -89,6 +89,20 @@ export function matchStarted(m) {
   return !!m && !m.is_bye && !!(m.winner || m.live_scores || m.live_point || m.scores || m.status === 'completed')
 }
 
+/* A MATCH'S SCORE HISTORY, fetched once and shared: the history body and the
+   match sheet's header (its round and duration) ask by the same key, so one
+   request answers both. */
+export function useHistory(entry, visible) {
+  const entryOnly = !!entry && !entry.match_id
+  const key = visible && entry
+    ? (entryOnly ? `hist:e:${entry.id}` : `hist:${entry.draw_id}:${entry.match_id}`)
+    : null
+  const hist = useApi(key, () => entryOnly
+    ? getEntryScoreHistory(entry.id)
+    : getMatchScoreHistory(entry.draw_id, entry.match_id))
+  return { key, hist }
+}
+
 /* THE HISTORY SHEET: the body below, in a sheet of its own — what a tap on
    a started match's score opens. */
 export function ScoreHistorySheet({ visible, onClose, entry }) {
@@ -119,12 +133,7 @@ export function ScoreHistoryBody({ visible, entry, part = 'all' }) {
      out to a spinner mid-scrub (owner, 2026-09-24). The effect below re-asks
      on the SAME key instead, which keeps the current history showing while
      the next one loads. */
-  const key = visible && entry
-    ? (entryOnly ? `hist:e:${entry.id}` : `hist:${entry.draw_id}:${entry.match_id}`)
-    : null
-  const hist = useApi(key, () => entryOnly
-    ? getEntryScoreHistory(entry.id)
-    : getMatchScoreHistory(entry.draw_id, entry.match_id))
+  const { key, hist } = useHistory(entry, visible)
   const data = hist.data
   /* ASK AGAIN WHILE THE ACES ARE ON THEIR WAY. The server waits 1.5s for the
      point labels, then answers without them and says labels_pending while its
@@ -319,13 +328,13 @@ export function ScoreHistoryBody({ visible, entry, part = 'all' }) {
           two are pinned to the edges and simply absent when unknown. */}
       {timeline && <View style={s.head}>
         <View style={s.headSide}>
-          {data?.round_label ? (
+          {part === 'all' && data?.round_label ? (
             <Text style={s.roundPill}>{data.round_label}</Text>
           ) : null}
         </View>
         <Text style={[s.when, atEnd && live && { color: C.greenLit }]}>{when}</Text>
         <View style={[s.headSide, { alignItems: 'flex-end' }]}>
-          {headRight ? <Text style={s.headDur} numberOfLines={1}>{headRight}</Text> : null}
+          {part === 'all' && headRight ? <Text style={s.headDur} numberOfLines={1}>{headRight}</Text> : null}
         </View>
       </View>}
       {/* The scroll is OFF while the slider is held. Refusing to hand the
@@ -633,7 +642,7 @@ function Legend({ color, label, size = LEGEND_SIZE }) {
 /* "2h 39m", or "47m" under the hour. Sofascore's PLAYING time where we have
    it — the sum of its set clocks — so a match suspended for rain does not
    claim the delay as tennis. */
-function prettyDuration(mins) {
+export function prettyDuration(mins) {
   if (!mins || mins <= 0) return null
   const h = Math.floor(mins / 60), m = mins % 60
   return h ? `${h}h ${m}m` : `${m}m`

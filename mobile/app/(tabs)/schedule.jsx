@@ -968,6 +968,7 @@ export default function ScheduleScreen() {
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} drawId={h2h?.drawId}
                 surface={h2h?.surface} status={h2h?.status} pickSide={h2h?.pickSide}
                 histEntry={h2h ? (all.find(x => x.id === h2h.rowId) || null) : null}
+                round={h2h?.round}
                 predictMatch={h2h?.predictMatch} meId={me?.id} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
           and women's draws on one day, so there is no single draw to pass. */}
@@ -1202,7 +1203,7 @@ function h2hPairOf(e) {
     : a?.draw_entry_id === pick ? 0 : b?.draw_entry_id === pick ? 1 : null
   return e.discipline === 'singles' && a?.te_slug && b?.te_slug
     ? { a: of(a), b: of(b), surface: e.surface, drawId: e.draw_id, status,
-        predictMatch: matchFromEntry(e), pickSide, rowId: e.id }
+        predictMatch: matchFromEntry(e), pickSide, rowId: e.id, round: e.round_label ?? null }
     : null
 }
 
