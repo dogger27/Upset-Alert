@@ -335,6 +335,9 @@ export function StatusChip({ tone = 'muted', children }) {
  *   Halved, and the horizontal padding left alone so every card down the
  *   column still starts its text at the same x.
  */
+// '#rrggbb' at 50% opacity; any other form is returned untouched.
+const halfAlpha = c => (/^#[0-9a-f]{6}$/i.test(c || '') ? `${c}80` : c)
+
 export function TourCard({ draws, name, children, footer, href, corner, compact }) {
   const list = (draws || []).filter(Boolean)
   const combined = list.length > 1
@@ -419,7 +422,10 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
           values). The border and the footer's rule come along — a pink card
           with the palette's grey-green edge reads as an unfinished state, not
           a colour choice. */}
-      <View style={[u.card, { backgroundColor: skin.card, borderColor: skin.line }]}>
+      {/* HALF-TRANSPARENT ON THE FULL CARDS (owner, 2026-09-24): Open and
+          Active sit on the page at 50% of their tint, so the page reads
+          through them. The week cards (`compact`) keep theirs solid. */}
+      <View style={[u.card, { backgroundColor: compact ? skin.card : halfAlpha(skin.card), borderColor: skin.line }]}>
         {combined ? (
           // Both tours, split down the bar. Men above, as everywhere else.
           <View style={{ width: 4 }}>
@@ -674,8 +680,10 @@ const u = StyleSheet.create({
      drawn for a card with four rows in it; this one has two, and the tier
      plate that sets the first row is 31pt of artwork that does not need 14pt
      of air above it to read. */
-  body: { flex: 1, paddingTop: 10, paddingRight: 16, paddingBottom: 10, paddingLeft: 16, gap: 7 },
-  bodyLink: { gap: 9 },
+  /* 5 and 5, gap 3 (owner, 2026-09-24: "tighten up the active tournament
+     boxes vertically"), from 10/10 and 7–9. */
+  body: { flex: 1, paddingTop: 5, paddingRight: 16, paddingBottom: 5, paddingLeft: 16, gap: 3 },
+  bodyLink: { gap: 3 },
   /* See `compact` at TourCard. Vertical only: the horizontal padding is what
      lines every card's text up down the column.
      3 AND 3, DOWN FROM 7 AND 5 IN TWO PASSES (owner, 2026-09-16), which takes
