@@ -397,7 +397,11 @@ function Form({ form, side, end = false, open, onOpen }) {
   /* THE SQUARES ARE SIZED FROM THE COLUMN, not fixed: five to a row, filling
      the width the row has, which is what brings them up to the word in the
      middle. See h2hView.formChipSize for why the ceiling and the floor. */
-  const { size, per } = formGrid(width)
+  /* FILLING THE HALF (owner, 2026-09-24): the Bio table runs edge to edge
+     now, so each side of the form row is wider than the 34pt ceiling was set
+     for, and the squares stopped short of the word. The ceiling is lifted to
+     what five squares across a phone's half can reach. */
+  const { size, per } = formGrid(width, { max: 64 })
   // Two rows of whatever a row holds: ten at ordinary text size, eight where
   // large text has narrowed the column.
   // Singles only: this sheet previews a singles match — see singlesOnly.
