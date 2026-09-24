@@ -750,6 +750,7 @@ const u = StyleSheet.create({
      two move it to 10.25 either side. That pair is font metrics and travels. */
   stampSet: {
     flexDirection: 'row',
+    justifyContent: 'center',
     /* The line box is taller than the plate — Kanit's ascent and descent
        carry room for Thai marks — so the cross-axis rule is what decides
        where the ink lands, and TierBadge's `lift` is measured against THIS
@@ -788,7 +789,10 @@ const u = StyleSheet.create({
   // Stacked, and right-aligned so the two tours' plates share an edge — they
   // are different widths (a 250's line is shorter than a 1000's) and a
   // centred pair would read as two things rather than one block.
-  stampStack: { gap: 4, alignItems: 'flex-end' },
+  /* STRETCH, so a joint event's two plates are one width — the wider one's —
+     and each centres its lettering in it (owner, 2026-09-24). The stack
+     itself is only as wide as its widest plate, so a lone plate is unchanged. */
+  stampStack: { gap: 4, alignItems: 'stretch' },
   // Two small plates on a combined week card: the gap scales with them, or the
   // air between reads as wider than either plate is tall.
   stampStackTight: { gap: 2 },
