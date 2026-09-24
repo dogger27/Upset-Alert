@@ -22,7 +22,9 @@ const SRC = readFileSync(new URL('./h2h.jsx', import.meta.url), 'utf8')
    them outgrow the column they sit in. */
 assert.doesNotMatch(SRC, /^const CHIP = /m,
   'the swatch must be measured from its row, not fixed')
-assert.match(SRC, /formGrid\(width\)/,
+// A ceiling may be passed (the Bio row fills its half, 2026-09-24); the
+// width must still be the measured one.
+assert.match(SRC, /formGrid\(width[,)]/,
   'the swatch size must come from the measured width')
 assert.doesNotMatch(SRC, /chipText: \{[^}]*fontSize: \d/,
   'the letter grows with its box, so it cannot carry a fixed size')
