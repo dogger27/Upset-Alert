@@ -157,7 +157,9 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   /* THE BIG MOMENTS, IN ORDER — every position with a tick on it. The arrows
      step the thumb between them (owner, 2026-09-24): the ticks were a map of
      the match you could only read by dragging a thumb across 3pt targets. */
-  const moments = useMemo(() => [...new Set(markers.map(m => m.i))].sort((x, y) => x - y), [markers])
+  // The match's START is a stop too (owner, 2026-09-24) — position 0, the
+  // first point — though it has no tick and no legend entry.
+  const moments = useMemo(() => [...new Set([0, ...markers.map(m => m.i)])].sort((x, y) => x - y), [markers])
   const here = atEnd ? max : pos
   const prevMoment = [...moments].reverse().find(i => i < here)
   const nextMoment = moments.find(i => i > here)
@@ -175,7 +177,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
     if (!words.length) return null
     const name = who(side)
     return name ? `${name}: ${words.join(' · ')}` : words.join(' · ')
-  }).filter(Boolean).join('   ') || prevPoint
+  }).filter(Boolean).join('   ') || prevPoint || (here === 0 ? 'Match start' : null)
   const stats = useMemo(() => pointStats(snapshots), [snapshots])
   const statsUsable = stats.counted >= 20 && stats.counted / Math.max(1, stats.transitions) >= 0.7
 
@@ -583,14 +585,16 @@ const s = StyleSheet.create({
   /* Arrows and pill in one row, stretched to one height: the pill's two
      fixed lines set it, the arrows take it. */
   navRow: { flexDirection: 'row', alignItems: 'stretch', justifyContent: 'center', gap: S.sm },
+  /* The arrows take all the width the pill leaves, out to the sheet's
+     padding (owner, 2026-09-24): wide targets, the legend still centred. */
   navBtn: {
-    width: 44, borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn,
+    flex: 1, minWidth: 44, borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn,
     backgroundColor: C.card, alignItems: 'center', justifyContent: 'center',
   },
   navBtnPressed: { backgroundColor: C.greenDeep },
   navBtnOff: { opacity: 0.4 },
   legendPill: {
-    flexShrink: 1, justifyContent: 'center', gap: 3,
+    flexShrink: 0, maxWidth: '70%', justifyContent: 'center', gap: 3,
     paddingHorizontal: S.md, paddingVertical: 6,
     borderWidth: 1, borderColor: C.borderOn, borderRadius: R.pill,
   },
