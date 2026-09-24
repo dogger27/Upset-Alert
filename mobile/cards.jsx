@@ -1241,6 +1241,8 @@ const AFTER_PX = 24
    side ahead of the pair. The glyphs are not in the metric tables, so each
    takes a fixed allowance off the room before the rungs are measured. */
 const FLAG_PX = 20
+// How far a name may shrink to keep its flags before it gives them up.
+const FLAG_KEEP = 0.85
 /* "A / B" with each side's flag ahead of its name; a side with no country
    keeps its name alone. pairForms joins with " / ", so the split is exact. */
 export function withFlags(text, glyphs) {
@@ -1280,10 +1282,37 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style, a
     const rungs = glyphs.length
       ? [...forms.map(f => ({ f, flagged: true })), ...forms.map(f => ({ f, flagged: false }))]
       : forms.map(f => ({ f, flagged: false }))
-    const fits = rungs.find(r => textWidth(r.f, family, size) + (r.flagged ? flagW : 0) <= room)
+    /* FLAGS STAY, THE TYPE GIVES A LITTLE FIRST (owner, 2026-09-24: "look
+       at all those players with no flags"). Dropping every flag the moment a
+       name missed full size by a point stripped most doubles rows once the
+       flags were counted at their true width. Now a rung that fits wearing
+       its flags at up to 15% smaller is taken at that size; only a name that
+       cannot keep its flags even then loses them. */
+    const scaleFor = (r) => {
+      const fw = r.flagged ? flagW : 0
+      const tw = textWidth(r.f, family, size)
+      if (tw + fw <= room) return 1
+      // Flags scale with the type, so the whole line scales together.
+      const k = room / (tw + fw)
+      return k >= FLAG_KEEP ? k : null
+    }
+    /* In order: any flagged rung at full size (a shorter form keeps the
+       flags without shrinking); then flagged rungs shrunk up to FLAG_KEEP;
+       then unflagged rungs at full size. */
+    let fits = null, k = 1
+    const flaggedRungs = rungs.filter(r => r.flagged)
+    fits = flaggedRungs.find(r => scaleFor(r) === 1) || null
+    if (!fits) {
+      for (const r of flaggedRungs) {
+        const got = scaleFor(r)
+        if (got != null) { fits = r; k = got; break }
+      }
+    }
+    if (!fits) fits = rungs.filter(r => !r.flagged).find(r => scaleFor(r) === 1) || null
     if (fits) {
       text = fits.f
       flagged = fits.flagged
+      if (k < 1) fontSize = size * k
     } else {
       flagged = false
       // Every rung is too wide: the shortest one, shrunk TO FIT. No floor and
