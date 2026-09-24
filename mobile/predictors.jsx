@@ -22,8 +22,9 @@ import { predictorsMessage } from './lock'
 import { shortRound } from './rounds'
 import { useApi } from './useApi'
 import { C, R, S, T } from './theme'
-import { leading } from './fontScale'
+import { FONT_SCALE, leading } from './fontScale'
 import { Loading } from './ui'
+import { textWidth } from './measure'
 
 export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueId: initialLeagueId = null }) {
   const winner = match?.winner?.name
@@ -133,6 +134,23 @@ export function PredictorsBody({ active = true, drawId, match, meId, initialLeag
   }, [mine, meId])
 
   const fieldSize = (d?.correct?.length || 0) + (d?.incorrect?.length || 0)
+  /* THE HEADINGS NEVER WRAP (owner, 2026-09-24): "Wrong (7 users, 100%)"
+     broke onto a second line in a half-width column. Both are measured
+     against the column's width from the font's own tables and share ONE
+     scale — the smaller of the two — so they stay the same size as each
+     other, and are drawn with system scaling off so the measurement is the
+     drawing. */
+  const [colsW, setColsW] = useState(0)
+  const leftLabel = d?.pending ? 'Maybe' : 'Right'
+  const colW = colsW ? (colsW - 1 - 2 * S.md) / 2 : 0
+  const headScale = (() => {
+    if (!colW || !d) return 1
+    const need = (label, n) => textWidth(label, HEAD_FONT, HEAD_SIZE)
+      + textWidth(headNote(n, fieldSize), NOTE_FONT, NOTE_SIZE)
+    const worst = Math.max(need(leftLabel, d.correct?.length || 0), need('Wrong', d.incorrect?.length || 0))
+    // 5% held back: kerning is not in the width tables.
+    return Math.min(1, (0.95 * (colW - 2)) / worst)
+  })()
   /* WITHHELD IS NOT EMPTY, and the difference is the whole sheet. Under
      match-by-match locking the server returns both columns empty with
      `hidden` set, because picks stay editable through round one and a
@@ -183,13 +201,13 @@ export function PredictorsBody({ active = true, drawId, match, meId, initialLeag
                 before a result: it is not provisionally wrong, it is wrong. */}
             <SplitRail left={d.correct?.length || 0} right={d.incorrect?.length || 0}
                        leftTone={d.pending ? C.warn : C.greenLit} />
-            <View style={s.columns}>
-              <Column label={d.pending ? 'Maybe' : 'Right'} tone={d.pending ? C.warn : C.greenLit}
+            <View style={s.columns} onLayout={e => setColsW(e.nativeEvent.layout.width)}>
+              <Column label={leftLabel} tone={d.pending ? C.warn : C.greenLit} headScale={headScale}
                       people={d.correct} fieldSize={fieldSize} meId={meId} friends={friends}
                       cap={leagueId == null ? GLOBAL_CAP : null}
                       showPicks={d.pending} />
               <View style={s.columnRule} />
-              <Column label="Wrong" tone={C.bad}
+              <Column label="Wrong" tone={C.bad} headScale={headScale}
                       people={d.incorrect} fieldSize={fieldSize} meId={meId} friends={friends}
                       cap={leagueId == null ? GLOBAL_CAP : null}
                       showPicks />
@@ -235,10 +253,17 @@ function SplitRail({ left, right, leftTone }) {
  * the wrong column, and both columns before a result. Groups run fewest
  * backers first — on Upset Alert the three who went the other way are the
  * news — and each says its full count even when only some of it is shown. */
-function Column({ label, tone, people, fieldSize, meId, friends, cap, showPicks }) {
+/* The heading's two faces, at their full size (scaled by headScale). */
+const HEAD_FONT = 'SairaCondensed_700Bold'
+const HEAD_SIZE = 19 * FONT_SCALE
+const NOTE_FONT = 'Archivo_400Regular'
+const NOTE_SIZE = 13 * FONT_SCALE
+const headNote = (n, fieldSize) =>
+  ` (${n} ${n === 1 ? 'user' : 'users'}${fieldSize ? `, ${Math.round((100 * n) / fieldSize)}%` : ''})`
+
+function Column({ label, tone, people, fieldSize, meId, friends, cap, showPicks, headScale = 1 }) {
   const [all, setAll] = useState(false)
   const list = useMemo(() => people || [], [people])
-  const pct = fieldSize ? Math.round((100 * list.length) / fieldSize) : 0
 
   const { groups, hidden } = useMemo(() => {
     const rank = p => (meId != null && p.id === meId ? 0 : friends.has(p.id) ? 1 : 2)
@@ -260,11 +285,11 @@ function Column({ label, tone, people, fieldSize, meId, friends, cap, showPicks 
     <View style={s.column}>
       {/* "Right (7 users, 33%)" — the count and share in brackets after the
           word (owner, 2026-09-24). */}
-      <Text style={[s.colLabel, { color: tone }]}>
+      <Text style={[s.colLabel, { color: tone, fontSize: HEAD_SIZE * headScale,
+                                  lineHeight: Math.round(HEAD_SIZE * 1.2) }]}
+            allowFontScaling={false}>
         {label}
-        <Text style={s.colCount}>
-          {` (${list.length} ${list.length === 1 ? 'user' : 'users'}${fieldSize ? `, ${pct}%` : ''})`}
-        </Text>
+        <Text style={[s.colCount, { fontSize: NOTE_SIZE * headScale }]}>{headNote(list.length, fieldSize)}</Text>
       </Text>
       {!list.length ? <Text style={s.none}>No one</Text> : null}
       {groups.map(g => (
@@ -351,7 +376,7 @@ const s = StyleSheet.create({
   columns: { flexDirection: 'row', alignItems: 'flex-start' },
   column: { flex: 1, minWidth: 0, gap: 2 },
   columnRule: { width: 1, alignSelf: 'stretch', backgroundColor: C.border, marginHorizontal: S.md },
-  colLabel: { ...T.h2, lineHeight: leading(22), marginBottom: S.sm },
+  colLabel: { fontFamily: HEAD_FONT, marginBottom: S.sm },
   // Inside the heading's line; fontVariant carries, margins do not.
   colCount: { ...T.small, color: C.faint, fontVariant: ['tabular-nums'] },
   pickGroup: { marginBottom: S.sm, gap: 2 },
