@@ -3,7 +3,7 @@ import { useBackdropClose } from '../hooks/useBackdropClose'
 import { shortRound } from '../utils/rounds'
 import { createPortal } from 'react-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { getH2H, getPlayerForm } from '../api/players'
+import { getH2H, getPairOdds, getPlayerForm } from '../api/players'
 import { IOC_TO_ISO2, splitPlayerName } from '../utils/flags'
 import './H2HPanel.css'
 
@@ -312,6 +312,21 @@ function FormRow({ matches, side, openKey, onOpen }) {
   )
 }
 
+function UaInfoPopup({ onClose }) {
+  const backdrop = useBackdropClose(onClose)
+  return (
+    <div className="h2h-elo-popup-backdrop" {...backdrop}>
+      <div className="h2h-elo-popup" onClick={e => e.stopPropagation()}>
+        <div className="h2h-elo-popup-header">
+          <span className="h2h-elo-popup-title">UA odds</span>
+          <button className="h2h-elo-popup-close" onClick={onClose}>✕</button>
+        </div>
+        <p className="h2h-elo-popup-body">Upset Alert's estimated winning percentage</p>
+      </div>
+    </div>
+  )
+}
+
 function EloInfoPopup({ onClose }) {
   const backdrop = useBackdropClose(onClose)
   return (
@@ -348,6 +363,7 @@ export default function H2HPanel({
   // rather than in each square so opening one closes the rest by construction.
   const [openForm, setOpenForm] = useState(null)
   const [showEloInfo, setShowEloInfo] = useState(false)
+  const [showUaInfo, setShowUaInfo] = useState(false)
 
   // Freeze the page behind the panel for as long as it is open — see the
   // .h2h-modal-open rule in H2HPanel.css for why this matters more on iOS than
@@ -397,6 +413,17 @@ export default function H2HPanel({
   // beforeDrawId/beforeRound restrict Form to results before that match's date,
   // so viewing an old draw shows form leading up to it, not each player's
   // current form.
+  /* UA ODDS (owner, 2026-09-24): each player's chance of winning, from the
+     same model as the standings' chances; the draw gives the match's own
+     surface and best-of. */
+  const uaQ = useQuery({
+    queryKey: ['h2h-ua', slug1In, slug2In, beforeDrawIdIn, tournSurface],
+    queryFn: () => getPairOdds(slug1In, slug2In, { drawId: beforeDrawIdIn, surface: tournSurface }),
+    enabled: teIn,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
+  })
+
   const f1Q = useQuery({
     queryKey: ['h2h-form', slug1In, beforeDrawIdIn, beforeRoundIn],
     queryFn: () => getPlayerForm(slug1In, { beforeDrawId: beforeDrawIdIn, beforeRound: beforeRoundIn }),
@@ -574,6 +601,7 @@ export default function H2HPanel({
   return createPortal(
     <div className="h2h-backdrop" {...backdrop}>
       {showEloInfo && <EloInfoPopup onClose={() => setShowEloInfo(false)} />}
+      {showUaInfo && <UaInfoPopup onClose={() => setShowUaInfo(false)} />}
       <div className="h2h-panel" onClick={e => e.stopPropagation()}>
         {/* Arrows paired at the left with the title to their right, matching
             the draw header's own nav bar rather than inventing a second
@@ -676,6 +704,22 @@ export default function H2HPanel({
 
           {/* Divider */}
           <div className="h2h-divider" />
+
+          {/* UA odds row — each player's estimated chance of winning */}
+          {uaQ.data && (() => {
+            const ua1 = Math.round(uaQ.data.p_a * 100), ua2 = 100 - ua1
+            return (
+              <div className="h2h-row">
+                <div className="h2h-label h2h-label-with-info">
+                  UA odds
+                  <button className="h2h-info-btn" onClick={e => { e.stopPropagation(); setShowUaInfo(true) }} aria-label="About UA odds">ⓘ</button>
+                </div>
+                <div className="h2h-col-val h2h-val-p1 h2h-meta-val"><span className={bestCls(ua1, ua2)}>{ua1}%</span></div>
+                <div className="h2h-vs" />
+                <div className="h2h-col-val h2h-val-p2 h2h-meta-val"><span className={bestCls(ua2, ua1)}>{ua2}%</span></div>
+              </div>
+            )
+          })()}
 
           {/* Rank row */}
           {showRank && (

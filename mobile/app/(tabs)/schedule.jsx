@@ -969,7 +969,7 @@ export default function ScheduleScreen() {
                  onH2H={setH2H} onPredictors={setPredictors} onHistory={setHist} />
       {/* The surface comes off the ROW: a day mixes draws, so there is no one
           surface for the page. */}
-      <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b}
+      <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} drawId={h2h?.drawId}
                 surface={h2h?.surface} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
           and women's draws on one day, so there is no single draw to pass. */}
@@ -1190,7 +1190,7 @@ function h2hPairOf(e) {
     ranking: p.ranking, elo_rank: p.elo_rank, date_of_birth: p.date_of_birth,
   })
   return e.discipline === 'singles' && a?.te_slug && b?.te_slug
-    ? { a: of(a), b: of(b), surface: e.surface }
+    ? { a: of(a), b: of(b), surface: e.surface, drawId: e.draw_id }
     : null
 }
 

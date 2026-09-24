@@ -51,3 +51,20 @@ async def player_form(
                 from datetime import date as _date
                 before_date = _date.fromisoformat(date_str)
     return await get_player_form(slug, db, before_date=before_date, singles=singles)
+
+
+@router.get("/odds")
+async def pair_odds_endpoint(
+    a: str = Query(..., description="Tennis Explorer slug, player A"),
+    b: str = Query(..., description="Tennis Explorer slug, player B"),
+    surface: Optional[str] = Query(None, description="Hard / Clay / Grass, when no draw is given"),
+    draw_id: Optional[int] = Query(None, description="The match's draw: its surface and best-of win"),
+    db: AsyncSession = Depends(get_db),
+):
+    """UA odds: each player's chance of winning, from the model behind the
+    standings' win chances. 404 when either player is unknown."""
+    from app.services.win_chances import pair_odds
+    out = await pair_odds(db, a, b, surface=surface, draw_id=draw_id)
+    if out is None:
+        raise HTTPException(404, "unknown player")
+    return out
