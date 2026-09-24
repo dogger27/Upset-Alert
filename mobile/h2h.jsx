@@ -294,8 +294,15 @@ function TwoLineName({ name, end = false }) {
   const align = end ? 'right' : 'left'
   return (
     <View style={s.whoNames}>
-      {first ? <FitText style={s.whoFirst} min={9} align={align}>{first}</FitText> : null}
-      <FitText style={s.whoName} min={10} align={align}>{last}</FitText>
+      {/* Each line in a box of its own height: FitText's slot is flex:1, and
+          two of them in a column shared out whatever height the column had —
+          a gap between the names that grew with the row (owner, 2026-09-24:
+          "remove that gap"). The surname is pulled up by the room iOS leaves
+          above a line's capitals, so it sits directly under the first name. */}
+      {first ? <View style={s.whoLineBox}><FitText style={s.whoFirst} min={9} align={align}>{first}</FitText></View> : null}
+      <View style={[s.whoLineBox, first ? s.whoLast : null]}>
+        <FitText style={s.whoName} min={10} align={align}>{last}</FitText>
+      </View>
     </View>
   )
 }
@@ -318,6 +325,8 @@ const s = StyleSheet.create({
   whoLineEnd: { justifyContent: 'flex-end' },
   whoName: { ...T.bodyBold, color: C.ink, flexShrink: 1 },
   whoNames: { flex: 1, minWidth: 0 },
+  whoLineBox: { flexGrow: 0, flexShrink: 0 },
+  whoLast: { marginTop: -leading(6) },
   whoFirst: { ...T.small, color: C.inkBody },
   whoNameEnd: { textAlign: 'right' },
   // Two points, so the key reads as a deliberate mark rather than a hairline.
