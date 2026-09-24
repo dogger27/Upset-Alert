@@ -1235,12 +1235,16 @@ export function FlagSlot({ codes, slots = 1 }) {
 /* `after`: a mark that rides immediately after the name — the pick's 🤞 —
    inside the slot, so it follows the name rather than drifting to the row's
    far edge. Its width comes off what the name may use. */
-const AFTER_PX = 24
+// The 🤞 as drawn (14pt, ~1.25em wide) plus the 4pt gap before it — no more
+// (owner, 2026-09-24: Ostapenko shrunk for a wider reservation than it needs).
+const AFTER_PX = 21
 /* `flags`: a doubles pair's two countries, one BEFORE EACH NAME (owner,
    2026-09-17) - "🇺🇸 Stearns / 🇺🇸 Stephens" - rather than two flags side by
    side ahead of the pair. The glyphs are not in the metric tables, so each
    takes a fixed allowance off the room before the rungs are measured. */
-const FLAG_PX = 20
+// A flag emoji plus its following space at 15pt: ~22 as iOS draws it (20 undercounted —
+// "Back / Ja…", 2026-09-24).
+const FLAG_PX = 22
 // How far a name may shrink to keep its flags before it gives them up.
 const FLAG_KEEP = 0.85
 /* "A / B" with each side's flag ahead of its name; a side with no country
@@ -1332,7 +1336,12 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style, a
           the trap recorded for the day strip, the Postponed pill and the
           match sheet's names. The arithmetic above decides the size, with
           its own slack; the name is drawn at exactly that. */}
-      <Text style={[style, { flexShrink: 1 }, fontSize !== size && { fontSize }]} numberOfLines={1}>
+      {/* A MILD BACKSTOP, NEVER "…" (owner, 2026-09-24: "Ja…"). The size
+          above is ours; iOS may shave at most 12% more where it draws a hair
+          wider than the tables — far short of the floor that made the old
+          backstop shrink names that fit. */}
+      <Text style={[style, { flexShrink: 1 }, fontSize !== size && { fontSize }]} numberOfLines={1}
+            adjustsFontSizeToFit minimumFontScale={0.88}>
         {flagged ? withFlags(text, glyphs) : text}
       </Text>
       {after}

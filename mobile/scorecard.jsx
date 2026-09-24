@@ -126,6 +126,18 @@ export function MatchCard({ e, scale = 1, badges = true, round = null }) {
                 to whatever is left. That is the whole of "decrease the font
                 size when necessary": it is already the rule, it just has to be
                 given the real width (owner, 2026-09-14). */}
+            {/* ON THE LINE WITHOUT THE ROUND, the entry chip takes the round's
+                empty slot (owner, 2026-09-24: "the WC card can be pushed far
+                to the right") — the name gets the room the chip used to take.
+                The ghost still holds the slot's width; the chip sits over it,
+                right-aligned, on the round column. */}
+            {idx !== 0 && round && sideEntryType(e.players, side) ? (
+              <View>
+                <RoundChip round={round} ghost />
+                <View style={s.entryInRound}><EntryChip entryType={sideEntryType(e.players, side)} /></View>
+              </View>
+            ) : (
+            <>
             <EntryChip entryType={sideEntryType(e.players, side)} />
             {/* THE ROUND, DRAWN ON THE TOP PLAYER'S LINE AND HELD OPEN ON THE
                 OTHER (owner, 2026-09-21). Here rather than beside the card so
@@ -136,6 +148,8 @@ export function MatchCard({ e, scale = 1, badges = true, round = null }) {
                 that pass no round — every screen but the schedule's compact
                 list — render nothing and are untouched. */}
             <RoundChip round={round} ghost={idx !== 0} />
+            </>
+            )}
             {end && <Text style={s.end}>{end}</Text>}
             {winner != null && (
               <Text style={[s.mark, scale < 1 && { fontSize: Math.round(13 * scale), lineHeight: leading(Math.round(16 * scale)) }, { color: winner === idx ? C.greenLit : C.lossMark }]}>
@@ -195,6 +209,7 @@ const s = StyleSheet.create({
      instead; the name is the one part with a ladder to climb down. */
   sets: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto', flexShrink: 0 },
   nameWrap: { flex: 1, minWidth: 0 },
+  entryInRound: { position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center' },
   setBox: { flexDirection: 'row', alignItems: 'flex-start', minWidth: 16, justifyContent: 'center' },
   setWide: { minWidth: 26 },
   set: { ...T.score },
