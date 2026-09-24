@@ -35,7 +35,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { getH2H, getPairOdds, getPlayerForm } from './api'
 import { FitText, FlagSlot, PlayerName } from './cards'
@@ -121,10 +121,19 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
     () => compareRows({ view, surface, left: a, right: b,
                         odds: ua.data ? [ua.data.p_a, ua.data.p_b] : null }), [view, surface, a, b, ua.data])
 
+  const [tabsW, setTabsW] = useState(0)
   const nMeet = view?.meetings?.length
   const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `Meetings (${nMeet})` : 'Meetings'],
                 ...(predictMatch ? [['prediction', 'Prediction']] : []),
-                ...(played ? [['history', 'Point history'], ['stats', 'Match stats']] : [])]
+                ...(played ? [['history', 'Points'], ['stats', 'Stats']] : [])]
+
+  const TAB_BASE = 13 * FONT_SCALE
+  const tabSize = (() => {
+    if (!tabsW) return TAB_BASE
+    const cell = tabsW / tabs.length - 2 * 4 - 2
+    const widest = Math.max(...tabs.map(([, l]) => textWidth(l, 'Archivo_700Bold', TAB_BASE)))
+    return widest <= cell ? TAB_BASE : Math.max(9, (TAB_BASE * cell) / widest)
+  })()
 
   return (
     <Sheet visible={!!visible} onClose={onClose} height="92%"
@@ -161,16 +170,20 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
           </View>
         </View>
 
-        {/* Sideways-scrolling when five tabs outgrow the width — never cut. */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabsScroll}
-                    contentContainerStyle={s.tabs}>
-          {tabs.map(([k, label]) => (
-            <Pressable key={k} onPress={() => setTab(k)} hitSlop={6} style={[s.tabBtn, shownTab === k && s.tabBtnOn]}
+        {/* EVERY TAB IN VIEW AT ONCE, IN EQUAL CELLS with a rule between each
+            (owner, 2026-09-24). One type size for all of them: the size at
+            which the longest label fits its cell, measured, never above the
+            normal size and never cut. */}
+        <View style={s.tabs} onLayout={e => setTabsW(e.nativeEvent.layout.width)}>
+          {tabs.map(([k, label], i) => (
+            <Pressable key={k} onPress={() => setTab(k)} hitSlop={4}
+                       style={[s.tabBtn, i > 0 && s.tabBtnRule, shownTab === k && s.tabBtnOn]}
                        accessibilityRole="tab" accessibilityState={{ selected: shownTab === k }}>
-              <Text style={[s.tab, shownTab === k && s.tabOn]}>{label}</Text>
+              <Text style={[s.tab, shownTab === k && s.tabOn, { fontSize: tabSize }]}
+                    allowFontScaling={false}>{label}</Text>
             </Pressable>
           ))}
-        </ScrollView>
+        </View>
 
         {shownTab === 'history' || shownTab === 'stats' ? (
           <ScoreHistoryBody visible={!!visible} entry={histEntry}
@@ -464,11 +477,13 @@ const s = StyleSheet.create({
   nameRowEnd: { justifyContent: 'flex-end' },
   /* The tabs, the Points / Serve & Return pair's idiom: words, the chosen one
      in ink with a green underline. */
-  tabsScroll: { flexGrow: 0, marginTop: S.sm, marginBottom: S.sm,
-                borderBottomWidth: 1, borderBottomColor: C.border },
-  tabs: { flexDirection: 'row', gap: S.lg },
-  tabBtn: { paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabBtnOn: { borderBottomColor: C.greenLit },
+  tabs: { flexDirection: 'row', marginTop: S.sm, marginBottom: S.sm,
+          borderWidth: 1, borderColor: C.border, borderRadius: R.sm, overflow: 'hidden' },
+  tabBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 4,
+            borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  // The rule between two tabs.
+  tabBtnRule: { borderLeftWidth: 1, borderLeftColor: C.border },
+  tabBtnOn: { borderBottomColor: C.greenLit, backgroundColor: C.raised },
   tab: { ...T.smallMed, color: C.muted },
   tabOn: { color: C.ink, fontFamily: 'Archivo_700Bold' },
   /* Tight to the names above and the table below (owner, 2026-09-24: "remove
