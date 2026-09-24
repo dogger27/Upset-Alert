@@ -126,7 +126,7 @@ def _tz(venue_tz: Optional[str]):
         return timezone.utc
 
 
-def _surname_last(part: str) -> str:
+def _surname_last(part: str, doubles: bool = False) -> str:
     """"Bhambri Y" -> "Y Bhambri", so the surname ends the string.
 
     Sofascore writes a SINGLES player as "Daniel Altmaier" but a DOUBLES team
@@ -144,6 +144,17 @@ def _surname_last(part: str) -> str:
     # player with two given names, and taking one made her "L Barros V"
     # (SP Open doubles, 2026-09-18).
     initials = []
+    # A DOUBLES part's given name is not always one letter. Hangzhou
+    # 2026-09-25 (doc 525): Sofascore wrote "Rojer J-J" and "Zhang Zhi", the
+    # one-letter rule left both where they were, the surnames came out "j-j"
+    # and "zhi", and two doubles rows' pair keys matched nothing — no round
+    # chip on either while every other row had R16. Inside a "/" team the form
+    # is ALWAYS surname-first, so a short trailing token (a hyphenated initial,
+    # or an abbreviation of three letters or fewer) is the given name too. A
+    # singles part keeps the one-letter rule: "Taro Daniel" is the same shape
+    # as "Zhang Zhi", and only the team says which order it is in.
+    if doubles and len(toks) > 1 and _abbreviated_given(toks[-1]):
+        initials.insert(0, toks.pop())
     while len(toks) > 1 and len(toks[-1].rstrip(".")) == 1 and toks[-1].rstrip(".").isalpha():
         initials.insert(0, toks.pop())
     if initials:
@@ -151,11 +162,26 @@ def _surname_last(part: str) -> str:
     return part
 
 
+def _abbreviated_given(tok: str) -> bool:
+    """"J-J", "J.-J.", "Zhi", "A." — a given name cut short, never a surname
+    Sofascore spells out in full on a doubles team."""
+    from app.services.sofascore_doubles import _GEN_SUFFIX
+    if _GEN_SUFFIX.match(tok):      # "Damm Jr" — a suffix, not a given name
+        return False
+    parts = [p for p in re.split(r"[-.]", tok) if p]
+    if not parts or not all(p.isalpha() for p in parts):
+        return False
+    if len(parts) > 1:
+        return all(len(p) <= 2 for p in parts)
+    return len(parts[0]) <= 3
+
+
 def _names(team: dict) -> tuple[list, list]:
     """A doubles team is one string — "Krajicek A. / Mektic N." — so the pair
     is split back apart, and a singles player is simply a list of one."""
     name = (team or {}).get("name") or ""
-    parts = [_surname_last(p.strip()) for p in name.split("/") if p.strip()]
+    raw = [p.strip() for p in name.split("/") if p.strip()]
+    parts = [_surname_last(p, doubles=len(raw) > 1) for p in raw]
     country = (((team or {}).get("country") or {}).get("alpha3") or "").strip()
     # A neutral athlete's country is one the tour's sheet withholds; see
     # oop_parser.NEUTRAL_NATIONS.

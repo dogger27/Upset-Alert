@@ -101,6 +101,15 @@ def test_a_doubles_player_with_two_initials_keeps_both_before_the_surname():
     assert _surname_last("Bhambri Y") == "Y Bhambri"
     assert _surname_last("Van de Zandschulp B") == "B Van de Zandschulp"
     assert _surname_last("Daniel Altmaier") == "Daniel Altmaier"
+    # Hangzhou 2026-09-25 (doc 525): a doubles given name cut to more than
+    # one letter. Only the team says the order, so singles keeps its shape.
+    assert _surname_last("Rojer J-J", doubles=True) == "J-J Rojer"
+    assert _surname_last("Zhang Zhi", doubles=True) == "Zhi Zhang"
+    assert _surname_last("Barros V L", doubles=True) == "V L Barros"
+    assert _surname_last("Damm Jr", doubles=True) == "Damm Jr"
+    assert _surname_last("Zhang Zhi") == "Zhang Zhi"
+    from app.services.sofa_schedule import _names
+    assert _names({"name": "Rojer J-J / Winegar T"})[0] == ["J-J Rojer", "T Winegar"]
 
 
 def test_a_feed_estimate_is_not_a_printed_clock():
