@@ -265,7 +265,8 @@ export function TierBadge({ tour, tier, name, small }) {
        tiny bit too low"), seen once the plate took an edge. Fixed points: the
        stamp does not scale with the reader's text size. */
     marginTop: Platform.OS === 'web' ? 0 : lift - 1,
-    color: TOUR[key].text,
+    // 80% opaque (owner, 2026-09-24: 20% more transparent).
+    color: `${TOUR[key].text}cc`,
   }
   return (
     /* EDGED, AND DARKER THAN THE CARD (owner, 2026-09-24). On the home cards
