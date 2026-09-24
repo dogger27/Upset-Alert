@@ -29,6 +29,7 @@ async def player_form(
     before_round: Optional[int] = Query(
         None, description="Round number of the match being viewed, required alongside before_draw_id"
     ),
+    singles: bool = Query(False, description="Singles only, still `limit` of them"),
     db: AsyncSession = Depends(get_db),
 ):
     """Last 10 completed matches for a single player, sourced from our own draw data.
@@ -49,4 +50,4 @@ async def player_form(
             if date_str:
                 from datetime import date as _date
                 before_date = _date.fromisoformat(date_str)
-    return await get_player_form(slug, db, before_date=before_date)
+    return await get_player_form(slug, db, before_date=before_date, singles=singles)
