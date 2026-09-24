@@ -966,7 +966,7 @@ export default function ScheduleScreen() {
       {/* The surface comes off the ROW: a day mixes draws, so there is no one
           surface for the page. */}
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} drawId={h2h?.drawId}
-                surface={h2h?.surface} status={h2h?.status}
+                surface={h2h?.surface} status={h2h?.status} pickSide={h2h?.pickSide}
                 predictMatch={h2h?.predictMatch} meId={me?.id} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
           and women's draws on one day, so there is no single draw to pass. */}
@@ -1194,9 +1194,14 @@ function h2hPairOf(e) {
     winner: won, scores: e.scores, live: isLive(e),
     live_point: e.live_point, live_scores: e.live_scores,
   })
+  // The reader's pick, as the row's own 🤞 reads it (scorecard.jsx): the
+  // server stamps the row with the draw entry they chose.
+  const pick = e.pick_entry_id
+  const pickSide = pick == null ? null
+    : a?.draw_entry_id === pick ? 0 : b?.draw_entry_id === pick ? 1 : null
   return e.discipline === 'singles' && a?.te_slug && b?.te_slug
     ? { a: of(a), b: of(b), surface: e.surface, drawId: e.draw_id, status,
-        predictMatch: matchFromEntry(e) }
+        predictMatch: matchFromEntry(e), pickSide }
     : null
 }
 
