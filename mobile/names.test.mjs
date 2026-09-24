@@ -1,4 +1,4 @@
-import { nameForms, pairForms, sheetName } from './names.js'
+import { nameForms, nameLines, pairForms, sheetName } from './names.js'
 import { flagEmoji } from './flags.js'
 
 let fail = 0
@@ -35,3 +35,11 @@ eq('a three-letter surname is still a name', sheetName('Orlando LUZ'),
 
 console.log(fail ? `\n${fail} failed` : '\n  all passed')
 process.exit(fail ? 1 : 0)
+
+// Two lines for the H2H headline: particles and a trailing "Jr" stay with the surname.
+assert.deepEqual(nameLines('Martin Damm Jr'), ['Martin', 'Damm Jr'])
+assert.deepEqual(nameLines('Botic van de Zandschulp'), ['Botic', 'van de Zandschulp'])
+assert.deepEqual(nameLines('Shintaro Mochizuki'), ['Shintaro', 'Mochizuki'])
+assert.deepEqual(nameLines('Alex de Minaur'), ['Alex', 'de Minaur'])
+assert.deepEqual(nameLines('Rafa'), ['', 'Rafa'])
+assert.deepEqual(nameLines(null), ['', ''])
