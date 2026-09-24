@@ -265,8 +265,16 @@ export function TierBadge({ tour, tier, name, small }) {
     color: TOUR[key].text,
   }
   return (
+    /* EDGED, AND DARKER THAN THE CARD (owner, 2026-09-24). On the home cards
+       at 50% tint the plate measured 1.2:1 against the card — the same dark
+       on the same dark. A dark fill cannot get far from a dark card (1.5:1
+       is its ceiling here), so the plate goes 70% toward black, which is also
+       the most its own lettering has ever had (9.7:1 ATP, 11.9:1 WTA), and
+       the EDGE does the separating: the tour's bright ink, 5.6:1 and 6.2:1
+       on the card, past the 3:1 a non-text outline needs. */
     <View style={[u.stamp, u.stampSet, small && u.stampSmall,
-                  { height: plate, backgroundColor: TOUR[key].plate }]}>
+                  { height: plate, backgroundColor: mix(TOUR[key].plate, '#000000', 0.7),
+                    borderWidth: 1.5, borderColor: TOUR[key].fg }]}>
       <Text style={[u.stampMark, set]} allowFontScaling={false}>{mark}</Text>
       <Text style={[u.stampNum, set, { marginLeft: size * 0.06 }]} allowFontScaling={false}>{num}</Text>
     </View>
