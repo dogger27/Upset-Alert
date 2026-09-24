@@ -28,7 +28,8 @@ import { useLastLeague } from '../../lastLeague'
 import { pruneScheduleTournaments, setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
 import { holdSelection } from '../../scheduleRows'
 import { C, S, T } from '../../theme'
-import { leading } from '../../fontScale.js'
+import { FONT_SCALE, leading } from '../../fontScale.js'
+import { textWidth } from '../../measure'
 import { FinalGuessSheet } from '../../finalGuess'
 
 /* THE TAB BAR'S OWN HEIGHT ARITHMETIC, because it has to be reproduced to be
@@ -117,6 +118,7 @@ export default function TabLayout() {
      the handful of draws being played, and `live` is a fresh array on every
      render anyway, so a memo here would buy a comparison and no work. */
   const drawGroups = groupDrawsByStatus(live, sectionOf)
+  const badgeW = badgeColumnWidth(live)
   const groupHeadings = showGroupHeadings(drawGroups)
   /* The tab's destination falls back past `live` to any released draw, so the
      bar keeps four tabs through an off-season week with nothing being played.
@@ -343,7 +345,7 @@ export default function TabLayout() {
             </View>
           ) : null}
           {g.draws.map((t, i) => (
-            <DrawRow key={t.id} t={t} showing={showing}
+            <DrawRow key={t.id} t={t} showing={showing} badgeW={badgeW}
                      /* The heading brought its own rule, so the first row
                         under one must not draw a second immediately below it. */
                      underHeading={groupHeadings && i === 0}
@@ -457,7 +459,22 @@ export default function TabLayout() {
 /* ONE DRAW IN THE CHOOSER. Its own component now that the list is grouped: the
    rows are drawn from inside a second map, and the alternative was this body
    nested two levels deep in the sheet. */
-function DrawRow({ t, showing, underHeading, onPress, onTiebreak }) {
+/* ONE WIDTH FOR THE TIER COLUMN (owner, 2026-09-24: "center the TB pills and
+   the category badge columns"). Each badge was as wide as its words, so
+   "WTA 250" and "ATP 250" ended at the same edge but started at different
+   places, and the TB pill beside each sat wherever that left it. The column is
+   the widest label in the list — measured from the font's own advances at the
+   reader's text size, with the badge's letter-spacing and padding — and each
+   badge centres in it. */
+function badgeColumnWidth(draws) {
+  const w = (draws || []).map(t => {
+    const text = `${t.gender === 'F' ? 'WTA' : 'ATP'} ${categoryShort(t.category) || ''}`.trim()
+    return textWidth(text, 'Archivo_700Bold', 10 * FONT_SCALE) + 0.6 * text.length + 12
+  })
+  return w.length ? Math.ceil(Math.max(...w)) + 2 : undefined
+}
+
+function DrawRow({ t, showing, underHeading, onPress, onTiebreak, badgeW }) {
   return (
     <Pressable style={[s.row, underHeading && s.rowUnderHeading]} accessibilityRole="button"
                /* The mark says "this one" to anyone who can see it; this
@@ -504,7 +521,9 @@ function DrawRow({ t, showing, underHeading, onPress, onTiebreak }) {
                    accessibilityRole="button" accessibilityLabel={`Tiebreak questions for ${t.name}`}>
           <Text style={s.tbText}>TB</Text>
         </Pressable>
-        <TourBadge gender={t.gender} level={categoryShort(t.category)} style={s.pillCentre} />
+        <View style={[s.badgeCol, badgeW ? { width: badgeW } : null]}>
+          <TourBadge gender={t.gender} level={categoryShort(t.category)} style={s.pillCentre} />
+        </View>
       </View>
     </Pressable>
   )
@@ -553,6 +572,7 @@ const s = {
   pills: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   // TourBadge sits flex-start for the stacked cards it usually lives in.
   pillCentre: { alignSelf: 'center' },
+  badgeCol: { alignItems: 'center' },
   /* The tour badge's own box and type, outlined: the 1pt border comes out of
      the vertical padding so the two pills stand the same height. */
   tb: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1,
