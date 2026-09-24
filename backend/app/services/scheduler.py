@@ -647,22 +647,18 @@ async def _history_sync(full: bool = False) -> None:
     tournaments and players paired with their ids, our finished matches
     exported beside theirs, and every rating recomputed from 1967. Each step
     is its own try, so a TML outage still lets tonight's results rate."""
-    from app.services.history import link, odds, ratings, tml
+    from app.services.history import link, ratings, tml
     try:
         await tml.sync_async(only_current=not full)
     except Exception:
         logger.warning("history: TML sync failed; linking and rating what we have", exc_info=True)
-    try:
-        # The market, as a yardstick only — nothing here feeds a prediction.
-        # Always ask for the whole window the model is validated on: odds.sync
-        # re-reads the current season (it grows weekly) and skips a past one it
-        # already holds, so this is two requests a night in the steady state
-        # and a backfill the first time.
-        from datetime import date as _date
-        year = _date.today().year
-        await odds.sync_async([year - 2, year - 1, year])
-    except Exception:
-        logger.warning("history: market odds unavailable", exc_info=True)
+    # THE MARKET ODDS ARE NO LONGER FETCHED NIGHTLY (owner, 2026-09-24). They
+    # are a yardstick for scripts/fit_own_elo.py --market and feed nothing a
+    # user sees; that script is run by hand when the model is retuned, which
+    # has been once. Two requests a night — and a warning email whenever
+    # tennis-data moved its files — bought nothing between retunings. The
+    # admin page's Settings tab refreshes them on demand
+    # (POST /admin/market-odds/refresh) before a retune.
     try:
         await link.link_all_async()
     except Exception:

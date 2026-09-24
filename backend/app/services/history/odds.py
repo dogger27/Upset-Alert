@@ -451,6 +451,17 @@ def _health(out: dict, today: Optional[date] = None) -> tuple:
     return "info", f"last fresh read from tennis-data.co.uk {last}"
 
 
+def status(conn) -> dict:
+    """What the store holds, for the admin page: rows, how many are linked to
+    the record, and the newest match priced, per tour. Read-only."""
+    ensure_schema(conn)
+    held, linked = conn.execute(
+        "SELECT count(*), sum(tml_winner_id IS NOT NULL) FROM market_odds").fetchone()
+    latest = {t: d for t, d in conn.execute(
+        "SELECT tour, max(match_date) FROM market_odds GROUP BY tour")}
+    return {"held": held, "linked": linked or 0, "latest_match": latest}
+
+
 async def sync_async(seasons: Optional[list] = None) -> dict:
     from app.services.system_log import app_log
     out = await hdb.run(sync, seasons)

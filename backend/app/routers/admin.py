@@ -304,3 +304,52 @@ async def set_draw_pick_lock_mode(
                   f"Pick-lock mode for draw {draw_id} ({draw.year} {draw.name} "
                   f"{draw.gender}): {was!r} -> {mode!r} by {current_user.username}",
                   {"draw_id": draw_id, "from": was, "to": mode, "user_id": current_user.id})
+
+
+# ── The betting market, on demand ────────────────────────────────────────────
+# A yardstick for the rating model (services/history/odds.py), read only by
+# scripts/fit_own_elo.py --market. It is not fetched nightly any more: refresh
+# it from here before a retune.
+
+async def _odds_last_refresh(db) -> Optional[dict]:
+    row = (await db.execute(
+        select(SystemLog.created_at, SystemLog.level, SystemLog.message)
+        .where(SystemLog.message.like("market odds:%"))
+        .order_by(SystemLog.id.desc()).limit(1))).first()
+    return {"at": row[0].isoformat() if row[0] else None, "level": row[1], "message": row[2]} if row else None
+
+
+@router.get("/market-odds")
+async def market_odds_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """What the odds store holds, and when it was last refreshed."""
+    if not current_user.is_admin:
+        raise HTTPException(403, "Admin only")
+    from app.services.history import db as hdb, odds
+    held = await hdb.run(odds.status)
+    return {**held, "last_refresh": await _odds_last_refresh(db)}
+
+
+@router.post("/market-odds/refresh")
+async def market_odds_refresh(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Fetch the window the model is validated on — this season and the two
+    before it — store it, and link it to the record. A past season already
+    held is not re-read, so a routine refresh is two requests."""
+    if not current_user.is_admin:
+        raise HTTPException(403, "Admin only")
+    from datetime import date as _date
+    from app.services.history import db as hdb, odds
+    year = _date.today().year
+    out = await odds.sync_async([year - 2, year - 1, year])
+    held = await hdb.run(odds.status)
+    return {
+        "read": sum(s["rows"] for s in out["seasons"]),
+        "sources": out.get("sources") or [],
+        **held,
+        "last_refresh": await _odds_last_refresh(db),
+    }
