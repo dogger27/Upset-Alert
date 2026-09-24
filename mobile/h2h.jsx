@@ -391,8 +391,8 @@ function TwoLineName({ name, end = false }) {
           a gap between the names that grew with the row (owner, 2026-09-24:
           "remove that gap"). The surname is pulled up by the room iOS leaves
           above a line's capitals, so it sits directly under the first name. */}
-      {first ? <View style={s.whoLineBox}><FitText style={s.whoFirst} min={9} align={align}>{first}</FitText></View> : null}
-      <View style={[s.whoLineBox, first ? s.whoLast : null]}>
+      {first ? <View style={[s.whoLineBox, s.whoFirstBox]}><FitText style={s.whoFirst} min={9} align={align}>{first}</FitText></View> : null}
+      <View style={[s.whoLineBox, s.whoLastBox, first ? s.whoLast : null]}>
         <FitText style={s.whoName} min={10} align={align}>{last}</FitText>
       </View>
     </View>
@@ -435,6 +435,13 @@ const s = StyleSheet.create({
   whoName: { ...T.bodyBold, color: C.ink, flexShrink: 1 },
   whoNames: { flex: 1, minWidth: 0 },
   whoLineBox: { flexGrow: 0, flexShrink: 0 },
+  /* EACH LINE ITS OWN EXACT HEIGHT (owner, 2026-09-24: "the player names are
+     not showing"). FitText's slot is flex: 1; in a box with no height of its
+     own that is a height of zero, and iOS's shrink-to-fit then draws nothing.
+     Inside the old scroll view the box happened to get one; in the fixed
+     header above the tabs it did not. One line's height each, stated. */
+  whoFirstBox: { height: T.small.lineHeight },
+  whoLastBox: { height: T.bodyBold.lineHeight },
   whoLast: { marginTop: -leading(6) },
   whoFirst: { ...T.small, color: C.inkBody },
   whoNameEnd: { textAlign: 'right' },
