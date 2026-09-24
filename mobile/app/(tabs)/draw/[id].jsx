@@ -28,7 +28,7 @@ import { useAuth } from '../../../auth'
 import { H2HSheet } from '../../../h2h'
 import { FinalGuessBar, FinalGuessSheet } from '../../../finalGuess'
 import { useLiveUpdates } from '../../../live'
-import { ScoreHistorySheet, entryFromMatch } from '../../../scoreHistory'
+import { ScoreHistorySheet, entryFromMatch, matchStarted } from '../../../scoreHistory'
 import { PredictorsSheet } from '../../../predictors'
 import { statusLine } from '../../../score'
 import { computeDrawRanks } from '../../../drawRanks'
@@ -429,6 +429,7 @@ export default function DrawScreen() {
           <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} drawId={t?.id}
                     surface={draw.data?.surface} status={status} pickSide={pickSide}
                     predictMatch={hm && !hm.is_bye ? hm : null} meId={me?.id}
+                    histEntry={hm && matchStarted(hm) ? entryFromMatch(hm, Number(id), drawRanks) : null}
                     onPrev={prev ? () => setH2H(prev) : null}
                     onNext={next ? () => setH2H(next) : null} />
         )
