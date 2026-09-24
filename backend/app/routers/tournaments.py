@@ -844,6 +844,7 @@ async def match_score_history(
     """
     from app.models.score_history import MatchScoreSnapshot
     from app.services.rounds import compact_round
+    from app.services.schedule import _best_of
     from app.services.sofascore_live import renderable_history
 
     match = await db.get(Match, match_id)
@@ -908,6 +909,9 @@ async def match_score_history(
         # the note at the top of services/rounds.py.
         "round_label": compact_round(draw.round_name(match.round_number))
                        if draw and match.round_number else None,
+        # Sets in the match, so the timeline can tell a set point from a
+        # MATCH point. The same answer the schedule plans with.
+        "best_of": _best_of(draw, "singles", "main"),
     }
 
 

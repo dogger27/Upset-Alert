@@ -39,7 +39,7 @@ function clockOf(iso) {
   } catch { return '' }
 }
 
-const TICK = { bp: C.breakPoint, break: C.warn, set: C.info, match: C.lossMark, ace: C.greenLit, df: C.h2hP2 }
+const TICK = { bp: C.breakPoint, sp: C.setPoint, mp: C.matchPoint, break: C.warn, set: C.info, match: C.lossMark, ace: C.greenLit, df: C.h2hP2 }
 /* The legend's order and words, and what the caption under it calls each
    moment the arrows land on. Break point before break: the chance, then the
    thing it became. */
@@ -49,8 +49,10 @@ const CAPTION_SIZE = 14 * FONT_SCALE
 const NUM_W = Math.ceil(textWidth('100%', 'Archivo_700Bold', 11 * FONT_SCALE)) + 3
 
 const KINDS = [
-  ['bp', 'break point', 'Break point'], ['break', 'break', 'Break'], ['set', 'set', 'Set'],
-  ['match', 'match', 'Match'], ['ace', 'ace', 'Ace'], ['df', 'DF', 'Double fault'],
+  ['bp', 'break point', 'Break point'], ['break', 'break', 'Break'],
+  ['sp', 'set point', 'Set point'], ['set', 'set', 'Set'],
+  ['mp', 'match point', 'Match point'], ['match', 'match', 'Match'],
+  ['ace', 'ace', 'Ace'], ['df', 'DF', 'Double fault'],
 ]
 
 /* The draw page's caller. A bracket match is not a schedule row, but the
@@ -126,6 +128,9 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   // matters most. Once the reader taps, their choice stands.
   const [tab, setTab] = useState(null)
   const [captionW, setCaptionW] = useState(0)
+  const [navW, setNavW] = useState(0)
+  // What the legend's pill can hold: its 70% cap, less its padding and border.
+  const legendRoom = navW ? navW * 0.7 - 2 * S.md - 4 : 0
 
   /* Snapshots arrive in the MATCH's orientation (side 1 = the bracket's
      player1); the sheet shows the SHEET's order, which need not agree. Line
@@ -153,8 +158,8 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
     if (!completed || entry?.winner_side == null) return null
     return (entry.winner_side === 0) === topIsP1 ? 1 : 2
   })()
-  const markers = useMemo(() => timelineMarkers(snapshots, { completed, winnerSide, breakPoints: true }),
-    [snapshots, completed, winnerSide])
+  const markers = useMemo(() => timelineMarkers(snapshots, { completed, winnerSide, pressurePoints: true, bestOf: data?.best_of }),
+    [snapshots, completed, winnerSide, data?.best_of])
   /* The point the scrub is sitting ON. A snapshot records the score AFTER a
      point, so the snapshot at this position IS the point just played — hence
      "Prev Point", as the site says it. Sofascore names only aces and double
@@ -178,8 +183,12 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   const who = (side) => surname(cleanName(((side === 1) === topIsP1 ? a : b)[0]))
   const hereMarks = markers.filter(m => m.i === here)
   const caption = [1, 2].map(side => {
-    const kinds = new Set(hereMarks.filter(m => m.side === side).map(m => m.kind))
-    const words = KINDS.filter(([k]) => kinds.has(k)).map(([, , word]) => word)
+    // Numbered where the marker carries a count (owner, 2026-09-24): "Break
+    // point #4" in that game, "Set point #2" in that set, "Match point #1"
+    // in the match, "Ace #7" so far — see timelineMarkers.
+    const mine = hereMarks.filter(m => m.side === side)
+    const words = KINDS.flatMap(([k, , word]) => mine.filter(m => m.kind === k)
+      .map(m => (m.n ? `${word} #${m.n}` : word)))
     if (!words.length) return null
     const name = who(side)
     return name ? `${name}: ${words.join(' · ')}` : words.join(' · ')
@@ -314,12 +323,12 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                 the arrows' own height. Two lines, fixed, so the tabs below
                 never move as kinds appear. */}
             {markers.length > 0 && (
-              <View style={s.navRow}>
+              <View style={s.navRow} onLayout={e => setNavW(e.nativeEvent.layout.width)}>
                 <NavButton dir="back" disabled={prevMoment == null} onPress={() => goTo(prevMoment)} />
                 <View style={s.legendPill}>
                   {(() => {
                     const shown = KINDS.filter(([k]) => markers.some(m => m.kind === k))
-                    return legendLines(shown).map((line, n) => (
+                    return legendLines(shown, legendRoom).map((line, n) => (
                       <View key={n} style={s.legendLine}>
                         {line.map(([k, label]) => <Legend key={k} color={TICK[k]} label={label} />)}
                       </View>
@@ -438,25 +447,34 @@ function Scrub({ max, pos, onChange, markers, topIsP1, top, bottom, onHold }) {
   )
 }
 
-/* THE LEGEND'S TWO LINES, EVENED OUT (owner, 2026-09-24): ace and DF always
-   on the bottom line; the score moments (break point, break, set, match) on
-   top, with the last of them moved down while that makes the wider line
-   narrower. "break point · break · ace / DF" made the pill as wide as its
-   longest line; "break point · break / ace · DF" is not. Widths from the
-   font's own tables, at the legend's size — only their ratio matters. */
-function legendLines(shown) {
-  const itemW = ([, label]) => 8 + 4 + textWidth(label, 'Archivo_500Medium', 11)
+/* THE LEGEND'S LINES, EVENED OUT (owner, 2026-09-24): ace and DF always on
+   the bottom line; the score moments (break point … match) above, wrapped to
+   the room the pill has, then the last of them moved down while that makes
+   the wider line narrower — "break point · break / ace · DF", not one long
+   line over a short one. Never fewer than two lines, so the pill's height
+   is the same match to match; a third only when the moments need it (set
+   and match points joined them). Widths from the font's own tables at the
+   reader's text size, against `room` (0 = not measured yet: no wrapping). */
+function legendLines(shown, room) {
+  const itemW = ([, label]) => 8 + 4 + textWidth(label, 'Archivo_500Medium', 11 * FONT_SCALE)
   const lineW = (items) => items.reduce((w, it) => w + itemW(it), 0) + Math.max(0, items.length - 1) * S.sm
-  const top = shown.filter(([k]) => k !== 'ace' && k !== 'df')
+  const fits = (items) => !room || lineW(items) <= room
+  const lines = [[]]
+  for (const it of shown.filter(([k]) => k !== 'ace' && k !== 'df')) {
+    const cur = lines[lines.length - 1]
+    if (cur.length && !fits([...cur, it])) lines.push([it])
+    else cur.push(it)
+  }
   let bottom = shown.filter(([k]) => k === 'ace' || k === 'df')
-  while (top.length > 1) {
-    const moved = [top[top.length - 1], ...bottom]
-    const kept = top.slice(0, -1)
-    if (Math.max(lineW(kept), lineW(moved)) >= Math.max(lineW(top), lineW(bottom))) break
-    top.pop()
+  const last = lines[lines.length - 1]
+  while (last.length > 1) {
+    const moved = [last[last.length - 1], ...bottom]
+    const kept = last.slice(0, -1)
+    if (!fits(moved) || Math.max(lineW(kept), lineW(moved)) >= Math.max(lineW(last), lineW(bottom))) break
+    last.pop()
     bottom = moved
   }
-  return [top, bottom]
+  return [...lines, bottom]
 }
 
 /* The two column heads. NEVER "…" (owner, restated 2026-09-24): each name
@@ -653,7 +671,7 @@ const s = StyleSheet.create({
     paddingHorizontal: S.md, paddingVertical: 6,
     borderWidth: 1, borderColor: C.borderOn, borderRadius: R.pill,
   },
-  /* A line is drawn even when empty, so the pill is always two lines tall. */
+  /* A line is drawn even when empty, so the pill is at least two lines tall. */
   legendLine: { flexDirection: 'row', justifyContent: 'center', gap: S.sm, minHeight: leading(15) },
   /* A FIXED HEIGHT, EMPTY OR NOT (owner, 2026-09-24: "everything is
      bouncing"). It was a minHeight around a COLUMN, in which FitText's

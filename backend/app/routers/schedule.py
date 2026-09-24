@@ -1551,6 +1551,9 @@ async def entry_score_history(entry_id: int, db: AsyncSession = Depends(get_db))
         "player1_name": side_a,
         "snapshots": snapshots,
         "final": final,
+        # These rows are qualifying singles and doubles: best of three
+        # everywhere (schedule._best_of says the same for both).
+        "best_of": 3,
     }
 
 

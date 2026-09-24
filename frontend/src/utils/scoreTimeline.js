@@ -200,31 +200,73 @@ export function timelineMarkers(snapshots, opts = {}) {
     }
   }
 
-  /* ── Break point ── (opt-in: the app's timeline; owner, 2026-09-24) a
-     point after which the RECEIVER is one point from breaking: 40 against
-     less than 40, or advantage. Each chance is its own tick — 30-40 then
-     deuce then advantage-receiver is two break points. Never in a tiebreak,
-     where there is no serve to break. The tick sits on the receiver's side,
-     the player holding the chance, and on the snapshot the chance appeared
-     at, so the break (if it came) is the very next point. */
-  if (opts.breakPoints) {
+  /* ── Pressure points ── (opt-in: the app's timeline; owner, 2026-09-24)
+     A snapshot records the score AFTER a point, so a snapshot that leaves a
+     player one point from something is the chance itself:
+       - BREAK POINT: the receiver one point from the game. Numbered within
+         THAT service game — "Break point #4" is the fourth chance of it.
+       - SET POINT: one point from the set, numbered within THAT set for THAT
+         player.
+       - MATCH POINT: a set point that would win the match, numbered across
+         the whole match for that player. It is not also called a set point.
+     Tiebreaks carry set and match points but never break points. The same
+     state reported twice in a row is one chance, counted once. `bestOf`
+     (sets in the match) decides what a set is worth; 3 when not given. */
+  if (opts.pressurePoints) {
+    const need = Math.ceil((opts.bestOf === 5 ? 5 : 3) / 2)
+    const bpSeen = {}, spSeen = {}, mpSeen = { 1: 0, 2: 0 }
     for (let i = 0; i < snapshots.length; i++) {
       const sn = snapshots[i]
-      if (!sn || sn.tiebreak || sn.match_tiebreak) continue
-      const srv = sn.serving
-      if (srv !== 1 && srv !== 2) continue
-      const pts = sn.point
-      if (!Array.isArray(pts)) continue
-      const rcv = srv === 1 ? 2 : 1
-      const r = RANK[String(pts[rcv - 1]).toUpperCase().replace(/^AD$/, 'A')]
-      const v = RANK[String(pts[srv - 1]).toUpperCase().replace(/^AD$/, 'A')]
-      if (r == null || v == null) continue
-      const bp = (r === 3 && v < 3) || r === 4
-      if (!bp) continue
-      // The same state twice in a row is one chance reported twice.
+      const g = sn?.games, pts = sn?.point
+      if (!g?.[0] || !Array.isArray(pts)) continue
       const pv = snapshots[i - 1]
-      if (pv && String(pv.point) === String(pts) && String(pv.games) === String(sn.games)) continue
-      out.push({ i, kind: 'bp', side: rcv })
+      if (pv && String(pv.point) === String(pts) && String(pv.games) === String(g)
+          && !!pv.tiebreak === !!sn.tiebreak) continue
+      const col = g[0].length - 1
+      const tb = !!(sn.tiebreak || sn.match_tiebreak)
+      const winsGame = (side) => {
+        const x = side - 1, o = 1 - x
+        if (tb) {
+          const target = sn.match_tiebreak ? 10 : 7
+          return num(pts[x]) + 1 >= target && num(pts[x]) + 1 - num(pts[o]) >= 2
+        }
+        const r = RANK[String(pts[x]).toUpperCase().replace(/^AD$/, 'A')]
+        const v = RANK[String(pts[o]).toUpperCase().replace(/^AD$/, 'A')]
+        return r != null && v != null && ((r === 3 && v < 3) || r === 4)
+      }
+      const winsSet = (side) => {
+        if (!winsGame(side)) return false
+        if (tb) return true
+        const x = side - 1, o = 1 - x
+        const gx = num(g[x][col]) + 1, go = num(g[o]?.[col])
+        return gx >= 6 && gx - go >= 2
+      }
+      const setsWon = (side) => {
+        const x = side - 1, o = 1 - x
+        let n = 0
+        for (let c = 0; c < col; c++) if (num(g[x][c]) > num(g[o]?.[c])) n++
+        return n
+      }
+      const srv = sn.serving
+      if (!tb && (srv === 1 || srv === 2)) {
+        const rcv = srv === 1 ? 2 : 1
+        if (winsGame(rcv)) {
+          const key = `${col}:${num(g[0][col]) + num(g[1]?.[col])}`
+          bpSeen[key] = (bpSeen[key] || 0) + 1
+          out.push({ i, kind: 'bp', side: rcv, n: bpSeen[key] })
+        }
+      }
+      for (const side of [1, 2]) {
+        if (!winsSet(side)) continue
+        if (sn.match_tiebreak || setsWon(side) + 1 >= need) {
+          mpSeen[side] += 1
+          out.push({ i, kind: 'mp', side, n: mpSeen[side] })
+        } else {
+          const key = `${col}:${side}`
+          spSeen[key] = (spSeen[key] || 0) + 1
+          out.push({ i, kind: 'sp', side, n: spSeen[key] })
+        }
+      }
     }
   }
 
@@ -232,12 +274,17 @@ export function timelineMarkers(snapshots, opts = {}) {
      About one point in twenty has one, and with no tick on the rail a reader
      drags straight past every single one and concludes the labels were never
      built (owner, 2026-09-12). Sided on the SERVER, the player both events
-     belong to; an unknown server goes on top rather than being dropped. */
+     belong to; an unknown server goes on top rather than being dropped.
+     `n` counts that player's aces (or double faults) in the match so far —
+     "Ace #4" (owner, 2026-09-24). */
+  const served = { ace: { 1: 0, 2: 0 }, df: { 1: 0, 2: 0 } }
   for (let i = 0; i < snapshots.length; i++) {
     const label = snapshots[i]?.point_label
     if (!label) continue
-    out.push({ i, kind: label === 'Double Fault' ? 'df' : 'ace',
-               side: snapshots[i]?.serving === 2 ? 2 : 1 })
+    const kind = label === 'Double Fault' ? 'df' : 'ace'
+    const side = snapshots[i]?.serving === 2 ? 2 : 1
+    served[kind][side] += 1
+    out.push({ i, kind, side, n: served[kind][side] })
   }
 
   /* ── Match finished ── a red tick at the timeline's very end, only once
