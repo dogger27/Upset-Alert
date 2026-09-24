@@ -77,3 +77,19 @@ export function dayWords(dates, todayIso, shortDateOf, active = null) {
   }
   return out
 }
+
+
+/* The DEVICE's calendar date — the schedule's rule (the zone is the device).
+   toISOString() alone is UTC, which after 5 PM Pacific already names
+   tomorrow. */
+export function todayIso(now = new Date()) {
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+}
+
+/* Milliseconds to the next local midnight, plus a second's margin so the
+   timer never lands a hair early and re-reads the same day. */
+export function msToMidnight(now = new Date()) {
+  const next = new Date(now)
+  next.setHours(24, 0, 0, 0)
+  return next.getTime() - now.getTime() + 1000
+}

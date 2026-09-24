@@ -35,6 +35,7 @@ import { FitText, FlagSlot, TierBadge, TourBadge } from '../../cards'
 import { setScheduleTournaments, useScheduleTournaments } from '../../scheduleFilter'
 import { useChoosableTournaments } from '../../choosableTournaments'
 import { DayStrip } from '../../DayStrip'
+import { useToday } from '../../deviceToday'
 import { SWIPE_PX, SWIPE_VX, swipeStep } from '../../swipeDay'
 import { beginSwipe, endSwipe, unlessSwiping } from '../../swipeGuard'
 import { dayLabels, dayWords, relativeDayWord } from '../../dayLabels'
@@ -54,14 +55,6 @@ import { ScoreHistorySheet } from '../../scoreHistory'
 import { C, R, S, T, TOUR } from '../../theme'
 import { Card, CardLink, ErrorNote, Loading, Muted, Screen, Title, eyebrowType } from '../../ui'
 
-/* The DEVICE's calendar date — the schedule's rule (the zone is the device).
-   toISOString() is UTC, which after 5 PM Pacific already names tomorrow: the
-   page then landed on tomorrow's sheet during the evening session, and the
-   strip would have called the wrong day "Today" every night. */
-const today = () => {
-  const d = new Date()
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
-}
 
 /* THE EARLIEST DAY WITH TENNIS LEFT IN IT, never earlier than today — the
    site's rule, verbatim in intent. "Today" is not blindly the answer: out of
@@ -71,10 +64,9 @@ const today = () => {
    and if nothing from today onward has anything open the last such day stands.
    A date that was asked for is clamped to the list so an old link cannot
    strand the page on a day with nothing on it. */
-function landingDay(dates, openCounts, asked) {
-  if (!dates.length) return asked || today()
+function landingDay(dates, openCounts, asked, t) {
+  if (!dates.length) return asked || t
   if (asked && dates.includes(asked)) return asked
-  const t = today()
   const upcoming = dates.filter(d => d >= t)
   const firstOpen = upcoming.find(d => (openCounts[d] ?? 1) > 0)
   return firstOpen || upcoming[upcoming.length - 1] || dates[dates.length - 1]
@@ -84,6 +76,9 @@ export default function ScheduleScreen() {
   // From a dashboard card: which tournament's sheets, which draw we came from,
   // and (from a link) which day. The tab still works with none of them.
   const params = useLocalSearchParams()
+  /* ONE "today" for the whole screen, turning at midnight (deviceToday.js):
+     the strip's T and the slot's "Today" read the same value. */
+  const today = useToday()
   const tournament = params.tournament ? Number(params.tournament) : undefined
   const fromDraw = params.draw ? Number(params.draw) : undefined
   const asked = typeof params.date === 'string' ? params.date : undefined
@@ -217,8 +212,8 @@ export default function ScheduleScreen() {
      singles day, then the count from it. Memoised on the answer, not on
      `available`, which is a fresh array whenever there is no answer yet. */
   const days = useMemo(
-    () => dayLabels(dates.data?.dates || [], dates.data?.main_start ?? null, today()),
-    [dates.data],
+    () => dayLabels(dates.data?.dates || [], dates.data?.main_start ?? null, today),
+    [dates.data, today],
   )
   /* A pinned day only counts while it EXISTS in the list this page is showing.
      The reset above is the cure for the stale day; this is the belt to its
@@ -226,14 +221,14 @@ export default function ScheduleScreen() {
      list is still in flight. */
   const date = (pinned && available.includes(pinned))
     ? pinned
-    : landingDay(available, dates.data?.open_counts || {}, asked)
+    : landingDay(available, dates.data?.open_counts || {}, asked, today)
   /* A DAY BEFORE TODAY IS A RECORD, and a record has one shape. Every match
      on it is over, so there is nothing to filter by phase — and the court view
      is not offered either (owner, 2026-09-20): a finished day is read as a
      chronology of what happened, not as a map of which court it happened on.
      So the Time/Court switch is gone on a past day and the view is Time,
      whatever the reader last chose on a live one. */
-  const past = date < today()
+  const past = date < today
   const view = past ? 'time' : viewChoice
   /* SWIPE ANYWHERE TO CHANGE THE DAY. A sideways drag on the page — the
      cards, the empty space, the header — steps one day: left for the next,
@@ -538,11 +533,11 @@ export default function ScheduleScreen() {
      "Sep NN" comes out 45.6pt. They stop agreeing the moment a locale writes
      "11 Sep", and nothing would have reported that it had. */
   const rightSlotW = useMemo(() => {
-    const words = dayWords(dates.data?.dates || [], today(), shortDate, date)
+    const words = dayWords(dates.data?.dates || [], today, shortDate, date)
     if (!words.length) return undefined
     const widest = Math.max(...words.map(w => textWidth(w, 'Archivo_700Bold', 14)))
     return Math.ceil(widest) + 4 + S.md + S.lg
-  }, [dates.data, date])
+  }, [dates.data, date, today])
 
   const refetch = () => { day.refetch(); dates.refetch() }
 
@@ -592,7 +587,7 @@ export default function ScheduleScreen() {
                   that arithmetic is ever wrong again the date must still be a
                   date on one line. */}
               <Text style={s.todayDate} numberOfLines={1}>
-                {relativeDayWord(date, today()) ?? shortDate(date)}
+                {relativeDayWord(date, today) ?? shortDate(date)}
               </Text>
             </View>
           )}

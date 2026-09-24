@@ -1,6 +1,6 @@
 /* node dayLabels.test.mjs */
 import assert from 'node:assert/strict'
-import { dayLabels, dayWords, relativeDayWord } from './dayLabels.js'
+import { dayLabels, dayWords, msToMidnight, relativeDayWord, todayIso } from './dayLabels.js'
 
 const labels = (dates, main) => dayLabels(dates, main).map(d => d.label)
 
@@ -134,4 +134,12 @@ assert.deepEqual(dayWords([null, undefined], '2026-09-22', SHORT), [])
   const range = ['2026-09-20', '2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24']
   const answers = new Set(range.map(d => dayWords(range, '2026-09-22', SHORT, d).join('|')))
   assert.equal(answers.size, 1, `the slot changed width mid-range: ${[...answers]}`)
+}
+
+// Today is the DEVICE calendar date, and midnight is the next local one.
+{
+  const late = new Date(2026, 8, 23, 23, 59, 30)   // local 23:59:30
+  assert.equal(todayIso(late), '2026-09-23')
+  assert.equal(msToMidnight(late), 31000)           // 30s + 1s margin
+  assert.equal(todayIso(new Date(late.getTime() + msToMidnight(late))), '2026-09-24')
 }
