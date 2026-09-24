@@ -274,6 +274,15 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
           that cannot be argued with. */}
       <ScrollView scrollEnabled={!holding} style={{ flex: 1 }}
                   contentContainerStyle={{ gap: S.md, paddingBottom: S.sm }}>
+        {/* What the thumb is on — every key moment, and whose — directly
+            above the score, right-justified over the set columns (owner,
+            2026-09-24). A fixed line whenever there is a history, so the card
+            never moves as it changes. */}
+        {max > 0 && (
+          <View style={s.captionRow} accessibilityLiveRegion="polite">
+            {caption ? <FitText style={s.prevPointValue} min={9}>{caption}</FitText> : null}
+          </View>
+        )}
         <MatchCard e={row} />
         {hist.loading && !data ? <Loading /> : null}
         {hist.error ? <Text style={s.err}>Couldn’t load the match history.</Text> : null}
@@ -282,12 +291,6 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
             <Scrub max={max} pos={atEnd ? max : pos} onChange={v => setPos(v >= max ? null : v)}
                    onHold={setHolding} markers={markers} topIsP1={topIsP1}
                    top={initialsOf(a[0]?.name)} bottom={initialsOf(b[0]?.name)} />
-            {/* What the thumb is on — every key moment, not only aces and double
-                faults — on its own fixed line ABOVE the legend (owner,
-                2026-09-24), so nothing below jumps as it changes. */}
-            <View style={s.captionRow} accessibilityLiveRegion="polite">
-              {caption ? <FitText style={s.prevPointValue} min={9}>{caption}</FitText> : null}
-            </View>
             {/* THE MOMENT NAVIGATOR (owner, 2026-09-24): previous / next big
                 moment either side of the legend, which sits centred in a pill
                 the arrows' own height. Two lines, fixed, so the tabs below
@@ -600,7 +603,10 @@ const s = StyleSheet.create({
   },
   /* A line is drawn even when empty, so the pill is always two lines tall. */
   legendLine: { flexDirection: 'row', justifyContent: 'center', gap: S.sm, minHeight: leading(15) },
-  captionRow: { minHeight: leading(16), alignItems: 'center', justifyContent: 'center' },
+  captionRow: {
+    minHeight: leading(16), alignItems: 'flex-end', justifyContent: 'center',
+    marginBottom: -S.sm, paddingRight: S.xs,   // sits tight on the card it describes
+  },
   prevPointValue: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendBox: { width: 8, height: 8, borderRadius: 2 },
