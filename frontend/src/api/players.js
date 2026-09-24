@@ -7,6 +7,12 @@ export const getH2H = (slug1, slug2) =>
   client.get('/h2h', { params: { p1: slug1, p2: slug2 }, timeout: LONG_MS })
     .then(r => r.data)
 
+/* UA odds: each player's chance of winning, from the model behind the
+   standings' chances. drawId gives the match's own surface and best-of. */
+export const getPairOdds = (a, b, { surface, drawId } = {}) =>
+  client.get('/h2h/odds', { params: { a, b, draw_id: drawId || undefined, surface: drawId ? undefined : surface } })
+    .then(r => r.data)
+
 export const getPlayerForm = (slug, { beforeDrawId, beforeRound } = {}) =>
   client.get('/h2h/form', {
     params: { slug, before_draw_id: beforeDrawId, before_round: beforeRound },

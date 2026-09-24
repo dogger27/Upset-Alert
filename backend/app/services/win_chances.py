@@ -375,3 +375,66 @@ _SURFACE_COLUMN = {
 # What the column credits, once, wherever it is drawn.
 ATTRIBUTION = "Elo ratings from Tennis Abstract (CC BY-NC-SA 4.0)"
 OWN_ATTRIBUTION = "Upset Alert's own Elo, from its match record and TennisMyLife's open results database (MIT)"
+
+
+async def pair_odds(db: AsyncSession, slug_a: str, slug_b: str,
+                    surface: Optional[str] = None, draw_id: Optional[int] = None) -> Optional[dict]:
+    """P(each player wins) for two Tennis Explorer slugs — the H2H sheet's "UA
+    odds" row (owner, 2026-09-24).
+
+    THE SAME ARITHMETIC AS THE STANDINGS' CHANCES, not a second model: the
+    pair's ratings are gathered exactly as draw_odds gathers a field's (our
+    own Elo where the record is deep enough, then Tennis Abstract's surface
+    and overall Elo, then the ranking) and priced by DrawOdds.pair_prob. With
+    a draw, its surface and its best-of are the match's; without one, the
+    surface asked for and best of three. None when either player is unknown.
+    """
+    draw = await db.get(Draw, draw_id) if draw_id else None
+    players = {}
+    for slug in (slug_a, slug_b):
+        tp = (await db.execute(select(TePlayer).where(TePlayer.te_slug == slug).limit(1))).scalar_one_or_none()
+        if tp is None:
+            return None
+        players[slug] = tp
+    a, b = players[slug_a], players[slug_b]
+    gender = draw.gender if draw is not None else a.gender
+    tour = "wta" if gender == "F" else "atp"
+    surf = _norm_surface((draw.surface if draw is not None else None) or surface)
+    bo = best_of(draw) if draw is not None else 3
+
+    own: dict = {}
+    tml_ids = [p.tml_player_id for p in (a, b) if p.tml_player_id]
+    if tml_ids:
+        try:
+            from app.services.history import db as hdb
+            from app.services.history.ratings import ratings_for
+            surface_key = {"Hard": "elo_hard", "Clay": "elo_clay", "Grass": "elo_grass"}[surf]
+            rated = await hdb.run(lambda conn: ratings_for(conn, tour, tml_ids))
+            for pid, r in rated.items():
+                if (r.get("n_all") or 0) >= OWN_MIN_MATCHES:
+                    own[pid] = (float(r["elo"]), float(r.get(surface_key) or r["elo"]),
+                                int(r["n_all"]), _days_since(r.get("last")))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("own ratings unavailable for H2H odds", exc_info=True)
+
+    by_te: dict = {}
+    week = (await db.execute(
+        select(TeRankingsSnapshot.week_date).where(TeRankingsSnapshot.elo.isnot(None))
+        .order_by(TeRankingsSnapshot.week_date.desc()).limit(1))).scalar_one_or_none()
+    if week is not None:
+        for pid, elo, selo, rank in (await db.execute(
+                select(TeRankingsSnapshot.player_id, TeRankingsSnapshot.elo,
+                       _SURFACE_COLUMN[surf], TeRankingsSnapshot.rank)
+                .where(TeRankingsSnapshot.player_id.in_([a.id, b.id]),
+                       TeRankingsSnapshot.week_date == week))).all():
+            by_te[pid] = (elo, selo, rank)
+
+    def _rating(p):
+        elo, selo, rank = by_te.get(p.id, (None, None, None))
+        return (elo, selo, rank, own.get(p.tml_player_id) if p.tml_player_id else None)
+
+    odds = DrawOdds({0: _rating(a), 1: _rating(b)}, surf, bo, {}, ("pair", slug_a, slug_b, surf, bo))
+    odds.tour = tour
+    p = odds.pair_prob(0, 1)
+    return {"p_a": round(p, 4), "p_b": round(1 - p, 4), "surface": surf, "best_of": bo}

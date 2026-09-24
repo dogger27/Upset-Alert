@@ -402,7 +402,7 @@ export default function DrawScreen() {
           is 64 mounted Modals. The match hands it a pair and it fetches. */}
       {/* The surface is the DRAW's here — one draw to a page — and one of the
           sheet's comparison rows is "on hard". */}
-      <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b}
+      <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} drawId={t?.id}
                 surface={draw.data?.surface} />
       <FinalGuessSheet tournamentId={Number(id)} visible={finalGuessOpen} onClose={() => setFinalGuessOpen(false)}
                        onSaved={() => setFinalGuessKey(k => k + 1)} />

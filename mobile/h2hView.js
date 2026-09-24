@@ -98,7 +98,7 @@ export function betterSide(left, right, { lowerWins = false } = {}) {
  * anything. Rows with nothing to say are dropped rather than shown empty —
  * "Elo —— Elo" is a row that costs height and answers nothing.
  */
-export function compareRows({ view, surface, left, right }) {
+export function compareRows({ view, surface, left, right, odds }) {
   if (!view) return []
   const rows = []
   /* `judged: false` is a row with no winner. betterSide's own comment says an
@@ -116,6 +116,14 @@ export function compareRows({ view, surface, left, right }) {
   const surf = onSurface(view.surfaces, surface)
   if (surf && (surf[0] || surf[1])) {
     add('surface', `on ${String(surface).toLowerCase()}`, surf[0], surf[1])
+  }
+  /* UA ODDS (owner, 2026-09-24): each side's chance of winning, from the
+     same model as the standings' chances, in whole percent. `odds` is
+     [left, right] already oriented; the higher one is lit. */
+  if (odds && odds[0] != null && odds[1] != null) {
+    const l = Math.round(odds[0] * 100), r = 100 - l
+    rows.push({ key: 'ua', label: 'UA odds', info: "Upset Alert's estimated winning percentage",
+                values: [`${l}%`, `${r}%`], better: betterSide(l, r) })
   }
   add('rank', 'ranking', left?.ranking, right?.ranking, { lowerWins: true })
   add('elo', 'Elo', left?.elo_rank, right?.elo_rank, { lowerWins: true })

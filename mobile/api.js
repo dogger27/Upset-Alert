@@ -272,6 +272,13 @@ export const getPlayerForm = (slug) =>
   // singles=1: ten SINGLES matches, counted after the doubles are dropped.
   request(`/h2h/form?slug=${encodeURIComponent(slug)}&singles=1`)
 
+/* UA ODDS: each player's chance of winning, from the model behind the
+   standings' chances. `drawId`, when known, gives the match's own surface and
+   best-of; otherwise `surface` and best of three. */
+export const getPairOdds = (a, b, { surface, drawId } = {}) =>
+  request(`/h2h/odds?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`
+    + (drawId ? `&draw_id=${drawId}` : surface ? `&surface=${encodeURIComponent(surface)}` : ''))
+
 export const getH2H = (p1, p2) =>
   request(`/h2h?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`)
 

@@ -248,4 +248,15 @@ assert.equal(teName('C. Sinclair'), 'C. Sinclair', 'a name already that way roun
 assert.equal(teName('Roger Federer'), 'Roger Federer', 'and so is one with no initial')
 assert.equal(teName(null), '')
 
+// UA odds: whole percent that sum to 100, the higher side lit, with its info.
+{
+  const withOdds = compareRows({ view: asShapo, surface: 'Hard', left: LEFT, right: RIGHT, odds: [0.6234, 0.3766] })
+  const ua = withOdds.find(r => r.key === 'ua')
+  assert.deepEqual(ua.values, ['62%', '38%'])
+  assert.equal(ua.better, 0)
+  assert.equal(ua.label, 'UA odds')
+  assert.equal(ua.info, "Upset Alert's estimated winning percentage")
+  assert.ok(!rows.some(r => r.key === 'ua'), 'no odds, no row')
+}
+
 console.log('ok — h2hView')

@@ -35,8 +35,8 @@
  */
 
 import { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { getH2H, getPlayerForm } from './api'
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
+import { getH2H, getPairOdds, getPlayerForm } from './api'
 import { FitText, FlagSlot, PlayerName } from './cards'
 import { nameLines } from './names'
 import { shortDay } from './dates'
@@ -52,7 +52,7 @@ import { useApi } from './useApi'
 // The two rows whose figures are places in a list rather than counts.
 const HASHED = new Set(['rank', 'elo'])
 
-export function H2HSheet({ visible, onClose, a, b, surface }) {
+export function H2HSheet({ visible, onClose, a, b, surface, drawId }) {
   // Keyed on the pair so switching matches refetches; the backend caches, so a
   // reopen is cheap and there is nothing to memoise here.
   const live = !!(visible && a?.te_slug && b?.te_slug)
@@ -62,6 +62,8 @@ export function H2HSheet({ visible, onClose, a, b, surface }) {
      Explorer per player and the head-to-head is another, so asking for them
      together would make the whole sheet wait on the slowest of three. Each
      fills in as it lands. */
+  const ua = useApi(live ? `ua:${a.te_slug}:${b.te_slug}:${drawId || surface || ''}` : null,
+                    () => getPairOdds(a.te_slug, b.te_slug, { surface, drawId }))
   const formA = useApi(live ? `form:${a.te_slug}` : null, () => getPlayerForm(a.te_slug))
   const formB = useApi(live ? `form:${b.te_slug}` : null, () => getPlayerForm(b.te_slug))
 
@@ -74,7 +76,8 @@ export function H2HSheet({ visible, onClose, a, b, surface }) {
   const d = h2h.data
   const view = useMemo(() => orient(d, a?.te_slug), [d, a?.te_slug])
   const rows = useMemo(
-    () => compareRows({ view, surface, left: a, right: b }), [view, surface, a, b])
+    () => compareRows({ view, surface, left: a, right: b,
+                        odds: ua.data ? [ua.data.p_a, ua.data.p_b] : null }), [view, surface, a, b, ua.data])
 
   return (
     <Sheet visible={!!visible} onClose={onClose} title="Head to head">
@@ -120,7 +123,17 @@ export function H2HSheet({ visible, onClose, a, b, surface }) {
               {rows.map((r, i) => (
                 <View key={r.key} style={[s.row, i > 0 && s.rowRule]}>
                   <Figure v={r.values[0]} lit={r.better === 0} side="left" hashed={HASHED.has(r.key)} />
-                  <FitText style={s.label} min={8} align="center">{r.label}</FitText>
+                  {r.info ? (
+                    /* The ⓘ opens the row's explanation — the standings'
+                       "Chances ⓘ" pattern. */
+                    <Pressable style={s.labelPress} hitSlop={8} accessibilityRole="button"
+                               accessibilityLabel={`${r.label}: ${r.info}`}
+                               onPress={() => Alert.alert(r.label, r.info)}>
+                      <FitText style={s.label} min={8} align="center">{`${r.label} ⓘ`}</FitText>
+                    </Pressable>
+                  ) : (
+                    <FitText style={s.label} min={8} align="center">{r.label}</FitText>
+                  )}
                   <Figure v={r.values[1]} lit={r.better === 1} side="right" hashed={HASHED.has(r.key)} />
                 </View>
               ))}
@@ -348,6 +361,7 @@ const s = StyleSheet.create({
      large text turned on, which is the one thing this project does not print
      (owner, 2026-09-23: "fix the …"). FitText is the second guard: whatever
      is left after the column has grown, the word shrinks into it. */
+  labelPress: { alignItems: 'center', justifyContent: 'center' },
   label: { ...T.tiny, color: C.faint, width: leading(74), textAlign: 'center' },
   // "form" is four letters; the room belongs to the squares either side.
   labelNarrow: { width: leading(42) },
