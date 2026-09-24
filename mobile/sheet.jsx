@@ -104,7 +104,8 @@ const s = StyleSheet.create({
   titleArrowOff: { backgroundColor: 'transparent', borderColor: C.border, opacity: 0.6 },
   footer: {
     marginHorizontal: -S.md, paddingHorizontal: S.md, alignItems: 'center',
-    borderTopWidth: 1, borderTopColor: C.border,
+    // The brightest edge the palette has, and heavier (owner, 2026-09-24).
+    borderTopWidth: 1.5, borderTopColor: C.borderLit,
   },
   close: { alignSelf: 'center', paddingVertical: S.sm, paddingHorizontal: S.lg },
   closeText: { ...T.smallMed, color: C.clay },

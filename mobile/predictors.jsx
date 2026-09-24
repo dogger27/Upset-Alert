@@ -430,7 +430,7 @@ const s = StyleSheet.create({
      height than the button used to take on its own. */
   close: {
     alignSelf: 'stretch', alignItems: 'center', marginHorizontal: -S.md, marginTop: S.sm,
-    paddingVertical: S.xs, borderTopWidth: 1, borderColor: C.borderOn,
+    paddingVertical: S.xs, borderTopWidth: 1.5, borderColor: C.borderLit,
   },
   closeText: { ...T.smallMed, color: C.clay },
 })
