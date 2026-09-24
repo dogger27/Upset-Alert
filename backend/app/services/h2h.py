@@ -335,7 +335,8 @@ def _match_date_val(match, draw) -> Optional[str]:
 
 
 async def get_player_form(
-    te_slug: str, db: AsyncSession, limit: int = 10, before_date: Optional[date] = None
+    te_slug: str, db: AsyncSession, limit: int = 10, before_date: Optional[date] = None,
+    singles: bool = False,
 ) -> list[dict]:
     """
     A player's last `limit` completed matches. When before_date is given (the
@@ -358,11 +359,19 @@ async def get_player_form(
     """
     from app.services import te_form
 
+    # SINGLES ONLY, AND STILL `limit` OF THEM (owner, 2026-09-24: "why do
+    # many players have less than 10 recent matches?"). The app shows singles
+    # form, and it used to take ten matches and THEN drop the doubles, so a
+    # player with a doubles run showed six or seven. With `singles`, the page
+    # is read to its full depth and the ten are counted after the doubles go.
     try:
-        rows = await te_form.fetch_form(te_slug, limit=limit, before=before_date)
+        rows = await te_form.fetch_form(te_slug, limit=te_form.FORM_LIMIT if singles else limit,
+                                        before=before_date)
     except Exception as exc:                          # never at the panel's cost
         logger.debug("TE form unavailable for %s: %s", te_slug, exc)
         rows = []
+    if singles:
+        rows = [r for r in rows if not r.get("doubles")][:limit]
     if rows:
         return rows
 

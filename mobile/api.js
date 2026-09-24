@@ -269,7 +269,8 @@ export const getEntryStatus = () => request('/predictions/entry-status')
 /* A player's own last matches, whichever rung of the ladder they were on —
    Challengers, Futures, qualifying and doubles included (services/te_form). */
 export const getPlayerForm = (slug) =>
-  request(`/h2h/form?slug=${encodeURIComponent(slug)}`)
+  // singles=1: ten SINGLES matches, counted after the doubles are dropped.
+  request(`/h2h/form?slug=${encodeURIComponent(slug)}&singles=1`)
 
 export const getH2H = (p1, p2) =>
   request(`/h2h?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`)
