@@ -127,7 +127,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
                 ...(played ? [['history', 'Point history'], ['stats', 'Match stats']] : [])]
 
   return (
-    <Sheet visible={!!visible} onClose={onClose} height="80%"
+    <Sheet visible={!!visible} onClose={onClose} height="92%"
            title={status?.line || 'Upcoming'}
            titleStyle={status?.live ? { color: C.greenLit } : !status ? { color: C.muted } : null}
            titleNav={onPrev !== undefined || onNext !== undefined ? { onPrev, onNext } : undefined}>
@@ -175,7 +175,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
           <ScoreHistoryBody visible={!!visible} entry={histEntry}
                             part={shownTab === 'history' ? 'timeline' : 'stats'} />
         ) : (
-        <ScrollPane contentContainerStyle={s.body}>
+        <ScrollPane style={s.pane} contentContainerStyle={s.body}>
           {shownTab === 'prediction' ? (
             <PredictorsBody drawId={predictMatch.draw_id ?? drawId} match={predictMatch} meId={meId} scroll={false} />
           ) : (
@@ -433,12 +433,16 @@ function TwoLineName({ name, end = false, picked = false }) {
 }
 
 const s = StyleSheet.create({
-  body: { paddingBottom: S.md, gap: S.md },
+  /* The scroller runs to the sheet's edges (the sheet pads S.md a side) and
+     gives the padding back to its content — so a row can reach the edges
+     without the ScrollView clipping it. */
+  pane: { marginHorizontal: -S.md },
+  body: { paddingBottom: S.md, gap: S.md, paddingHorizontal: S.md },
   /* ONE HEIGHT, WHATEVER IS IN IT (owner, 2026-09-24: "always keep the
      drawer at FULL height"). The sheet used to size to its content, so
      stepping to the next match collapsed it to a spinner and grew it back
      when the data landed, and each tab was a different height. It is a
-     fixed 80% of the screen now (the point history's size) and this fills
+     fixed 92% of the screen now (owner: "open HIGHER") and this fills
      it; a short tab leaves room below rather than shrinking the sheet. */
   swipeRoot: { flex: 1, minHeight: 0 },
 
@@ -479,11 +483,14 @@ const s = StyleSheet.create({
   // Two points, so the key reads as a deliberate mark rather than a hairline.
   rule: { height: 2, borderRadius: 1, alignSelf: 'stretch' },
 
+  /* EDGE TO EDGE (owner, 2026-09-24): the Bio table's rows run the full
+     width of the screen — ruled top and bottom, no side edges or corners —
+     with the figures kept in from the edge by the row's own padding. */
   spine: {
-    backgroundColor: C.sunken, borderRadius: R.md,
-    borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.sunken, marginHorizontal: -S.md,
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.border,
   },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, paddingHorizontal: S.sm },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, paddingHorizontal: S.md },
   rowRule: { borderTopWidth: 1, borderTopColor: C.border },
   /* THE AXIS: one width for every row, so the figures either side line up
      rather than wandering down the card with the length of each word.

@@ -14,7 +14,7 @@ export function Sheet({ visible, onClose, title, titleStyle, titleRight, titleNa
   return (
     <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={s.scrim} onPress={onClose} accessibilityLabel="Close" />
-      <View style={[s.sheet, height ? { height } : null]}>
+      <View style={[s.sheet, height ? { height, maxHeight: height } : null]}>
         <View style={s.grabber} />
         {/* A TITLE WITH CONTROLS BESIDE IT CANNOT STAY CENTRED. Centring
             measures the title against the whole width, so an accessory on the
