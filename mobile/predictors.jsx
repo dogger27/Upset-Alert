@@ -22,7 +22,7 @@ import { nameForms } from './names'
 import { predictorsMessage } from './lock'
 import { shortRound } from './rounds'
 import { useApi } from './useApi'
-import { C, R, S, T } from './theme'
+import { C, S, T } from './theme'
 import { leading } from './fontScale'
 import { Loading } from './ui'
 
@@ -41,7 +41,14 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueI
      group of theirs. */
   const leagues = useApi(visible ? 'leagues' : null, getLeagues)
   const mine = useMemo(() => (leagues.data || []).filter(l => (l.members || []).some(m => m.id === meId)), [leagues.data, meId])
-  const scopeName = leagueId == null ? 'Global' : (d?.league_name ?? mine.find(l => l.id === leagueId)?.name ?? '…')
+  /* THE PEOPLE THE READER KNOWS — everyone in their own leagues — who come
+     first when Global has to leave names out. */
+  const friends = useMemo(() => {
+    const ids = new Set()
+    for (const l of mine) for (const m of l.members || []) if (m.id !== meId) ids.add(m.id)
+    return ids
+  }, [mine, meId])
+  const scopeName = leagueId == null ? 'Global' : (d?.league_name ?? mine.find(l => l.id === leagueId)?.name ?? 'League')
 
   const winner = match?.winner?.name
   const pending = !match?.winner
@@ -153,29 +160,28 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueI
 
         {withheld ? <Text style={s.withheld}>{withheld}</Text> : d ? (
           <ScrollView style={s.list} contentContainerStyle={{ paddingBottom: S.lg }}>
-            {/* BOTH, always, empty or not. A missing heading reads as a
-                loading gap or a bug, where "Right (0)" is a fact about the
-                match — and a strong one: every pick in the draw has already
-                gone out. Holding both positions between matches also lets the
-                eye learn where to look.
+            {/* TWO COLUMNS, ONE SPLIT (owner, 2026-09-24): right — or "Maybe",
+                in gold, until there is a winner to be right about — on the
+                left, wrong on the right, each listing its people. The bar
+                above them is the split of the whole field, and the key to the
+                columns under it. BOTH columns always, empty or not: "Wrong 0"
+                is a fact about the match, not a gap.
 
-                Right and wrong even before a result: the server puts a pick
-                whose player has already lost into `incorrect`, and that pick
-                is not provisionally wrong, it is wrong. */}
-            {/* Both sections share one denominator — everyone who picked this
-                match — so the percentages across the whole sheet add to 100. */}
-            {/* NOBODY IS RIGHT YET while a match is undecided — "Maybe", in
-                gold, until there is a winner to be right about. `pending` is
-                the server's own "no winner", so this covers a match not yet
-                started and one on court alike; only a finished match earns
-                the green "Right". The site's popup has always drawn a gold
-                "?" here rather than its green check, for the same reason. */}
-            <Group label={d.pending ? 'Maybe' : 'Right'}
-                   tone={d.pending ? C.warn : C.greenLit}
-                   people={d.correct} meId={meId}
-                   fieldSize={fieldSize} fallback={d.pending ? '' : shortP(winner)} />
-            <Group label="Wrong" tone={C.bad} people={d.incorrect} meId={meId}
-                   fieldSize={fieldSize} />
+                A pick whose player has already lost is in `incorrect` even
+                before a result: it is not provisionally wrong, it is wrong. */}
+            <SplitRail left={d.correct?.length || 0} right={d.incorrect?.length || 0}
+                       leftTone={d.pending ? C.warn : C.greenLit} />
+            <View style={s.columns}>
+              <Column label={d.pending ? 'Maybe' : 'Right'} tone={d.pending ? C.warn : C.greenLit}
+                      people={d.correct} fieldSize={fieldSize} meId={meId} friends={friends}
+                      cap={leagueId == null ? GLOBAL_CAP : null}
+                      showPicks={d.pending} />
+              <View style={s.columnRule} />
+              <Column label="Wrong" tone={C.bad}
+                      people={d.incorrect} fieldSize={fieldSize} meId={meId} friends={friends}
+                      cap={leagueId == null ? GLOBAL_CAP : null}
+                      showPicks />
+            </View>
           </ScrollView>
         ) : null}
 
@@ -187,120 +193,93 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueI
   )
 }
 
-/* One PLAYER and everyone who backed them, collapsed until asked.
- *
- * A flat list of names repeated the same pick twenty-nine times and made the
- * reader count to learn the only thing the screen is for: how the field
- * split. The pick is the heading now and the names are behind it.
- *
- * FEWEST FIRST. The lopsided side is never the news — on a screen called
- * Upset Alert the three people who went the other way are — and putting the
- * long list last also keeps the short ones above the fold.
- */
-/* `isMine`, not `mine`: the chip loop below declares its own per-PERSON
-   `mine`, and two different meanings of one word in one function is how a
-   later edit ends up highlighting every chip in your bucket. */
 /* "A. Zverev", the initials-and-surname rung of the ladder, falling back to
    the full name when a name has no rung to drop to. Shared by the match-up
    line and the bucket rows so one player cannot appear as two. */
 const shortP = (n) => (n ? (nameForms(n)[1] || nameForms(n)[0]) : '')
 
-function PickBucket({ picked, people, tone, meId, isMine, fieldSize, fallback }) {
-  const [open, setOpen] = useState(false)
-  /* Every row names the player it is about, both columns alike: "A. Zverev
-     (28)" over "A. Tabilo (1)" is a scoreline you can read in one glance.
+/* GLOBAL NAMES AT MOST THIS MANY A COLUMN (owner, 2026-09-24). A league is
+   a group of people who know each other and is always shown whole; the
+   whole field is not, and a column of two hundred usernames answers nothing. */
+const GLOBAL_CAP = 10
 
-     A FINISHED match sends no pick name for the people who got it right — the
-     server omits it on purpose, since a correct pick can only be the winner
-     (routers/tournaments.py: "a correct pick is the winner, already in the
-     title"). `fallback` supplies that name back rather than leaving the row
-     unlabelled, and it is only ever passed for the right column of a decided
-     match, where the winner IS what all of them picked.
-
-     "No pick" is left for where it is TRUE: anyone with no pick fails
-     `pid == winner_id`, lands in Wrong, and gets no fallback. */
-  const label = shortP(picked) || fallback || 'No pick'
-  const count = `${people.length} ${people.length === 1 ? 'person' : 'people'}`
+/* The field's split as one bar: each side's share of everyone who picked this
+   match, in its column's colour, the left segment over the left column. */
+function SplitRail({ left, right, leftTone }) {
+  const total = left + right
+  if (!total) return null
   return (
-    <View style={s.bucket}>
-      <Pressable onPress={() => setOpen(o => !o)} hitSlop={6}
-                 accessibilityRole="button"
-                 accessibilityState={{ expanded: open }}
-                 accessibilityLabel={[label, count].filter(Boolean).join(', ')}
-                 style={s.bucketHead}>
-        {/* SHARE OF THE WHOLE FIELD, not of this section: "86%" means 86% of
-            everyone who picked this match, which is the comparison worth
-            making. Against the section it would read 100% for the only group
-            in it and say nothing at all.
-
-            Fixed width and right-aligned so the chevrons and names below line
-            up whether the number is 3% or 86%. */}
-        <Text style={[s.pct, { color: tone }]} numberOfLines={1}
-              adjustsFontSizeToFit minimumFontScale={0.8}>
-          {fieldSize ? `${Math.round((100 * people.length) / fieldSize)}%` : ''}
-        </Text>
-        <Ionicons name={open ? 'chevron-down' : 'chevron-forward'}
-                  size={14} color={tone} style={s.chev} />
-        <Text style={s.bucketName} numberOfLines={1}>{label}</Text>
-        <Text style={[s.bucketCount, { color: tone }]}>({people.length})</Text>
-        {/* YOUR pick, named without opening anything. Auto-expanding this row
-            was the wrong way to answer "which one is mine": it dumped a list
-            of other people's names to say one thing about you, and on a busy
-            match that was the longest row on the screen. The mark says it
-            while the row stays shut. */}
-        {isMine ? (
-          <Text style={s.mineMark}
-                accessibilityLabel="You predicted this player to win">🤞</Text>
-        ) : null}
-      </Pressable>
-      {open ? (
-        <View style={s.chips}>
-          {people.map(p => {
-            const mine = meId != null && p.id === meId
-            return (
-              <View key={p.id} style={[s.chip, mine && { borderColor: C.clay }]}>
-                <Text style={[s.chipText, mine && { color: C.clay }]} numberOfLines={1}>
-                  {p.username}
-                </Text>
-              </View>
-            )
-          })}
-        </View>
-      ) : null}
+    <View style={s.rail} accessibilityLabel={`${left} of ${total} on the left, ${right} on the right`}>
+      {left > 0 && <View style={{ flex: left, backgroundColor: leftTone }} />}
+      {left > 0 && right > 0 && <View style={s.railGap} />}
+      {right > 0 && <View style={{ flex: right, backgroundColor: C.bad }} />}
     </View>
   )
 }
 
-function Group({ label, tone, people, meId, fieldSize, fallback }) {
-  /* Bucketed by pick, fewest backers first. Ties keep the order the server
-     sent, which is already by weight of support. */
-  const buckets = useMemo(() => {
+/* ONE COLUMN: its heading, then its people.
+ *
+ * WHO IS SHOWN WHEN NOT EVERYONE CAN BE (`cap`, Global only): you first, then
+ * people from your own leagues, then the rest in the server's order (weight of
+ * support). "+N more" under the list opens the rest.
+ *
+ * Grouped by WHO THEY PICKED when that is not already obvious (`showPicks`):
+ * the wrong column, and both columns before a result. Groups run fewest
+ * backers first — on Upset Alert the three who went the other way are the
+ * news — and each says its full count even when only some of it is shown. */
+function Column({ label, tone, people, fieldSize, meId, friends, cap, showPicks }) {
+  const [all, setAll] = useState(false)
+  const list = useMemo(() => people || [], [people])
+  const pct = fieldSize ? Math.round((100 * list.length) / fieldSize) : 0
+
+  const { groups, hidden } = useMemo(() => {
+    const rank = p => (meId != null && p.id === meId ? 0 : friends.has(p.id) ? 1 : 2)
+    const ordered = list.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map(x => x.p)
+    const shown = new Set((cap && !all ? ordered.slice(0, cap) : ordered).map(p => p.id))
     const by = new Map()
-    for (const p of people || []) {
-      const key = p.picked || ''
-      if (!by.has(key)) by.set(key, [])
-      by.get(key).push(p)
+    for (const p of ordered) {
+      const k = showPicks ? (p.picked || '') : ''
+      if (!by.has(k)) by.set(k, { picked: k, total: 0, people: [] })
+      const g = by.get(k)
+      g.total += 1
+      if (shown.has(p.id)) g.people.push(p)
     }
-    return [...by.entries()]
-      .map(([picked, list]) => ({ picked, list }))
-      .sort((a, b) => a.list.length - b.list.length)
-  }, [people])
+    const gs = [...by.values()].filter(g => g.people.length).sort((a, b) => a.total - b.total)
+    return { groups: gs, hidden: list.length - shown.size }
+  }, [list, meId, friends, cap, all, showPicks])
 
   return (
-    <View style={s.group}>
-      <Text style={[s.groupLabel, { color: tone }]}>
-        {label} ({(people || []).length})
+    <View style={s.column}>
+      <Text style={[s.colLabel, { color: tone }]}>{label}</Text>
+      <Text style={s.colCount}>
+        <Text style={[s.colCountNum, { color: tone }]}>{list.length}</Text>
+        {fieldSize ? `  ${pct}%` : ''}
       </Text>
-      {!people?.length ? <Text style={s.none}>No one.</Text> : null}
-      <View>
-        {buckets.map(b => (
-          <PickBucket
-            key={b.picked || '_none'} picked={b.picked} people={b.list}
-            tone={tone} meId={meId} fieldSize={fieldSize} fallback={fallback}
-            isMine={meId != null && b.list.some(p => p.id === meId)}
-          />
-        ))}
-      </View>
+      {!list.length ? <Text style={s.none}>No one</Text> : null}
+      {groups.map(g => (
+        <View key={g.picked || '_'} style={s.pickGroup}>
+          {showPicks ? (
+            <Text style={s.pickHead}>
+              {g.picked ? shortP(g.picked) : 'No pick'}
+              <Text style={s.pickHeadCount}>{`  ${g.total}`}</Text>
+            </Text>
+          ) : null}
+          {g.people.map(p => {
+            const me = meId != null && p.id === meId
+            return (
+              <Text key={p.id} style={[s.person, me && s.personMe]}>
+                {p.username}{me ? ' 🤞' : ''}
+              </Text>
+            )
+          })}
+        </View>
+      ))}
+      {hidden > 0 ? (
+        <Pressable onPress={() => setAll(true)} hitSlop={6} accessibilityRole="button"
+                   accessibilityLabel={`Show ${hidden} more`}>
+          <Text style={[s.more, { color: tone }]}>+{hidden} more</Text>
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -353,25 +332,34 @@ const s = StyleSheet.create({
   pillUpcoming: { borderColor: '#3b4c8a', backgroundColor: '#182140', color: '#9db4ff' },
   pillDone: { borderColor: C.border, backgroundColor: C.raised, color: C.muted },
   pillTbd: { borderColor: C.border, borderStyle: 'dashed', backgroundColor: 'transparent', color: C.muted },
-  list: { marginTop: S.md },
-  group: { marginBottom: S.md },
-  groupLabel: { ...T.smallMed, marginBottom: S.xs },
+  list: { marginTop: S.sm },
+  /* The split: thin, full width, square-ended segments with a hairline of
+     the sheet between them. */
+  rail: { flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', marginBottom: S.md },
+  railGap: { width: 2, backgroundColor: C.card },
+  columns: { flexDirection: 'row', alignItems: 'flex-start' },
+  column: { flex: 1, minWidth: 0, gap: 2 },
+  columnRule: { width: 1, alignSelf: 'stretch', backgroundColor: C.border, marginHorizontal: S.md },
+  colLabel: { ...T.h2, lineHeight: leading(22) },
+  colCount: { ...T.small, color: C.faint, marginBottom: S.sm, fontVariant: ['tabular-nums'] },
+  colCountNum: { fontFamily: 'Archivo_700Bold' },
+  pickGroup: { marginBottom: S.sm, gap: 2 },
+  pickHead: { ...T.tiny, color: C.muted, fontFamily: 'Archivo_700Bold', marginBottom: 2 },
+  pickHeadCount: { color: C.faint, fontFamily: 'Archivo_500Medium' },
+  person: { ...T.small, color: C.inkBody },
+  personMe: { color: C.clay, fontFamily: 'Archivo_700Bold' },
+  more: { ...T.small, fontFamily: 'Archivo_700Bold', paddingVertical: 4 },
   /* A pick and its backers. The header is a touch target, so it takes the
      full width and a real row height rather than hugging its text. */
   // Indented to 20 like the chips, so an empty section sits exactly where a
   // full one's names would — the eye reads it as the section's content rather
   // than as another heading.
-  none: { ...T.tiny, color: C.faint, paddingVertical: 4, paddingLeft: 20 },
+  none: { ...T.small, color: C.faint },
   /* Centred and roomy, unlike `none`'s indented aside: this replaces the
      whole answer rather than qualifying one column of it. */
   withheld: { ...T.small, color: C.muted, textAlign: 'center',
               paddingVertical: S.lg, paddingHorizontal: S.md,
               lineHeight: leading(T.small.fontSize * 1.45) },
-  bucket: { marginBottom: S.xs },
-  bucketHead: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 7, paddingHorizontal: 2,
-  },
   // Tabular so the digits sit in columns down the sheet.
   // Held off the sheet's edge rather than flush against it. Still fixed-width
   // and right-aligned, so the indent moves the whole column and the chevrons
@@ -381,25 +369,12 @@ const s = StyleSheet.create({
      out of column and wrapped the "%" onto its own line. The column now grows
      by the same factor the text does. Same reason the chevron's box scales:
      an icon font scales too, and a fixed box clips it. */
-  pct: { ...T.smallMed, width: leading(38), marginLeft: 10, textAlign: 'right',
-         fontVariant: ['tabular-nums'] },
-  chev: { width: leading(14), textAlign: 'center' },
   // The name takes the space and the count sits tight against it, so the
   // count never drifts to the far edge on a short name.
   // The pick, as a heading. Plain: the treatment belongs to the MATCH-UP line
   // above, and giving it to both would leave neither looking like the subject.
-  bucketName: { ...T.smallMed, color: C.ink, flexShrink: 1 },
-  bucketCount: { ...T.smallMed, opacity: 0.75 },
   // The same 🤞 the score cards use for a pick, at the same size.
-  mineMark: { fontSize: 14, lineHeight: leading(18), marginLeft: 2 },
   // Indented under their heading, so an open bucket reads as belonging to it.
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6,
-           paddingLeft: 20, paddingBottom: S.xs },
-  chip: {
-    backgroundColor: C.raised, borderRadius: R.sm, borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: 9, paddingVertical: 4, maxWidth: '100%',
-  },
-  chipText: { ...T.tiny, color: C.inkBody },
   err: { ...T.small, color: C.bad, textAlign: 'center', paddingVertical: S.md },
   scopeRow: { flexDirection: 'row', marginTop: S.sm, marginBottom: S.xs },
   scope: {
