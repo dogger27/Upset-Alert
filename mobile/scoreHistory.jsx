@@ -14,12 +14,14 @@
  * module, copied). Each hangs toward the player who earned it.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { PanResponder, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getEntryScoreHistory, getMatchScoreHistory, getMatchStatistics } from './api'
 import { MatchCard } from './scorecard'
 import { pointStats, sanitizeSnapshots, timelineMarkers } from './scoreTimeline'
 import { Sheet } from './sheet'
 import { C, R, S, T } from './theme'
+import { leading } from './fontScale.js'
 import { Loading } from './ui'
 import { useApi } from './useApi'
 import { FitText } from './cards'
@@ -36,7 +38,14 @@ function clockOf(iso) {
   } catch { return '' }
 }
 
-const TICK = { break: C.warn, set: C.info, match: C.lossMark, ace: C.greenLit, df: C.h2hP2 }
+const TICK = { bp: C.breakPoint, break: C.warn, set: C.info, match: C.lossMark, ace: C.greenLit, df: C.h2hP2 }
+/* The legend's order and words, and what the caption under it calls each
+   moment the arrows land on. Break point before break: the chance, then the
+   thing it became. */
+const KINDS = [
+  ['bp', 'break point', 'Break point'], ['break', 'break', 'Break'], ['set', 'set', 'Set'],
+  ['match', 'match', 'Match'], ['ace', 'ace', 'Ace'], ['df', 'DF', 'Double fault'],
+]
 
 /* The draw page's caller. A bracket match is not a schedule row, but the
    sheet reads one shape — so the match is dressed as a row: its two entrants
@@ -137,13 +146,26 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
     if (!completed || entry?.winner_side == null) return null
     return (entry.winner_side === 0) === topIsP1 ? 1 : 2
   })()
-  const markers = useMemo(() => timelineMarkers(snapshots, { completed, winnerSide }),
+  const markers = useMemo(() => timelineMarkers(snapshots, { completed, winnerSide, breakPoints: true }),
     [snapshots, completed, winnerSide])
   /* The point the scrub is sitting ON. A snapshot records the score AFTER a
      point, so the snapshot at this position IS the point just played — hence
      "Prev Point", as the site says it. Sofascore names only aces and double
      faults, so the line is blank most of the time by nature. */
   const prevPoint = (atEnd ? snapshots[snapshots.length - 1] : snapshots[pos])?.point_label ?? null
+  /* THE BIG MOMENTS, IN ORDER — every position with a tick on it. The arrows
+     step the thumb between them (owner, 2026-09-24): the ticks were a map of
+     the match you could only read by dragging a thumb across 3pt targets. */
+  const moments = useMemo(() => [...new Set(markers.map(m => m.i))].sort((x, y) => x - y), [markers])
+  const here = atEnd ? max : pos
+  const prevMoment = [...moments].reverse().find(i => i < here)
+  const nextMoment = moments.find(i => i > here)
+  const goTo = (i) => { if (i != null) setPos(i >= max ? null : i) }
+  /* What the thumb is sitting on, in words: every kind ticked at this spot,
+     else the point's own label. */
+  const hereKinds = new Set(markers.filter(m => m.i === here).map(m => m.kind))
+  const caption = KINDS.filter(([k]) => hereKinds.has(k)).map(([, , word]) => word).join(' · ')
+    || prevPoint
   const stats = useMemo(() => pointStats(snapshots), [snapshots])
   const statsUsable = stats.counted >= 20 && stats.counted / Math.max(1, stats.transitions) >= 0.7
 
@@ -248,26 +270,29 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
             <Scrub max={max} pos={atEnd ? max : pos} onChange={v => setPos(v >= max ? null : v)}
                    onHold={setHolding} markers={markers} topIsP1={topIsP1}
                    top={initialsOf(a[0]?.name)} bottom={initialsOf(b[0]?.name)} />
-            {/* Legend on the left, the last point's name on the right — the
-                site's row. It is drawn even when both are empty so the tabs
-                below never jump as the thumb crosses an ace. */}
-            <View style={s.underline}>
-              {markers.length > 0 && (
-                <View style={s.legend}>
-                  <Legend color={TICK.break} label="break" />
-                  <Legend color={TICK.set} label="set" />
-                  {markers.some(m => m.kind === 'match') && <Legend color={TICK.match} label="match" />}
-                  {markers.some(m => m.kind === 'ace') && <Legend color={TICK.ace} label="ace" />}
-                  {markers.some(m => m.kind === 'df') && <Legend color={TICK.df} label="DF" />}
+            {/* THE MOMENT NAVIGATOR (owner, 2026-09-24): previous / next big
+                moment either side of the legend, which sits centred in a pill
+                the arrows' own height. Two lines, fixed, so the tabs below
+                never move as kinds appear. */}
+            {markers.length > 0 && (
+              <View style={s.navRow}>
+                <NavButton dir="back" disabled={prevMoment == null} onPress={() => goTo(prevMoment)} />
+                <View style={s.legendPill}>
+                  {(() => {
+                    const shown = KINDS.filter(([k]) => markers.some(m => m.kind === k))
+                    return [shown.slice(0, 3), shown.slice(3)].map((line, n) => (
+                      <View key={n} style={s.legendLine}>
+                        {line.map(([k, label]) => <Legend key={k} color={TICK[k]} label={label} />)}
+                      </View>
+                    ))
+                  })()}
                 </View>
-              )}
-              {prevPoint ? (
-                <View style={s.prevPoint} accessibilityLiveRegion="polite" accessibilityLabel={`Previous point: ${prevPoint}`}>
-                  {/* Just the word — "Ace", "Double Fault" — no label (owner,
-                      2026-09-17); the label lives in the accessibility text. */}
-                  <FitText style={s.prevPointValue} min={9}>{prevPoint}</FitText>
-                </View>
-              ) : null}
+                <NavButton dir="forward" disabled={nextMoment == null} onPress={() => goTo(nextMoment)} />
+              </View>
+            )}
+            {/* What the thumb is on, one fixed line, so nothing below jumps. */}
+            <View style={s.captionRow} accessibilityLiveRegion="polite">
+              {caption ? <FitText style={s.prevPointValue} min={9}>{caption}</FitText> : null}
             </View>
             {/* Tabs only when there IS a second panel — a match with no
                 Sofascore event id keeps the single panel it always had. */}
@@ -375,6 +400,19 @@ function Scrub({ max, pos, onChange, markers, topIsP1, top, bottom, onHold }) {
         <View style={[s.thumb, { left: x - THUMB / 2 }]} pointerEvents="none" />
       </View>
     </View>
+  )
+}
+
+function NavButton({ dir, disabled, onPress }) {
+  return (
+    <Pressable onPress={onPress} disabled={disabled} hitSlop={6}
+               accessibilityRole="button"
+               accessibilityLabel={dir === 'back' ? 'Previous big moment' : 'Next big moment'}
+               accessibilityState={{ disabled }}
+               style={({ pressed }) => [s.navBtn, pressed && s.navBtnPressed, disabled && s.navBtnOff]}>
+      <Ionicons name={dir === 'back' ? 'chevron-back' : 'chevron-forward'} size={20}
+                color={disabled ? C.faint : C.ink} />
+    </Pressable>
   )
 }
 
@@ -530,9 +568,23 @@ const s = StyleSheet.create({
      a "Prev Point" label, and neither may cost a line. The legend keeps its
      width; the Prev Point value is the thing that gives, shrinking by
      measurement (FitText) in the room that is left. */
-  underline: { flexDirection: 'row', alignItems: 'center', minHeight: 16, gap: S.sm },
-  legend: { flexDirection: 'row', flexWrap: 'nowrap', gap: S.sm, alignItems: 'center', flexShrink: 0 },
-  prevPoint: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto', flexShrink: 1, minWidth: 0 },
+  /* Arrows and pill in one row, stretched to one height: the pill's two
+     fixed lines set it, the arrows take it. */
+  navRow: { flexDirection: 'row', alignItems: 'stretch', justifyContent: 'center', gap: S.sm },
+  navBtn: {
+    width: 44, borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn,
+    backgroundColor: C.card, alignItems: 'center', justifyContent: 'center',
+  },
+  navBtnPressed: { backgroundColor: C.greenDeep },
+  navBtnOff: { opacity: 0.4 },
+  legendPill: {
+    flexShrink: 1, justifyContent: 'center', gap: 3,
+    paddingHorizontal: S.md, paddingVertical: 6,
+    borderWidth: 1, borderColor: C.borderOn, borderRadius: R.pill,
+  },
+  /* A line is drawn even when empty, so the pill is always two lines tall. */
+  legendLine: { flexDirection: 'row', justifyContent: 'center', gap: S.sm, minHeight: leading(15) },
+  captionRow: { minHeight: leading(16), alignItems: 'center', justifyContent: 'center' },
   prevPointValue: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendBox: { width: 8, height: 8, borderRadius: 2 },

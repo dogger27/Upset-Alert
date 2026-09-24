@@ -52,6 +52,9 @@ export const C = {
   ok:        '#52b788',
   bad:       '#f87171',
   warn:      '#e0a34a',
+  // A break POINT on the point timeline: the chance, a pale yellow beside
+  // the break's amber (warn), so the two read as one story, lighter first.
+  breakPoint: '#f1e27a',
   info:      '#7aa9ff',   // the site's --info (dark): a match carried to a later day
   lossMark:  '#f87171',   // the site's --bad-fg: the cross beside the loser, and the match tick
   h2hP1:     '#38a8f0',   // the site's --h2h-p1 (dark): the top player in a comparison
