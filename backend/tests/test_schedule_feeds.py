@@ -286,3 +286,71 @@ def test_a_thin_day_the_pdf_filled_in_is_a_note_not_a_warning():
     assert msg == "Hangzhou Open 2026-09-23: the feeds hold 5 of the sheet's 6 matches; the PDF filled in"
     # Another day thin says nothing about this one.
     assert _pdf_fallback_note(t, day, {}, {}, {date(2026, 9, 24): "x"})[0] == "warning"
+
+
+def _parked_day(monkeypatch, stored_slots, sheet_count):
+    """Chengdu 2026-09-25 as Sofascore listed it at 15:00 UTC on the 24th:
+    the sheet's singles placed on named courts, and three R16 fixtures parked
+    on the day at 13:00 with no court (event ids 17108571/79/72)."""
+    from app.services import schedule_feeds, schedule_shadow
+
+    async def count(*_a, **_k):
+        return sheet_count
+
+    async def no_names(*_a, **_k):
+        return {}
+
+    async def stored(*_a, **_k):
+        return stored_slots
+
+    monkeypatch.setattr(schedule_feeds, "_sheet_match_count", count)
+    monkeypatch.setattr(schedule_shadow, "court_names", no_names)
+    monkeypatch.setattr(schedule_feeds, "_stored_slots", stored)
+    rows = [_sofa("Vit Kopřiva", "Denis Shapovalov", "Center Court", 5, 0),
+            _sofa("Alejandro Tabilo", "Adrian Mannarino", "Center Court", 6, 10),
+            _sofa("Jenson Brooksby", "Lorenzo Sonego", "Court 1 Chengdu", 5, 0),
+            _sofa("Juan Manuel Cerundolo", "Alejandro Davidovich Fokina", None, 5, 0),
+            _sofa("Martin Damm Jr", "Hubert Hurkacz", None, 5, 0)]
+    for r in rows:
+        if r["venue"]["name"] is None:
+            del r["venue"]
+    part = {"disc": "singles", "tour": "ATP", "doc": json.dumps(rows)}
+    dbl = {"disc": "doubles", "tour": "ATP", "doc": json.dumps(
+        [_sofa("Borges N / Cerundolo J M", "Schnaitter J / Wallner M", "Court 1 Chengdu", 6, 10)])}
+    return _feed_day([_draw("M")], monkeypatch, sofa_rows=[part, dbl])
+
+
+# The sheet's own rows for the day, as _stored_slots reads them off the PDF.
+_SHEET_0925 = [("singles", {"kopriva", "shapovalov"}), ("singles", {"tabilo", "mannarino"}),
+               ("singles", {"brooksby", "sonego"}),
+               ("doubles", {"borges", "cerundolo", "schnaitter", "wallner"})]
+
+
+def test_a_match_sofascore_parked_on_the_day_does_not_hand_it_to_the_pdf(monkeypatch):
+    """Chengdu and Hangzhou 2026-09-22..25: every day went to the PDF first
+    because Sofascore parks a not-yet-scheduled R16 on the next day with no
+    court, and one courtless row declined the whole day. The parked rows the
+    sheet does not print are left out and the feed keeps the day. Cerundolo is
+    on the day's sheet — in the DOUBLES — which must not keep his singles."""
+    got = _parked_day(monkeypatch, _SHEET_0925, 4)
+    assert "declined" not in got and got["count"] == 4
+    assert got["unplaced"] == ["Juan Manuel Cerundolo v Alejandro Davidovich Fokina",
+                               "Martin Damm Jr v Hubert Hurkacz"]
+    ms, meta = got["parser"](got["bytes"])
+    assert meta["unnamed"] == 0 and len(ms) == 4
+    assert b"Hurkacz" not in got["bytes"]           # out of the document, not just the parse
+
+
+def test_a_courtless_match_the_sheet_prints_still_declines_the_day(monkeypatch):
+    """A courtless row the stored day DOES print is a match Sofascore has not
+    placed yet: the PDF still has the court it lacks."""
+    sheet = _SHEET_0925 + [("singles", {"damm", "hurkacz"})]
+    got = _parked_day(monkeypatch, sheet, 5)
+    assert got["declined"] == "1 row(s) with no court"
+
+
+def test_with_nothing_stored_a_courtless_row_still_declines_the_day(monkeypatch):
+    """The day's first sighting has nothing to tell a parked match from an
+    unplaced one; the PDF is fetched and answers it on the next tick."""
+    got = _parked_day(monkeypatch, [], 0)
+    assert got["declined"] == "2 row(s) with no court"
