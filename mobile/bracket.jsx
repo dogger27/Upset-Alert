@@ -324,7 +324,9 @@ export function h2hPairOf(m, B, { needSlugs = true } = {}) {
   const hA = m.player1 ?? (rA != null ? B.playerById[rA] : null)
   const hB = m.player2 ?? (rB != null ? B.playerById[rB] : null)
   if (!(hA?.name && hB?.name && (!needSlugs || (hA.te_slug && hB.te_slug)))) return null
-  return { a: h2hPlayer(hA), b: h2hPlayer(hB), matchId: m.id }
+  // `match` travels with the pair: the sheet falls back to it when a refetch
+  // briefly leaves the match out of the list it looks it up in.
+  return { a: h2hPlayer(hA), b: h2hPlayer(hB), matchId: m.id, match: m }
 }
 
 function lastNameOf(full) {

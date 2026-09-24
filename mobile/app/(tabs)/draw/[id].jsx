@@ -427,7 +427,10 @@ export default function DrawScreen() {
       {(() => {
         /* The match as the draw holds it NOW — looked up by id each render,
            so a live score in the sheet's title keeps moving. */
-        const hm = h2h ? (draw.data?.matches || []).find(x => x.id === h2h.matchId) : null
+        /* Fresh from the draw when it is there, else the match the sheet was
+           opened with — a refetch must not make the Points and Stats tabs
+           blink out (owner, 2026-09-24: "randomly disappeared"). */
+        const hm = h2h ? ((draw.data?.matches || []).find(x => x.id === h2h.matchId) || h2h.match || null) : null
         const decided = hm?.winner?.id != null && hm?.player1?.id != null
         const status = hm ? statusLine({
           winner: decided ? (hm.winner.id === hm.player1.id ? 0 : 1) : null,

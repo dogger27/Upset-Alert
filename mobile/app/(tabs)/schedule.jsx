@@ -1001,7 +1001,7 @@ export default function ScheduleScreen() {
           surface for the page. */}
       <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} drawId={h2h?.drawId}
                 surface={h2h?.surface} status={h2h?.status} pickSide={h2h?.pickSide}
-                histEntry={h2h ? (all.find(x => x.id === h2h.rowId) || null) : null}
+                histEntry={h2h ? (all.find(x => x.id === h2h.rowId) || h2h.row || null) : null}
                 round={h2h?.round} initialTab={h2h?.tab} openKey={h2h?.open}
                 predictMatch={h2h?.predictMatch} meId={me?.id} />
       {/* drawId comes off the ROW, not the page: the schedule mixes the men's
@@ -1239,7 +1239,7 @@ function h2hPairOf(e, { needSlugs = true } = {}) {
   // itself (Prediction, Points) only needs a singles row with two players.
   return e.discipline === 'singles' && a && b && (!needSlugs || (a.te_slug && b.te_slug))
     ? { a: of(a), b: of(b), surface: e.surface, drawId: e.draw_id, status,
-        predictMatch: matchFromEntry(e), pickSide, rowId: e.id, round: e.round_label ?? null }
+        predictMatch: matchFromEntry(e), pickSide, rowId: e.id, row: e, round: e.round_label ?? null }
     : null
 }
 
