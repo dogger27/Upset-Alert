@@ -25,7 +25,7 @@ from app.models.schedule import CourtAlias, ScheduleEntry, ScheduleEntryPlayer
 from app.models.rankings import TePlayer, TeRankingsSnapshot
 from app.services.schedule import (carry_surname, settle_from_result_rows,
                                    settled_sides_index)
-from app.services.doubles_rank import doubles_pair_ranks
+from app.services.doubles_rank import doubles_pair_ranks, doubles_player_nations
 from app.services.qualifying_rank import qualifying_places
 from app.services.oop_parser import printed_score_final, served_nation
 from app.services.rankings import _norm
@@ -441,6 +441,7 @@ async def _qualifying_ranks(db, fields: set) -> dict:
 def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_bracket: bool,
                 slugs: dict = None, extra: dict = None, by_name: dict = None,
                 extra_by_name: dict = None, pair_rank: Optional[int] = None,
+                te_nat: Optional[str] = None,
                 qual_rank: Optional[int] = None, qual_seed: Optional[int] = None):
     """One player, preferring what the bracket knows over what the sheet printed.
 
@@ -508,7 +509,9 @@ def _player_out(p, nats: dict, seeds: dict, types: dict, ranks: dict, from_brack
         # the sheet's row must not borrow it. Korea Open 2026-09-21,
         # "Alina KORNEEVA": no country printed, none stored, a Russian
         # flag served anyway.
-        nationality=served_nation(nats.get(p.draw_entry_id), p.nationality),
+        # Last, a doubles player's country from their Tennis Explorer profile
+        # (doubles_rank) — for the specialist the sheet printed bare.
+        nationality=served_nation(nats.get(p.draw_entry_id), p.nationality, te_nat),
         seed=seed,
         draw_rank=draw_rank,
         entry_type=etype,
@@ -873,8 +876,10 @@ async def schedule_day(
     # The doubles pairs' inferred seeds, per tournament on the page — cached
     # inside doubles_rank, since this endpoint is polled every ten seconds.
     pair_ranks: dict = {}
+    pair_nats: dict = {}
     for _tid in {e.tournament_id for e in entries if e.discipline == "doubles"}:
         pair_ranks.update(await doubles_pair_ranks(db, _tid))
+        pair_nats.update(await doubles_player_nations(db, _tid))
 
     nats = {}
     ent_seeds = {}
@@ -1320,6 +1325,7 @@ async def schedule_day(
                         e.discipline == "singles" and e.stage == "main",
                         ent_slugs, ent_extra, slugs_by_name, extra_by_name,
                         pair_rank=pair_ranks.get((e.id, p.side)),
+                        te_nat=pair_nats.get((e.id, p.side, p.position)),
                         **_qual(qual_ranks, e, p))
             for p in ordered
         ]
