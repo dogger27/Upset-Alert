@@ -603,8 +603,15 @@ const s = StyleSheet.create({
   },
   /* A line is drawn even when empty, so the pill is always two lines tall. */
   legendLine: { flexDirection: 'row', justifyContent: 'center', gap: S.sm, minHeight: leading(15) },
+  /* A FIXED HEIGHT, EMPTY OR NOT (owner, 2026-09-24: "everything is
+     bouncing"). It was a minHeight around a COLUMN, in which FitText's
+     flex: 1 is a VERTICAL grow — so the line's height followed whether a
+     caption was in it, and the card and everything under it jumped on every
+     point the thumb crossed. Now a ROW of one exact height: FitText's flex
+     fills it sideways and right-aligns, and an empty line holds the same
+     space waiting. */
   captionRow: {
-    minHeight: leading(16), alignItems: 'stretch', justifyContent: 'center',   // FitText measures the full row, aligns right
+    height: leading(16), flexDirection: 'row', alignItems: 'center',
     marginBottom: -S.sm, paddingRight: S.xs,   // sits tight on the card it describes
   },
   prevPointValue: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold' },
