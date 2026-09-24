@@ -351,9 +351,12 @@ const s = StyleSheet.create({
      third of a line above them. On the baseline the three read as one line,
      which is what they are. */
   head: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm },
-  result: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingHorizontal: S.xs },
-  resultMark: { fontSize: 22, lineHeight: leading(26), width: leading(26), textAlign: 'center', fontFamily: 'Archivo_700Bold' },
-  resultLine: { ...T.score, fontSize: 24, lineHeight: leading(28), flex: 1, textAlign: 'center', color: C.ink, fontVariant: ['tabular-nums'] },
+  /* Tight to the names above and the table below (owner, 2026-09-24: "remove
+     all that excess space"): the body's gap cancelled to 2pt either side. */
+  result: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingHorizontal: S.xs,
+            marginVertical: -(S.md - 2) },
+  resultMark: { fontSize: 22, lineHeight: leading(24), width: leading(26), textAlign: 'center', fontFamily: 'Archivo_700Bold' },
+  resultLine: { ...T.score, fontSize: 24, lineHeight: leading(26), flex: 1, textAlign: 'center', color: C.ink, fontVariant: ['tabular-nums'] },
   who: { flex: 1, minWidth: 0, gap: 3, alignSelf: 'flex-end' },
   whoEnd: { alignItems: 'flex-end' },
   whoLine: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch' },
