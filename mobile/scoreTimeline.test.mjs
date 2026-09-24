@@ -82,7 +82,7 @@ test('a label on a duplicate state survives the duplicate being dropped', () => 
   assert.equal(s[0].point_label, 'Ace')
 })
 
-test('break points: each chance the receiver holds, never in a tiebreak, opt-in', () => {
+test('break points: each chance the receiver holds, numbered per game, never in a tiebreak, opt-in', () => {
   const h = [
     snap([['0'], ['0']], ['0', '0'], 1),
     snap([['0'], ['0']], ['15', '40'], 1),    // receiver (2) holds a BP
@@ -93,7 +93,41 @@ test('break points: each chance the receiver holds, never in a tiebreak, opt-in'
     snap([['1'], ['0']], ['0', '0'], 2),
     snap([['6'], ['6']], ['3', '6'], 1, { tiebreak: true }),
   ]
-  const bp = timelineMarkers(h, { breakPoints: true }).filter(x => x.kind === 'bp')
-  assert.deepEqual(bp.map(x => [x.i, x.side]), [[1, 2], [2, 2], [4, 2]])
+  const bp = timelineMarkers(h, { pressurePoints: true }).filter(x => x.kind === 'bp')
+  assert.deepEqual(bp.map(x => [x.i, x.side, x.n]), [[1, 2, 1], [2, 2, 2], [4, 2, 3]])
   assert.equal(timelineMarkers(h).some(x => x.kind === 'bp'), false)
+})
+
+test('set and match points: numbered per set per player, and across the match', () => {
+  const h = [
+    snap([['5'], ['3']], ['0', '0'], 1),
+    snap([['5'], ['3']], ['40', '15'], 1),        // SP #1 for 1
+    snap([['5'], ['3']], ['40', '30'], 1),        // SP #2
+    snap([['5'], ['3']], ['40', '40'], 1),
+    snap([['5'], ['3']], ['A', '40'], 1),         // SP #3
+    snap([['6', '5'], ['3', '4']], ['40', '0'], 1), // set 2, 5-4: MATCH point #1 (best of 3)
+    snap([['6', '6'], ['3', '6']], ['6', '5'], 1, { tiebreak: true }), // TB: MP #2 for 1
+    snap([['6', '6'], ['3', '6']], ['6', '6'], 2, { tiebreak: true }),
+    snap([['6', '6'], ['3', '6']], ['6', '7'], 2, { tiebreak: true }), // side 2 set point in the TB
+  ]
+  const m = timelineMarkers(h, { pressurePoints: true, bestOf: 3 })
+  const pick = k => m.filter(x => x.kind === k).map(x => [x.i, x.side, x.n])
+  assert.deepEqual(pick('sp'), [[1, 1, 1], [2, 1, 2], [4, 1, 3], [8, 2, 1]])
+  assert.deepEqual(pick('mp'), [[5, 1, 1], [6, 1, 2]])
+  assert.deepEqual(pick('bp'), [])   // the server's own chances are not break points
+  // best of five: the same 6-3, 5-4 lead is only a set point
+  const m5 = timelineMarkers(h, { pressurePoints: true, bestOf: 5 })
+  assert.equal(m5.some(x => x.kind === 'mp'), false)
+})
+
+test('aces and double faults count per player through the match', () => {
+  const h = [
+    snap([['0'], ['0']], ['15', '0'], 1, { point_label: 'Ace' }),
+    snap([['0'], ['0']], ['30', '0'], 1, { point_label: 'Ace' }),
+    snap([['0'], ['1']], ['0', '15'], 2, { point_label: 'Ace' }),
+    snap([['0'], ['1']], ['15', '15'], 2, { point_label: 'Double Fault' }),
+  ]
+  const m = timelineMarkers(h)
+  assert.deepEqual(m.filter(x => x.kind === 'ace' || x.kind === 'df').map(x => [x.kind, x.side, x.n]),
+    [['ace', 1, 1], ['ace', 1, 2], ['ace', 2, 1], ['df', 2, 1]])
 })
