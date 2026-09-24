@@ -122,12 +122,23 @@ test('set and match points: numbered per set per player, and across the match', 
 
 test('aces and double faults count per player through the match', () => {
   const h = [
+    snap([['0'], ['0']], ['0', '0'], 1),
     snap([['0'], ['0']], ['15', '0'], 1, { point_label: 'Ace' }),
     snap([['0'], ['0']], ['30', '0'], 1, { point_label: 'Ace' }),
-    snap([['0'], ['1']], ['0', '15'], 2, { point_label: 'Ace' }),
-    snap([['0'], ['1']], ['15', '15'], 2, { point_label: 'Double Fault' }),
+    snap([['1'], ['0']], ['0', '0'], 2),                               // P1 held
+    snap([['1'], ['0']], ['0', '15'], 2, { point_label: 'Ace' }),
+    snap([['1'], ['0']], ['15', '15'], 2, { point_label: 'Double Fault' }),
   ]
   const m = timelineMarkers(h)
   assert.deepEqual(m.filter(x => x.kind === 'ace' || x.kind === 'df').map(x => [x.kind, x.side, x.n]),
     [['ace', 1, 1], ['ace', 1, 2], ['ace', 2, 1], ['df', 2, 1]])
+})
+
+test("an ace belongs to the point's server — the snapshot BEFORE it, not the next server", () => {
+  const h = [
+    snap([['6'], ['6']], ['2', '4'], 1, { tiebreak: true }),                     // P1 to serve
+    snap([['6'], ['6']], ['3', '4'], 2, { tiebreak: true, point_label: 'Ace' }), // P1 aced; P2 serves next
+  ]
+  const ace = timelineMarkers(h).find(x => x.kind === 'ace')
+  assert.equal(ace.side, 1)
 })

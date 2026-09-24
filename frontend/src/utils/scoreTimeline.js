@@ -273,8 +273,9 @@ export function timelineMarkers(snapshots, opts = {}) {
   /* ── Ace and double fault ── the label the point itself carried.
      About one point in twenty has one, and with no tick on the rail a reader
      drags straight past every single one and concludes the labels were never
-     built (owner, 2026-09-12). Sided on the SERVER, the player both events
-     belong to; an unknown server goes on top rather than being dropped.
+     built (owner, 2026-09-12). Sided on the SERVER of that point, the
+     player both events belong to; an unknown server goes on top rather
+     than being dropped.
      `n` counts that player's aces (or double faults) in the match so far —
      "Ace #4" (owner, 2026-09-24). */
   const served = { ace: { 1: 0, 2: 0 }, df: { 1: 0, 2: 0 } }
@@ -282,7 +283,14 @@ export function timelineMarkers(snapshots, opts = {}) {
     const label = snapshots[i]?.point_label
     if (!label) continue
     const kind = label === 'Double Fault' ? 'df' : 'ace'
-    const side = snapshots[i]?.serving === 2 ? 2 : 1
+    /* THE POINT'S SERVER IS THE ONE BEFORE IT. A snapshot's `serving` is
+       who serves NEXT — after a tiebreak's odd points and at the end of every
+       game that is the other player, so reading it off the point's own
+       snapshot gave Shevchenko's ace at 3-3 in the tiebreak to Hurkacz, who
+       had only just taken over the serve (owner, 2026-09-24). */
+    const before = snapshots[i - 1]?.serving
+    const side = (before === 1 || before === 2) ? before
+      : snapshots[i]?.serving === 2 ? 2 : 1
     served[kind][side] += 1
     out.push({ i, kind, side, n: served[kind][side] })
   }
