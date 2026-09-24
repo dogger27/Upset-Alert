@@ -20,6 +20,11 @@ from app.models.notification import EmailSuppression
 
 logger = logging.getLogger(__name__)
 
+# A reader's own "no more league invitations" — recorded against the ADDRESS,
+# because an invitation usually goes to someone with no account to hold a
+# preference. Blocks only sends made with category=INVITES.
+INVITES = "league_invites"
+
 # Resend's last_event values that mean "do not write again".
 _EVENTS = ("bounced", "complained", "suppressed")
 # How far back one pass reads. Hourly runs at our volume see ~5 mails an hour;
@@ -65,9 +70,9 @@ def _read_events() -> list[tuple[str, str, Optional[datetime]]]:
     return found
 
 
-# A complaint outranks a bounce outranks Resend's generic "suppressed": the
+# A bounce outranks a complaint outranks Resend's generic "suppressed": the
 # stronger reason decides what may still be sent.
-_RANK = {"suppressed": 0, "complained": 1, "bounced": 2}
+_RANK = {INVITES: -1, "suppressed": 0, "complained": 1, "bounced": 2}
 
 
 async def sync() -> int:
@@ -96,7 +101,7 @@ async def sync() -> int:
             if row is None:
                 db.add(EmailSuppression(email=addr, reason=ev, event_at=at))
                 added.append((addr, ev))
-            elif _RANK[ev] > _RANK.get(row.reason, 0):
+            elif _RANK[ev] > _RANK.get(row.reason, -1):
                 row.reason, row.event_at = ev, at
                 added.append((addr, ev))
         await db.commit()
@@ -107,12 +112,24 @@ async def sync() -> int:
     return len(added)
 
 
-async def allowed(recipients: list[str], essential: bool) -> list[str]:
+async def opt_out_address(email: str, scope: str) -> None:
+    """Record an address-level unsubscribe, never weakening a stronger row."""
+    addr = _norm(email)
+    async with AsyncSessionLocal() as db:
+        row = await db.get(EmailSuppression, addr)
+        if row is None:
+            db.add(EmailSuppression(email=addr, reason=scope))
+            await db.commit()
+
+
+async def allowed(recipients: list[str], essential: bool,
+                  category: str = "") -> list[str]:
     """The recipients we may still write to.
 
     essential = the reader asked for this message just now (verification,
     password reset): only a hard bounce stops it, since the address cannot
-    receive anything. Everything else also stops at a complaint.
+    receive anything. Everything else also stops at a complaint. An invitation
+    opt-out stops only mail sent with category=INVITES.
     """
     wanted = [r for r in recipients if r]
     if not wanted:
@@ -120,5 +137,9 @@ async def allowed(recipients: list[str], essential: bool) -> list[str]:
     async with AsyncSessionLocal() as db:
         rows = (await db.execute(select(EmailSuppression).where(
             EmailSuppression.email.in_([_norm(r) for r in wanted])))).scalars().all()
-    blocked = {r.email for r in rows if r.reason == "bounced" or not essential}
+    def blocks(reason: str) -> bool:
+        if reason == INVITES:
+            return category == INVITES
+        return reason == "bounced" or not essential
+    blocked = {r.email for r in rows if blocks(r.reason)}
     return [r for r in wanted if _norm(r) not in blocked]

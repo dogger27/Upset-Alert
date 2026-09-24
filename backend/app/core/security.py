@@ -64,6 +64,28 @@ def create_unsubscribe_token(user_id: int, pref_key: str) -> str:
     )
 
 
+def create_email_unsubscribe_token(email: str, scope: str) -> str:
+    """For mail to an ADDRESS rather than an account — a league invitation to
+    someone who has not signed up has no user id to hang a preference on."""
+    return jwt.encode(
+        {"sub": email.strip().lower(), "scope": scope, "type": "unsubscribe_email"},
+        settings.secret_key,
+        algorithm=settings.algorithm,
+    )
+
+
+def verify_email_unsubscribe_token(token: str) -> Optional[tuple]:
+    """Return (email, scope) for a valid address-level unsubscribe token."""
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        if payload.get("type") != "unsubscribe_email":
+            return None
+        email, scope = payload.get("sub"), payload.get("scope")
+        return (email, scope) if email and scope else None
+    except JWTError:
+        return None
+
+
 def verify_unsubscribe_token(token: str) -> Optional[tuple]:
     """Return (user_id, pref_key) for a valid unsubscribe token, else None."""
     try:
