@@ -353,8 +353,11 @@ const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm },
   /* Tight to the names above and the table below (owner, 2026-09-24: "remove
      all that excess space"): the body's gap cancelled to 2pt either side. */
+  /* ABOVE, MORE STILL (owner, 2026-09-24): the head row is as tall as the
+     record's line box, whose empty descent hangs a few points below the
+     names' coloured rules — so the score also rises into that. */
   result: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingHorizontal: S.xs,
-            marginVertical: -(S.md - 2) },
+            marginTop: -(S.md + 6), marginBottom: -(S.md - 2) },
   resultMark: { fontSize: 22, lineHeight: leading(24), width: leading(26), textAlign: 'center', fontFamily: 'Archivo_700Bold' },
   resultLine: { ...T.score, fontSize: 24, lineHeight: leading(26), flex: 1, textAlign: 'center', color: C.ink, fontVariant: ['tabular-nums'] },
   who: { flex: 1, minWidth: 0, gap: 3, alignSelf: 'flex-end' },
