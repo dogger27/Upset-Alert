@@ -27,29 +27,6 @@ import { leading } from './fontScale'
 import { Loading } from './ui'
 
 export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueId: initialLeagueId = null }) {
-  /* WHOSE PICKS: everyone in the draw (Global) or one of the reader's own
-     leagues. The site scopes this to the league its draw page has selected;
-     here the sheet carries a scope pill of its own, and the reader can move
-     it. null is Global. */
-  const [leagueId, setLeagueId] = useState(initialLeagueId)
-  const [choosing, setChoosing] = useState(false)
-  const key = visible && match ? `predictors:${drawId}:${match.id}:${leagueId ?? 'global'}` : null
-  const q = useApi(key, () => getPredictors(drawId, match.id, leagueId))
-  const d = q.data
-  /* The reader's leagues, for the chooser: only the ones they belong to.
-     getLeagues lists public leagues too, and a stranger's league is not a
-     group of theirs. */
-  const leagues = useApi(visible ? 'leagues' : null, getLeagues)
-  const mine = useMemo(() => (leagues.data || []).filter(l => (l.members || []).some(m => m.id === meId)), [leagues.data, meId])
-  /* THE PEOPLE THE READER KNOWS — everyone in their own leagues — who come
-     first when Global has to leave names out. */
-  const friends = useMemo(() => {
-    const ids = new Set()
-    for (const l of mine) for (const m of l.members || []) if (m.id !== meId) ids.add(m.id)
-    return ids
-  }, [mine, meId])
-  const scopeName = leagueId == null ? 'Global' : (d?.league_name ?? mine.find(l => l.id === leagueId)?.name ?? 'League')
-
   const winner = match?.winner?.name
   const pending = !match?.winner
   // Names only once the ACTUAL players are known; the round and status pills
@@ -74,16 +51,6 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueI
   const status = !pending ? 'Completed' : !known ? 'TBD' : live ? 'In Progress' : 'Upcoming'
   const statusStyle = !pending ? s.pillDone : !known ? s.pillTbd : live ? s.pillLive : s.pillUpcoming
 
-  const fieldSize = (d?.correct?.length || 0) + (d?.incorrect?.length || 0)
-  /* WITHHELD IS NOT EMPTY, and the difference is the whole sheet. Under
-     match-by-match locking the server returns both columns empty with
-     `hidden` set, because picks stay editable through round one and a
-     visible bracket is a bracket to copy. Rendering the columns then says
-     "No one." about a match the whole field predicted — which is what it
-     did on a completed Singapore first-rounder six people had picked, one
-     of them correctly (owner, 2026-09-21). lock.js owns the sentence, so
-     this explanation and the standings' cannot drift apart. */
-  const withheld = predictorsMessage(d)
 
   return (
     <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -129,6 +96,59 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueI
           </Text>
         ) : null}
 
+        <PredictorsBody active={!!visible} drawId={drawId} match={match} meId={meId}
+                        initialLeagueId={initialLeagueId} />
+
+        <Pressable onPress={onClose} style={s.close} hitSlop={8}>
+          <Text style={s.closeText}>Close</Text>
+        </Pressable>
+      </View>
+    </Modal>
+  )
+}
+
+/* THE PICKS THEMSELVES — scope pill, split bar and the two columns — apart
+   from the sheet's chrome, so the match sheet's Prediction tab shows exactly
+   this and the two can never drift (owner, 2026-09-24). `scroll` off when the
+   host already scrolls: a ScrollView in a ScrollView fights for the finger. */
+export function PredictorsBody({ active = true, drawId, match, meId, initialLeagueId = null, scroll = true }) {
+  /* WHOSE PICKS: everyone in the draw (Global) or one of the reader's own
+     leagues. The site scopes this to the league its draw page has selected;
+     here the sheet carries a scope pill of its own, and the reader can move
+     it. null is Global. */
+  const [leagueId, setLeagueId] = useState(initialLeagueId)
+  const [choosing, setChoosing] = useState(false)
+  const key = active && match ? `predictors:${drawId}:${match.id}:${leagueId ?? 'global'}` : null
+  const q = useApi(key, () => getPredictors(drawId, match.id, leagueId))
+  const d = q.data
+  /* The reader's leagues, for the chooser: only the ones they belong to.
+     getLeagues lists public leagues too, and a stranger's league is not a
+     group of theirs. */
+  const leagues = useApi(active ? 'leagues' : null, getLeagues)
+  const mine = useMemo(() => (leagues.data || []).filter(l => (l.members || []).some(m => m.id === meId)), [leagues.data, meId])
+  /* THE PEOPLE THE READER KNOWS — everyone in their own leagues — who come
+     first when Global has to leave names out. */
+  const friends = useMemo(() => {
+    const ids = new Set()
+    for (const l of mine) for (const m of l.members || []) if (m.id !== meId) ids.add(m.id)
+    return ids
+  }, [mine, meId])
+  const scopeName = leagueId == null ? 'Global' : (d?.league_name ?? mine.find(l => l.id === leagueId)?.name ?? 'League')
+
+  const fieldSize = (d?.correct?.length || 0) + (d?.incorrect?.length || 0)
+  /* WITHHELD IS NOT EMPTY, and the difference is the whole sheet. Under
+     match-by-match locking the server returns both columns empty with
+     `hidden` set, because picks stay editable through round one and a
+     visible bracket is a bracket to copy. Rendering the columns then says
+     "No one." about a match the whole field predicted — which is what it
+     did on a completed Singapore first-rounder six people had picked, one
+     of them correctly (owner, 2026-09-21). lock.js owns the sentence, so
+     this explanation and the standings' cannot drift apart. */
+  const withheld = predictorsMessage(d)
+
+  const Wrap = scroll ? ScrollView : View
+  return (
+    <>
         {/* THE SCOPE PILL: which group these picks are from. Square-cornered,
             unlike the round/status pills above, so it reads as a control and
             not a label; a tap opens the reader's leagues beneath it. */}
@@ -159,7 +179,7 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueI
         {q.error ? <Text style={s.err}>Couldn’t load predictions.</Text> : null}
 
         {withheld ? <Text style={s.withheld}>{withheld}</Text> : d ? (
-          <ScrollView style={s.list} contentContainerStyle={{ paddingBottom: S.lg }}>
+          <Wrap style={s.list} {...(scroll ? { contentContainerStyle: { paddingBottom: S.lg } } : {})}>
             {/* TWO COLUMNS, ONE SPLIT (owner, 2026-09-24): right — or "Maybe",
                 in gold, until there is a winner to be right about — on the
                 left, wrong on the right, each listing its people. The bar
@@ -182,14 +202,10 @@ export function PredictorsSheet({ visible, onClose, drawId, match, meId, leagueI
                       cap={leagueId == null ? GLOBAL_CAP : null}
                       showPicks />
             </View>
-          </ScrollView>
+          </Wrap>
         ) : null}
 
-        <Pressable onPress={onClose} style={s.close} hitSlop={8}>
-          <Text style={s.closeText}>Close</Text>
-        </Pressable>
-      </View>
-    </Modal>
+    </>
   )
 }
 

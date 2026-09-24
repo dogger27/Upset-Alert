@@ -10,7 +10,7 @@ import { C, R, S, T } from './theme'
    history's tabs swap panels with different row counts, and a bottom sheet
    grows upward, so without this the timeline slid up the screen as the reader
    switched tabs. Everything else leaves it off and keeps hugging its content. */
-export function Sheet({ visible, onClose, title, titleRight, titleNav, children, height }) {
+export function Sheet({ visible, onClose, title, titleStyle, titleRight, titleNav, children, height }) {
   return (
     <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={s.scrim} onPress={onClose} accessibilityLabel="Close" />
@@ -42,7 +42,7 @@ export function Sheet({ visible, onClose, title, titleRight, titleNav, children,
                nowhere to go keeps its place, faded. */
             <View style={s.titleRow}>
               <TitleArrow dir="back" onPress={titleNav.onPrev} />
-              <Text style={[s.title, { flex: 1 }]}>{title}</Text>
+              <Text style={[s.title, { flex: 1 }, titleStyle]}>{title}</Text>
               <TitleArrow dir="forward" onPress={titleNav.onNext} />
             </View>
           ) : <Text style={s.title}>{title}</Text>

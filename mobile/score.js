@@ -102,3 +102,22 @@ export function scoreLine(scores, sep = '  ') {
   if (!sets.length) return null
   return sets.join(sep) + (retired ? ' (ret.)' : '')
 }
+
+/* THE MATCH'S SCORE AS ONE LINE, for a heading (the match sheet's title,
+   owner 2026-09-24): the final score once there is a winner, the live games
+   and the point while on court, else nothing. `winner` is 0/1 for the first
+   and second side as the caller orders them. Returns { line, winner, live }
+   or null. */
+export function statusLine({ winner = null, scores = null, live = false, live_point = null, live_scores = null } = {}) {
+  if (winner === 0 || winner === 1) {
+    return { line: scoreLine(scores, ', ') || (endedWith(scores, 0) || endedWith(scores, 1) ? 'walkover' : ''), winner, live: false }
+  }
+  if (!live) return null
+  const games = live_point?.games ?? null
+  const sets = games ? [games[0], games[1]] : live_scores
+  const line = scoreLine(sets, ', ')
+  const pts = live_point?.point
+  const pt = pts && pts.some(v => v != null) ? `${pts[0] ?? '0'}-${pts[1] ?? '0'}` : ''
+  if (!line && !pt) return { line: 'Live', winner: null, live: true }
+  return { line: [line, pt && `(${pt})`].filter(Boolean).join('  '), winner: null, live: true }
+}

@@ -46,6 +46,7 @@ import { FORM_GAP, compareRows, formChipText, formChips, formDetail, formGrid, o
   from './h2hView.js'
 import { ScrollPane } from './scrollPane'
 import { Sheet } from './sheet'
+import { PredictorsBody } from './predictors'
 import { C, PICK, R, S, SIDE, T } from './theme'
 import { Loading } from './ui'
 import { useApi } from './useApi'
@@ -53,7 +54,17 @@ import { useApi } from './useApi'
 // The two rows whose figures are places in a list rather than counts.
 const HASHED = new Set(['rank', 'elo'])
 
-export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNext, result }) {
+/* THE MATCH SHEET (owner, 2026-09-24): one header for the match — its score
+   as the title, the arrows, both players with their flags, and on the inside
+   of each name the result's tick or cross and the reader's 🤞 — over three
+   tabs: Bio (the comparison and form), Meetings (their head-to-head) and
+   Prediction (who called it, where the match is a bracket match).
+
+   `status` is { line, winner, live } from score.statusLine; `pickSide` 0/1
+   for the side the reader picked; `predictMatch` the site-shaped match the
+   Prediction tab asks about (null: no tab). */
+export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNext,
+                           status = null, pickSide = null, predictMatch = null, meId = null }) {
   // Keyed on the pair so switching matches refetches; the backend caches, so a
   // reopen is cheap and there is nothing to memoise here.
   const live = !!(visible && a?.te_slug && b?.te_slug)
@@ -74,6 +85,9 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
      overlay on an overlay, so the detail arrives as a line of the card
      itself, under the form it belongs to. */
   const [open, setOpen] = useState(null)
+  const [tab, setTab] = useState('bio')
+  // A tab this match does not have falls back to Bio.
+  const shownTab = tab === 'prediction' && !predictMatch ? 'bio' : tab
   /* SWIPE BETWEEN MATCHES (owner, 2026-09-24), the arrows' twin: left for
      the next match, right for the one before. Sideways only — 20pt across
      before it is ours, and any 12pt of vertical first hands the finger to
@@ -96,169 +110,192 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
     () => compareRows({ view, surface, left: a, right: b,
                         odds: ua.data ? [ua.data.p_a, ua.data.p_b] : null }), [view, surface, a, b, ua.data])
 
-  return (
-    <Sheet visible={!!visible} onClose={onClose} title="Head to head"
-           titleNav={onPrev !== undefined || onNext !== undefined ? { onPrev, onNext } : undefined}>
-      {h2h.loading && !d ? <Loading /> : null}
-      {h2h.error ? <Text style={s.err}>Couldn’t load the head-to-head.</Text> : null}
+  const nMeet = view?.meetings?.length
+  const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `Meetings ${nMeet}` : 'Meetings'],
+                ...(predictMatch ? [['prediction', 'Prediction']] : [])]
 
+  return (
+    <Sheet visible={!!visible} onClose={onClose}
+           title={status?.line || 'Upcoming'}
+           titleStyle={status?.live ? { color: C.greenLit } : !status ? { color: C.muted } : null}
+           titleNav={onPrev !== undefined || onNext !== undefined ? { onPrev, onNext } : undefined}>
       {/* Its own gesture root: a Modal is a separate native tree, outside
           the app's GestureHandlerRootView. */}
       <GestureHandlerRootView style={s.swipeRoot}>
       <GestureDetector gesture={swipe}>
       <View style={s.swipeRoot}>
-      {view ? (
-        <ScrollPane contentContainerStyle={s.body}>
-          {/* THE TWO NAMES, WITH THE RECORD BETWEEN THEM. Each name wears its
-              side's colour as an underline — the key the rest of the sheet is
-              read with — and shrinks through the app's own ladder rather than
-              truncating: "Botic Van de Zandschulp" becomes "Van de
-              Zandschulp" before it becomes smaller, and never becomes "Van de
-              Zandsc…". */}
-          <View style={s.head}>
-            <View style={s.who}>
-              <View style={s.whoLine}>
-                <FlagSlot codes={[a?.nationality]} />
-                <TwoLineName name={a?.name} />
-              </View>
-              <View style={[s.rule, { backgroundColor: SIDE.left.line }]} />
+        {/* THE PLAYERS, on every tab. Each name wears its side's colour as an
+            underline — the key the rest of the sheet is read with — and
+            shrinks through the app's own ladder rather than truncating. On
+            the INSIDE of each name, facing the middle: the result's tick or
+            cross, and 🤞 on the one the reader picked. */}
+        <View style={s.head}>
+          <View style={s.who}>
+            <View style={s.whoLine}>
+              <FlagSlot codes={[a?.nationality]} />
+              <TwoLineName name={a?.name} />
             </View>
-            <Text style={s.record} numberOfLines={1}>
-              <Text style={{ color: SIDE.left.ink }}>{view.wins[0]}</Text>
-              <Text style={s.recordDash}>–</Text>
-              <Text style={{ color: SIDE.right.ink }}>{view.wins[1]}</Text>
-            </Text>
-            <View style={[s.who, s.whoEnd]}>
-              <View style={[s.whoLine, s.whoLineEnd]}>
-                <TwoLineName name={b?.name} end />
-                <FlagSlot codes={[b?.nationality]} />
-              </View>
-              <View style={[s.rule, { backgroundColor: SIDE.right.line }]} />
-            </View>
+            <View style={[s.rule, { backgroundColor: SIDE.left.line }]} />
           </View>
-
-          {/* THIS MATCH'S RESULT, when it has one (owner, 2026-09-24): the
-              score centred under the names, a green tick at the winner's end
-              of the row and a red cross at the loser's — the scorecard's own
-              marks and colours. */}
-          {result ? (
-            <View style={s.result}>
-              <Text style={[s.resultMark, { color: result.winner === 0 ? C.greenLit : C.lossMark }]}>
-                {result.winner === 0 ? '✓' : '✗'}
-              </Text>
-              <Text style={s.resultLine}>{result.line || (result.winner === 0 ? 'Won' : 'Lost')}</Text>
-              <Text style={[s.resultMark, { color: result.winner === 1 ? C.greenLit : C.lossMark }]}>
-                {result.winner === 1 ? '✓' : '✗'}
-              </Text>
+          <SideMarks won={status?.winner == null ? null : status.winner === 0} picked={pickSide === 0} />
+          <SideMarks won={status?.winner == null ? null : status.winner === 1} picked={pickSide === 1}  end />
+          <View style={[s.who, s.whoEnd]}>
+            <View style={[s.whoLine, s.whoLineEnd]}>
+              <TwoLineName name={b?.name} end />
+              <FlagSlot codes={[b?.nationality]} />
             </View>
-          ) : null}
+            <View style={[s.rule, { backgroundColor: SIDE.right.line }]} />
+          </View>
+        </View>
 
-          {/* THE SPINE. The label is the axis and the figures flank it, so the
-              eye runs down one narrow column of words while the comparison
-              happens either side of it — rather than reading two numbers and
-              subtracting them, six times. */}
-          {rows.length || formA.data?.length || formB.data?.length ? (
-            <View style={s.spine}>
-              {rows.map((r, i) => (
-                <View key={r.key} style={[s.row, i > 0 && s.rowRule]}>
-                  <Figure v={r.values[0]} lit={r.better === 0} side="left" hashed={HASHED.has(r.key)} />
-                  {r.info ? (
-                    /* The ⓘ opens the row's explanation — the standings'
-                       "Chances ⓘ" pattern. */
-                    <Pressable style={s.labelPress} hitSlop={8} accessibilityRole="button"
-                               accessibilityLabel={`${r.label}: ${r.info}`}
-                               onPress={() => Alert.alert(r.label, r.info)}>
-                      <FitText style={s.label} min={8} align="center">{`${r.label} ⓘ`}</FitText>
-                    </Pressable>
-                  ) : (
-                    <FitText style={s.label} min={8} align="center">{r.label}</FitText>
-                  )}
-                  <Figure v={r.values[1]} lit={r.better === 1} side="right" hashed={HASHED.has(r.key)} />
-                </View>
-              ))}
-              {formA.data?.length || formB.data?.length ? (
-                <View style={[s.row, rows.length > 0 && s.rowRule]}>
-                  {/* A NARROWER AXIS FOR THIS ROW ONLY (owner, 2026-09-23:
-                      "the W / L pills are still way too small"). The word is
-                      four letters and the figures elsewhere need the wide
-                      column for "#258"; here that width is better spent on
-                      the squares, which is what the row is for. */}
-                  <Form form={formA.data} side={0} open={open} onOpen={setOpen} />
-                  <FitText style={[s.label, s.labelNarrow]} min={8} align="center">form</FitText>
-                  <Form form={formB.data} side={1} end open={open} onOpen={setOpen} />
-                </View>
-              ) : null}
-              {/* THE TAPPED RESULT, said in full. One line for the match and
-                  one for where it was — the same two-line shape as a meeting
-                  card, because it is the same kind of fact. The edge names
-                  whose result it is, in the key the sheet is read with. */}
-              {open ? (
-                <Pressable style={[s.row, s.rowRule, s.detail]} onPress={() => setOpen(null)}
-                           accessibilityRole="button" accessibilityLabel="Close this result">
-                  <View style={[s.detailEdge,
-                                { backgroundColor: (open.side === 0 ? SIDE.left : SIDE.right).line }]} />
-                  <View style={s.detailBody}>
-                    {/* TWO LINES, NOT A CUT (owner's rule, again): "lost to
-                        Fancutt T. / Watanabe S. · 6-3,…" is what a fixed line
-                        and a long pair of names produce. A card with room
-                        below it wraps. */}
-                    <Text style={s.detailLine} numberOfLines={2}>
-                      <Text style={{ color: open.detail.won ? PICK.correct.border : PICK.wrong.border }}>
-                        {open.detail.won ? 'W' : 'L'}
-                      </Text>
-                      {`  ${open.detail.line}`}
-                    </Text>
-                    <Text style={s.detailMeta} numberOfLines={2}>
-                      {[open.detail.meta, shortDay(open.match.date)].filter(Boolean).join(' · ')}
-                    </Text>
-                  </View>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : null}
+        <View style={s.tabs}>
+          {tabs.map(([k, label]) => (
+            <Pressable key={k} onPress={() => setTab(k)} hitSlop={6} style={[s.tabBtn, shownTab === k && s.tabBtnOn]}
+                       accessibilityRole="tab" accessibilityState={{ selected: shownTab === k }}>
+              <Text style={[s.tab, shownTab === k && s.tabOn]}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
 
-          {/* THE MEETINGS. One card each, with a bar down the winner's own
-              side in the winner's own colour: a column of green edges says one
-              player has owned this rivalry before a single score is read. */}
-          {view.meetings.length ? (
-            <>
-              <Text style={s.section}>
-                {view.meetings.length === 1 ? 'Their one meeting'
-                  : `All ${view.meetings.length} meetings`}
-              </Text>
-              {view.meetings.map((m, i) => {
-                const side = m.side === 0 ? SIDE.left : SIDE.right
-                return (
-                  <View key={`${m.year}-${m.tournament}-${i}`}
-                        style={[s.meet, m.side === 1 && s.meetEnd]}>
-                    <View style={[s.edge, { backgroundColor: side.line }]} />
-                    <View style={s.meetBody}>
-                      <View style={s.meetTop}>
-                        <PlayerName name={m.side === 0 ? a?.name : b?.name}
-                                    style={[s.meetWho, { color: side.ink }]} />
-                        {/* A five-set score with two tiebreaks is long, and a
-                            cut score is unreadable in a way a smaller one is
-                            not: shrink, never truncate. */}
-                        <FitText style={s.meetScore} min={10} align="right">{m.score}</FitText>
-                      </View>
-                      <Text style={s.meetMeta} numberOfLines={2}>
-                        {[shortEvent(m.tournament), m.year, roundWord(m.round), m.surface]
-                          .filter(Boolean).join(' · ')}
-                      </Text>
-                    </View>
-                  </View>
-                )
-              })}
-            </>
+        <ScrollPane contentContainerStyle={s.body}>
+          {shownTab === 'prediction' ? (
+            <PredictorsBody drawId={predictMatch.draw_id ?? drawId} match={predictMatch} meId={meId} scroll={false} />
           ) : (
-            <Text style={s.none}>They have never met.</Text>
+            <>
+              {h2h.loading && !d ? <Loading /> : null}
+              {h2h.error ? <Text style={s.err}>Couldn’t load the head-to-head.</Text> : null}
+              {view && shownTab === 'bio' ? (
+                <>
+                {/* THE SPINE. The label is the axis and the figures flank it, so the
+                    eye runs down one narrow column of words while the comparison
+                    happens either side of it — rather than reading two numbers and
+                    subtracting them, six times. */}
+                {rows.length || formA.data?.length || formB.data?.length ? (
+                  <View style={s.spine}>
+                    {rows.map((r, i) => (
+                      <View key={r.key} style={[s.row, i > 0 && s.rowRule]}>
+                        <Figure v={r.values[0]} lit={r.better === 0} side="left" hashed={HASHED.has(r.key)} />
+                        {r.info ? (
+                          /* The ⓘ opens the row's explanation — the standings'
+                             "Chances ⓘ" pattern. */
+                          <Pressable style={s.labelPress} hitSlop={8} accessibilityRole="button"
+                                     accessibilityLabel={`${r.label}: ${r.info}`}
+                                     onPress={() => Alert.alert(r.label, r.info)}>
+                            <FitText style={s.label} min={8} align="center">{`${r.label} ⓘ`}</FitText>
+                          </Pressable>
+                        ) : (
+                          <FitText style={s.label} min={8} align="center">{r.label}</FitText>
+                        )}
+                        <Figure v={r.values[1]} lit={r.better === 1} side="right" hashed={HASHED.has(r.key)} />
+                      </View>
+                    ))}
+                    {formA.data?.length || formB.data?.length ? (
+                      <View style={[s.row, rows.length > 0 && s.rowRule]}>
+                        {/* A NARROWER AXIS FOR THIS ROW ONLY (owner, 2026-09-23:
+                            "the W / L pills are still way too small"). The word is
+                            four letters and the figures elsewhere need the wide
+                            column for "#258"; here that width is better spent on
+                            the squares, which is what the row is for. */}
+                        <Form form={formA.data} side={0} open={open} onOpen={setOpen} />
+                        <FitText style={[s.label, s.labelNarrow]} min={8} align="center">form</FitText>
+                        <Form form={formB.data} side={1} end open={open} onOpen={setOpen} />
+                      </View>
+                    ) : null}
+                    {/* THE TAPPED RESULT, said in full. One line for the match and
+                        one for where it was — the same two-line shape as a meeting
+                        card, because it is the same kind of fact. The edge names
+                        whose result it is, in the key the sheet is read with. */}
+                    {open ? (
+                      <Pressable style={[s.row, s.rowRule, s.detail]} onPress={() => setOpen(null)}
+                                 accessibilityRole="button" accessibilityLabel="Close this result">
+                        <View style={[s.detailEdge,
+                                      { backgroundColor: (open.side === 0 ? SIDE.left : SIDE.right).line }]} />
+                        <View style={s.detailBody}>
+                          {/* TWO LINES, NOT A CUT (owner's rule, again): "lost to
+                              Fancutt T. / Watanabe S. · 6-3,…" is what a fixed line
+                              and a long pair of names produce. A card with room
+                              below it wraps. */}
+                          <Text style={s.detailLine} numberOfLines={2}>
+                            <Text style={{ color: open.detail.won ? PICK.correct.border : PICK.wrong.border }}>
+                              {open.detail.won ? 'W' : 'L'}
+                            </Text>
+                            {`  ${open.detail.line}`}
+                          </Text>
+                          <Text style={s.detailMeta} numberOfLines={2}>
+                            {[open.detail.meta, shortDay(open.match.date)].filter(Boolean).join(' · ')}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+                </>
+              ) : null}
+              {view && shownTab === 'meetings' ? (
+                <>
+                {/* THE MEETINGS. One card each, with a bar down the winner's own
+                    side in the winner's own colour: a column of green edges says one
+                    player has owned this rivalry before a single score is read. */}
+                {view.meetings.length ? (
+                  <>
+                    <Text style={s.section}>
+                      {view.meetings.length === 1 ? 'Their one meeting'
+                        : `All ${view.meetings.length} meetings`}
+                    </Text>
+                    {view.meetings.map((m, i) => {
+                      const side = m.side === 0 ? SIDE.left : SIDE.right
+                      return (
+                        <View key={`${m.year}-${m.tournament}-${i}`}
+                              style={[s.meet, m.side === 1 && s.meetEnd]}>
+                          <View style={[s.edge, { backgroundColor: side.line }]} />
+                          <View style={s.meetBody}>
+                            <View style={s.meetTop}>
+                              <PlayerName name={m.side === 0 ? a?.name : b?.name}
+                                          style={[s.meetWho, { color: side.ink }]} />
+                              {/* A five-set score with two tiebreaks is long, and a
+                                  cut score is unreadable in a way a smaller one is
+                                  not: shrink, never truncate. */}
+                              <FitText style={s.meetScore} min={10} align="right">{m.score}</FitText>
+                            </View>
+                            <Text style={s.meetMeta} numberOfLines={2}>
+                              {[shortEvent(m.tournament), m.year, roundWord(m.round), m.surface]
+                                .filter(Boolean).join(' · ')}
+                            </Text>
+                          </View>
+                        </View>
+                      )
+                    })}
+                  </>
+                ) : (
+                  <Text style={s.none}>They have never met.</Text>
+                )}
+                </>
+              ) : null}
+            </>
           )}
         </ScrollPane>
-      ) : null}
       </View>
       </GestureDetector>
       </GestureHandlerRootView>
     </Sheet>
+  )
+}
+
+/* The inside of a name: the result mark (✓ / ✗, once decided) and the
+   reader's 🤞. Toward the middle on both sides, so the marks meet. */
+function SideMarks({ won, picked, end = false }) {
+  if (won == null && !picked) return <View style={s.marks} />
+  const mark = won == null ? null : (
+    <Text style={[s.resultMark, { color: won ? C.greenLit : C.lossMark }]}
+          accessibilityLabel={won ? 'Won' : 'Lost'}>{won ? '✓' : '✗'}</Text>
+  )
+  const fingers = picked
+    ? <Text style={s.pickMark} accessibilityLabel="Your pick">🤞</Text>
+    : null
+  return (
+    <View style={s.marks}>
+      {end ? <>{fingers}{mark}</> : <>{mark}{fingers}</>}
+    </View>
   )
 }
 
@@ -376,16 +413,21 @@ const s = StyleSheet.create({
      carries descender room the names' 15pt one does not, so it floated a
      third of a line above them. On the baseline the three read as one line,
      which is what they are. */
-  head: { flexDirection: 'row', alignItems: 'baseline', gap: S.sm },
+  head: { flexDirection: 'row', alignItems: 'center', gap: S.xs, marginTop: S.xs },
+  // The marks' column, toward the middle; empty when there is nothing to say.
+  marks: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 4 },
+  pickMark: { fontSize: 18, lineHeight: leading(24) },
+  /* The tabs, the Points / Serve & Return pair's idiom: words, the chosen one
+     in ink with a green underline. */
+  tabs: { flexDirection: 'row', gap: S.lg, borderBottomWidth: 1, borderBottomColor: C.border,
+          marginTop: S.sm, marginBottom: S.sm },
+  tabBtn: { paddingVertical: 6, marginBottom: -1, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabBtnOn: { borderBottomColor: C.greenLit },
+  tab: { ...T.smallMed, color: C.muted },
+  tabOn: { color: C.ink, fontFamily: 'Archivo_700Bold' },
   /* Tight to the names above and the table below (owner, 2026-09-24: "remove
      all that excess space"): the body's gap cancelled to 2pt either side. */
-  /* ABOVE, MORE STILL (owner, 2026-09-24): the head row is as tall as the
-     record's line box, whose empty descent hangs a few points below the
-     names' coloured rules — so the score also rises into that. */
-  result: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingHorizontal: S.xs,
-            marginTop: -(S.md + 6), marginBottom: -(S.md - 2) },
   resultMark: { fontSize: 22, lineHeight: leading(24), width: leading(26), textAlign: 'center', fontFamily: 'Archivo_700Bold' },
-  resultLine: { ...T.score, fontSize: 24, lineHeight: leading(26), flex: 1, textAlign: 'center', color: C.ink, fontVariant: ['tabular-nums'] },
   who: { flex: 1, minWidth: 0, gap: 3, alignSelf: 'flex-end' },
   whoEnd: { alignItems: 'flex-end' },
   whoLine: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch' },
@@ -398,8 +440,6 @@ const s = StyleSheet.create({
   whoNameEnd: { textAlign: 'right' },
   // Two points, so the key reads as a deliberate mark rather than a hairline.
   rule: { height: 2, borderRadius: 1, alignSelf: 'stretch' },
-  record: { ...T.display, fontSize: 30, color: C.ink, flexShrink: 0 },
-  recordDash: { color: C.faint },
 
   spine: {
     backgroundColor: C.sunken, borderRadius: R.md,

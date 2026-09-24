@@ -30,6 +30,7 @@ import { FinalGuessBar, FinalGuessSheet } from '../../../finalGuess'
 import { useLiveUpdates } from '../../../live'
 import { ScoreHistorySheet, entryFromMatch } from '../../../scoreHistory'
 import { PredictorsSheet } from '../../../predictors'
+import { statusLine } from '../../../score'
 import { computeDrawRanks } from '../../../drawRanks'
 import { hasDrawData, useChoosableTournaments } from '../../../choosableTournaments'
 import { nextLiveDraw } from '../../../drawCycle'
@@ -410,12 +411,24 @@ export default function DrawScreen() {
       {/* The surface is the DRAW's here — one draw to a page — and one of the
           sheet's comparison rows is "on hard". */}
       {(() => {
+        /* The match as the draw holds it NOW — looked up by id each render,
+           so a live score in the sheet's title keeps moving. */
+        const hm = h2h ? (draw.data?.matches || []).find(x => x.id === h2h.matchId) : null
+        const decided = hm?.winner?.id != null && hm?.player1?.id != null
+        const status = hm ? statusLine({
+          winner: decided ? (hm.winner.id === hm.player1.id ? 0 : 1) : null,
+          scores: hm.scores, live: !decided && !!(hm.live_scores || hm.live_point),
+          live_point: hm.live_point, live_scores: hm.live_scores,
+        }) : null
+        const pickId = hm ? B.picks?.get(hm.id) : null
+        const pickSide = pickId == null ? null : pickId === h2h?.a?.id ? 0 : pickId === h2h?.b?.id ? 1 : null
         const at = h2h ? h2hOrder.findIndex(p => p.matchId === h2h.matchId) : -1
         const prev = at > 0 ? h2hOrder[at - 1] : null
         const next = at >= 0 && at < h2hOrder.length - 1 ? h2hOrder[at + 1] : null
         return (
           <H2HSheet visible={!!h2h} onClose={() => setH2H(null)} a={h2h?.a} b={h2h?.b} drawId={t?.id}
-                    surface={draw.data?.surface} result={h2h?.result}
+                    surface={draw.data?.surface} status={status} pickSide={pickSide}
+                    predictMatch={hm && !hm.is_bye ? hm : null} meId={me?.id}
                     onPrev={prev ? () => setH2H(prev) : null}
                     onNext={next ? () => setH2H(next) : null} />
         )
