@@ -394,6 +394,20 @@ def _build_te_index(
     for tp in te_players:
         ts = frozenset(tp.name_norm.split())
         index.setdefault(ts, []).append(tp.id)
+        # THE HYPHEN IS TWO SPELLINGS FROM EITHER SIDE (memory
+        # feedback_hyphen_is_two_spellings). `_match_token_set` already
+        # retries a HYPHENATED SHEET name joined up ("So-hyun" -> TE's
+        # "Sohyun"); this is the other direction. TE lists "Xu Yi-Fan", the
+        # sheet prints "Yifan XU", and name_norm splits the hyphen into "yi
+        # fan" — so the Tang/Xu pair went unranked (2026-09-24). The joined
+        # spelling is indexed as well, pointing at the same player.
+        raw = tp.name_raw or ""
+        if "-" in raw:
+            joined = frozenset(_norm(raw.replace("-", "")).split())
+            if joined != ts:
+                ids = index.setdefault(joined, [])
+                if tp.id not in ids:
+                    ids.append(tp.id)
         id_to_norm[tp.id] = tp.name_norm
         if tp.te_slug:
             id_to_slug[tp.id] = tp.te_slug
