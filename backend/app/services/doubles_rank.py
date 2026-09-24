@@ -198,6 +198,26 @@ async def _rank_field(db, entries, gender: str, week: date) -> dict[tuple[int, s
         name = _name_words(p.raw_name)
         return _match_token_set(name, te_index) if name else None
 
+    # A PLAYER WITH NO DOUBLES RANKING ENTERS ON HER SINGLES ONE (owner,
+    # 2026-09-24: Garland/Hsieh had no badge). Tennis Explorer has Joanna
+    # Garland at "rank - doubles: -" but 168 in singles, and the tours let a
+    # player use her singles ranking for doubles entry — so a missing doubles
+    # rank is filled from the singles list for the same week (the latest on
+    # or before it) instead of leaving the whole pair unranked. A player on
+    # NEITHER list still gets no rank rather than a guess.
+    all_ids = {te_id_of(p) for e in entries for p in e.players}
+    missing = {i for i in all_ids if i and i not in ranks_by_te}
+    singles_by_te: dict[int, int] = {}
+    if missing:
+        from app.models.rankings import TeRankingsSnapshot
+        for pid, wk, rank in (await db.execute(
+                select(TeRankingsSnapshot.player_id, TeRankingsSnapshot.week_date,
+                       TeRankingsSnapshot.rank)
+                .where(TeRankingsSnapshot.player_id.in_(missing),
+                       TeRankingsSnapshot.week_date <= week)
+                .order_by(TeRankingsSnapshot.week_date))).all():
+            singles_by_te[pid] = rank      # ascending weeks: the latest wins
+
     pairs: dict[object, tuple[Optional[int], Optional[int]]] = {}
     where: list[tuple[int, str, object]] = []
     for e in entries:
@@ -210,7 +230,7 @@ async def _rank_field(db, entries, gender: str, week: date) -> dict[tuple[int, s
             seed = next((s for s in (_printed_mark(p.raw_name)[0] for p in ps) if s), None)
             total = None
             if all(ids):
-                rs = [ranks_by_te.get(i) for i in ids]
+                rs = [ranks_by_te.get(i) or singles_by_te.get(i) for i in ids]
                 if all(r is not None for r in rs):
                     total = sum(rs)
             prev = pairs.get(key)
