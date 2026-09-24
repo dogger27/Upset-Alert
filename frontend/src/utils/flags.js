@@ -30,6 +30,12 @@ export const IOC_TO_ISO2 = {
   // which reads a trailing code as a country only if it is in this table —
   // printed "SGP" as the last word of her name.
   SIN:'SG', SGP:'SG',
+  // Added 2026-09-24 with the Tennis Explorer country names the server could
+  // not map (doubles specialists flew no flag): every code it now produces.
+  MDA:'MD', ALG:'DZ', IRI:'IR', KUW:'KW', ZIM:'ZW', KEN:'KE', BOT:'BW',
+  GHA:'GH', CIV:'CI', LIE:'LI', MOZ:'MZ', NCA:'NI', ANG:'AO', ANT:'AG',
+  AZE:'AZ', BEN:'BJ', BER:'BM', FIJ:'FJ', LBA:'LY', NAM:'NA', NEP:'NP',
+  PAN:'PA', SEN:'SN', SYR:'SY',
   // Folded in from H2HPanel.jsx, which kept its own copy of this table and
   // drifted both ways: it had these ten and lacked Singapore, so the same
   // player flew a flag on one screen and not the other (2026-09-19). The

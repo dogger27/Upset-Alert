@@ -214,11 +214,18 @@ async def _rank_field(db, entries, gender: str, week: date) -> dict[tuple[int, s
         from app.services.rankings import _norm
         sur = _norm(words[-1])
         inits = [w[0].lower() for w in words[:-1]]
-        cands = [tp for tp in by_surname.get(sur.split()[0] if sur else "", [])
-                 if (tp.first_name or "").lower().startswith(inits[0])
-                 or any(t.startswith(inits[0]) and t != sur for t in (tp.name_norm or "").split())]
-        ids = {tp.id for tp in cands}
-        return ids.pop() if len(ids) == 1 else None
+        pool = by_surname.get(sur.split()[0] if sur else "", [])
+        # The FIRST NAME first: "M Melo" is Marcelo, not Ausias Martin Melo,
+        # whose other surname merely starts with M. Any other name part only
+        # where the profile states no first name at all.
+        firsts = {tp.id for tp in pool if (tp.first_name or "").lower().startswith(inits[0])}
+        if len(firsts) == 1:
+            return firsts.pop()
+        if firsts:
+            return None
+        others = {tp.id for tp in pool if not tp.first_name
+                  and any(t.startswith(inits[0]) and t != sur for t in (tp.name_norm or "").split())}
+        return others.pop() if len(others) == 1 else None
 
     def te_id_of(p) -> Optional[int]:
         if p.draw_entry_id and p.draw_entry_id in te_by_entry:
