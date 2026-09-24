@@ -10,7 +10,7 @@
 
 import { createContext, useContext, useMemo, useState } from 'react'
 import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
-import { leading } from './fontScale.js'
+import { FONT_SCALE, leading } from './fontScale.js'
 import { stampsFor, tierStamp } from './logos'
 import { VERT } from './fontMetrics.js'
 import { flagEmoji } from './flags'
@@ -1268,12 +1268,15 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style, a
   if (avail != null) {
     // A point of slack: kerning is not in the tables, and a name that is
     // right on the line should shorten rather than gamble.
-    const room = avail - 1 - (after ? AFTER_PX : 0)
+    // 3% held back as well: with iOS's own shrink no longer behind this (see
+    // below), the tables' missing kerning must be covered here.
+    const room = 0.97 * (avail - 1 - (after ? AFTER_PX * FONT_SCALE : 0))
     /* THE FLAGS GO BEFORE THE TYPE SHRINKS (owner, 2026-09-17): every rung
        is tried wearing the flags, then every rung without them, and only
        then does the shortest rung shrink. A flag is decoration; a name that
        cannot be read is not a name. */
-    const flagW = glyphs.filter(Boolean).length * FLAG_PX * (size / 15)
+    // Emoji grow with the reader's text size, as the letters do.
+    const flagW = glyphs.filter(Boolean).length * FLAG_PX * (size / 15) * FONT_SCALE
     const rungs = glyphs.length
       ? [...forms.map(f => ({ f, flagged: true })), ...forms.map(f => ({ f, flagged: false }))]
       : forms.map(f => ({ f, flagged: false }))
@@ -1294,11 +1297,13 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style, a
 
   return (
     <View style={u.nameSlot} onLayout={e => setAvail(e.nativeEvent.layout.width)}>
-      {/* adjustsFontSizeToFit is the backstop: the arithmetic above uses our
-          own metrics tables, and where iOS measures the face a hair wider the
-          native shrink takes the last step rather than an ellipsis. */}
-      <Text style={[style, { flexShrink: 1 }, fontSize !== size && { fontSize }]} numberOfLines={1}
-            adjustsFontSizeToFit minimumFontScale={0.3}>
+      {/* NO NATIVE SHRINK (owner, 2026-09-24: "Back / Jang" drawn smaller
+          than it needed to be). adjustsFontSizeToFit was the backstop here,
+          and in a row with slack iOS takes it as licence to shrink anyway —
+          the trap recorded for the day strip, the Postponed pill and the
+          match sheet's names. The arithmetic above decides the size, with
+          its own slack; the name is drawn at exactly that. */}
+      <Text style={[style, { flexShrink: 1 }, fontSize !== size && { fontSize }]} numberOfLines={1}>
         {flagged ? withFlags(text, glyphs) : text}
       </Text>
       {after}
