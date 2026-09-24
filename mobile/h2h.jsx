@@ -152,7 +152,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   const TAB_RULE = 1.5
   const TAB_MAX = 18 * FONT_SCALE
   const tabUnit = tabs.map(([, l]) => drawnWidth(l, 'Archivo_700Bold', 1))
-  const tabSize = (() => {
+  const tabSizeRaw = (() => {
     if (!tabsW) return 13 * FONT_SCALE
     const room = tabsW - 1 - tabs.length * 2 * TAB_PAD - (tabs.length - 1) * TAB_RULE   // padding, rules
     /* 8% HELD BACK (owner, 2026-09-24: "Meetings (1)" wrapped). Fitted to
@@ -161,6 +161,22 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
        — so it broke onto a second line. The spare is shared out equally as
        margin, so the tabs still look even. */
     return Math.max(6, Math.min(TAB_MAX, (0.92 * (room - 1)) / tabUnit.reduce((a, b) => a + b, 0)))
+  })()
+  const tabSize = tabSizeRaw
+  /* EACH TAB'S WIDTH, STATED (owner, 2026-09-24: "Meetings" had far wider
+     margins than the other two). Left to flex-grow, iOS's layout gives a
+     label drawn a hair wider than its basis its content width and hands the
+     spare to the others — so one tab collected nearly all of it. Here every
+     tab is its word's width plus the same share of what is left over, and
+     the last absorbs the rounding, so the margins are equal by construction. */
+  const tabW = (() => {
+    if (!tabsW) return null
+    const words = tabUnit.map(u => u * tabSize)
+    const rules = (tabs.length - 1) * TAB_RULE
+    const spare = (tabsW - rules - words.reduce((a, b) => a + b, 0)) / tabs.length
+    const out = words.map((w, i) => Math.floor(w + spare + (i > 0 ? TAB_RULE : 0)))
+    out[out.length - 1] += Math.floor(tabsW - out.reduce((a, b) => a + b, 0))
+    return out
   })()
 
   return (
@@ -207,7 +223,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
         <View style={s.tabs} onLayout={e => setTabsW(e.nativeEvent.layout.width)}>
           {tabs.map(([k, label], i) => (
             <Pressable key={k} onPress={() => setTab(k)} hitSlop={4}
-                       style={[s.tabBtn, { flexGrow: 1, flexBasis: tabUnit[i] * tabSize + 2 * TAB_PAD + (i > 0 ? TAB_RULE : 0) },
+                       style={[s.tabBtn, tabW ? { width: tabW[i] } : { flex: 1 },
                                i > 0 && s.tabBtnRule, shownTab === k && s.tabBtnOn]}
                        accessibilityRole="tab" accessibilityState={{ selected: shownTab === k }}>
               <Text style={[s.tab, shownTab === k && s.tabOn, { fontSize: tabSize }]}
