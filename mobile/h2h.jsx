@@ -127,12 +127,17 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
                 ...(predictMatch ? [['prediction', 'Prediction']] : []),
                 ...(played ? [['history', 'Points'], ['stats', 'Stats']] : [])]
 
-  const TAB_BASE = 13 * FONT_SCALE
+  /* THE TABS, AS LARGE AS THE ROW ALLOWS (owner, 2026-09-24): one type size
+     for every label, the largest at which all of them fit side by side with
+     just TAB_PAD either side, and each cell as wide as its own word. Measured
+     in bold, the chosen tab's weight, so choosing one never overflows it. */
+  const TAB_PAD = 4
+  const TAB_MAX = 18 * FONT_SCALE
+  const tabUnit = tabs.map(([, l]) => textWidth(l, 'Archivo_700Bold', 1))
   const tabSize = (() => {
-    if (!tabsW) return TAB_BASE
-    const cell = tabsW / tabs.length - 2 * 4 - 2
-    const widest = Math.max(...tabs.map(([, l]) => textWidth(l, 'Archivo_700Bold', TAB_BASE)))
-    return widest <= cell ? TAB_BASE : Math.max(9, (TAB_BASE * cell) / widest)
+    if (!tabsW) return 13 * FONT_SCALE
+    const room = tabsW - 2 - tabs.length * (2 * TAB_PAD + 1)   // border, padding, rules
+    return Math.max(8, Math.min(TAB_MAX, (room - 1) / tabUnit.reduce((a, b) => a + b, 0)))
   })()
 
   return (
@@ -170,14 +175,13 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
           </View>
         </View>
 
-        {/* EVERY TAB IN VIEW AT ONCE, IN EQUAL CELLS with a rule between each
-            (owner, 2026-09-24). One type size for all of them: the size at
-            which the longest label fits its cell, measured, never above the
-            normal size and never cut. */}
+        {/* EVERY TAB IN VIEW AT ONCE, a rule between each; cells as wide as
+            their words, the words as large as the row allows (tabSize). */}
         <View style={s.tabs} onLayout={e => setTabsW(e.nativeEvent.layout.width)}>
           {tabs.map(([k, label], i) => (
             <Pressable key={k} onPress={() => setTab(k)} hitSlop={4}
-                       style={[s.tabBtn, i > 0 && s.tabBtnRule, shownTab === k && s.tabBtnOn]}
+                       style={[s.tabBtn, { flexGrow: tabUnit[i], flexBasis: 0 },
+                               i > 0 && s.tabBtnRule, shownTab === k && s.tabBtnOn]}
                        accessibilityRole="tab" accessibilityState={{ selected: shownTab === k }}>
               <Text style={[s.tab, shownTab === k && s.tabOn, { fontSize: tabSize }]}
                     allowFontScaling={false}>{label}</Text>
@@ -479,7 +483,7 @@ const s = StyleSheet.create({
      in ink with a green underline. */
   tabs: { flexDirection: 'row', marginTop: S.sm, marginBottom: S.sm,
           borderWidth: 1, borderColor: C.border, borderRadius: R.sm, overflow: 'hidden' },
-  tabBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 4,
+  tabBtn: { alignItems: 'center', justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 4,
             borderBottomWidth: 2, borderBottomColor: 'transparent' },
   // The rule between two tabs.
   tabBtnRule: { borderLeftWidth: 1, borderLeftColor: C.border },
