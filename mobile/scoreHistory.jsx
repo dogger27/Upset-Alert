@@ -46,6 +46,7 @@ const TICK = { bp: C.breakPoint, break: C.warn, set: C.info, match: C.lossMark, 
 // The moment's words over the score: the size of the sheet's other small
 // text, scaled with the reader's text size (fixed per render, not by iOS).
 const CAPTION_SIZE = 14 * FONT_SCALE
+const NUM_W = Math.ceil(textWidth('100%', 'Archivo_700Bold', 11 * FONT_SCALE)) + 3
 
 const KINDS = [
   ['bp', 'break point', 'Break point'], ['break', 'break', 'Break'], ['set', 'set', 'Set'],
@@ -458,6 +459,25 @@ function legendLines(shown) {
   return [top, bottom]
 }
 
+/* The two column heads. NEVER "…" (owner, restated 2026-09-24): each name
+   gets half the row, and one that does not fit it at the reader's text size
+   drops to the surname — the name ladder — rather than being cut. */
+function StatNames({ left, right }) {
+  const [w, setW] = useState(0)
+  const half = (w - S.sm) / 2
+  const fit = (name) => {
+    if (!w || !name) return name
+    const width = textWidth(name, 'Archivo_500Medium', 13 * FONT_SCALE)
+    return width <= half - 2 ? name : surname(name)
+  }
+  return (
+    <View style={s.statNames} onLayout={e => setW(e.nativeEvent.layout.width)}>
+      <Text style={[s.statName, { color: C.h2hP1 }]}>{fit(left)}</Text>
+      <Text style={[s.statName, { color: C.h2hP2, textAlign: 'right' }]}>{fit(right)}</Text>
+    </View>
+  )
+}
+
 function NavButton({ dir, disabled, onPress }) {
   return (
     <Pressable onPress={onPress} disabled={disabled} hitSlop={6}
@@ -505,10 +525,7 @@ function Stats({ stats, pos, topIsP1, left, right }) {
   ]
   return (
     <View style={s.stats}>
-      <View style={s.statNames}>
-        <Text style={[s.statName, { color: C.h2hP1 }]} numberOfLines={1}>{left}</Text>
-        <Text style={[s.statName, { color: C.h2hP2, textAlign: 'right' }]} numberOfLines={1}>{right}</Text>
-      </View>
+      <StatNames left={left} right={right} />
       {/* ONE LINE PER STATISTIC, the site's grid: number, bar, label, bar,
           number. The bars grow from the label outward, in each player's own
           colour, so name, bar and column read as one. */}
@@ -518,11 +535,11 @@ function Stats({ stats, pos, topIsP1, left, right }) {
               number column wide enough that the column clipped its own text;
               the percentage is the comparison, the raw count is detail. The
               site keeps the count at desktop widths. */}
-          <Text style={s.statNum} numberOfLines={1}>{lt ? `${pct(lw, lt)}%` : '—'}</Text>
+          <Text style={s.statNum}>{lt ? `${pct(lw, lt)}%` : '—'}</Text>
           <View style={s.barL}><View style={[s.barFill, { backgroundColor: C.h2hP1, width: `${lt ? pct(lw, lt) : 0}%` }]} /></View>
-          <Text style={s.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{label}</Text>
+          <Text style={s.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{label}</Text>
           <View style={s.barR}><View style={[s.barFill, { backgroundColor: C.h2hP2, width: `${rt ? pct(rw, rt) : 0}%` }]} /></View>
-          <Text style={[s.statNum, { textAlign: 'right' }]} numberOfLines={1}>{rt ? `${pct(rw, rt)}%` : '—'}</Text>
+          <Text style={[s.statNum, { textAlign: 'right' }]}>{rt ? `${pct(rw, rt)}%` : '—'}</Text>
         </View>
       ))}
     </View>
@@ -544,10 +561,7 @@ function SofaStats({ rows, topIsP1, loading, left, right, splitSuspect }) {
     <View style={s.stats}>
       {/* The same column heads the Points panel carries, each in that side's
           own bar colour, so name, bar and column read as one. */}
-      <View style={s.statNames}>
-        <Text style={[s.statName, { color: C.h2hP1 }]} numberOfLines={1}>{left}</Text>
-        <Text style={[s.statName, { color: C.h2hP2, textAlign: 'right' }]} numberOfLines={1}>{right}</Text>
-      </View>
+      <StatNames left={left} right={right} />
       {splitSuspect ? (
         <Text style={s.err}>The serve breakdown is published once the match finishes.</Text>
       ) : null}
@@ -565,11 +579,11 @@ function SofaStats({ rows, topIsP1, loading, left, right, splitSuspect }) {
           <View key={r.label}>
             {head ? <Text style={s.statSection}>{head}</Text> : null}
             <View style={s.statRow}>
-              <Text style={s.statNum} numberOfLines={1}>{ratio ? `${pct(l)}%` : l[0]}</Text>
+              <Text style={s.statNum}>{ratio ? `${pct(l)}%` : l[0]}</Text>
               <View style={s.barL}><View style={[s.barFill, { backgroundColor: C.h2hP1, width: `${width(l)}%` }]} /></View>
-              <Text style={s.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{r.label}</Text>
+              <Text style={s.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{r.label}</Text>
               <View style={s.barR}><View style={[s.barFill, { backgroundColor: C.h2hP2, width: `${width(rt)}%` }]} /></View>
-              <Text style={[s.statNum, { textAlign: 'right' }]} numberOfLines={1}>{ratio ? `${pct(rt)}%` : rt[0]}</Text>
+              <Text style={[s.statNum, { textAlign: 'right' }]}>{ratio ? `${pct(rt)}%` : rt[0]}</Text>
             </View>
           </View>
         )
@@ -670,7 +684,9 @@ const s = StyleSheet.create({
   statNames: { flexDirection: 'row', justifyContent: 'space-between', gap: S.sm },
   statName: { ...T.smallMed, flex: 1 },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statNum: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', width: 40 },
+  /* As wide as the widest value it can hold — "100%" — at the reader's text
+     size. A fixed 40 cut it to "10…" at a larger size (owner, 2026-09-24). */
+  statNum: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', width: NUM_W },
   /* FIXED, not flexShrink. Unsized, the label took its own natural width and
      the bars (flex: 1) absorbed whatever was left — so every row had a
      different bar length and the two tabs, whose labels differ, disagreed with
