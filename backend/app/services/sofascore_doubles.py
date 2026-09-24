@@ -531,21 +531,41 @@ def doubles_queries(their_name: str, our_name: Optional[str]) -> list:
     ", Singles" swapped for ", Doubles" (the doubles event's own name, when
     they follow the pattern), then the name with the suffix stripped (both
     disciplines come back together), then our own name as a last resort.
-    Older names ("Guadalajara Open") have no suffix and go through unchanged.
+    PLAIN NAMES GET THE ", Doubles" FORM TOO (2026-09-24). Sofascore calls the
+    Singapore Open just "Singapore", and a search for that returns football
+    leagues, table tennis and the singles event — never "Singapore, Doubles"
+    (24725, the singles id plus one). Eleven Singapore doubles matches went
+    unscored. So every name is searched in its doubles form first.
     """
     base = (their_name or "").split("(")[0].strip()
     out = []
     if base:
         stripped = re.sub(r",?\s*singles\s*$", "", base, flags=re.I).strip()
-        if stripped != base:
-            out.append(f"{stripped}, Doubles")
-            out.append(stripped)
-        else:
-            out.append(base)
+        out.append(f"{stripped}, Doubles")
+        out.append(stripped)
     ours = (our_name or "").split("(")[0].strip()
     if ours and ours not in out:
         out.append(ours)
     return out
+
+
+def pick_doubles_event(entities: list, want_cat: Optional[str], exact: str) -> Optional[int]:
+    """The doubles uniqueTournament among search results, or None.
+
+    THE EXACT NAME WINS. "Singapore, Doubles" returns "Tour Finals Singapore,
+    Doubles" (WTA) FIRST and "Singapore, Doubles" (WTA) second; taking the
+    first doubles row on the right tour would have scored Singapore's matches
+    against the Tour Finals. So a row named exactly `exact` is taken before
+    the first-match rule, which stays as the fallback for names that do not
+    follow the pattern.
+    """
+    ok = [e for e in entities
+          if "doubles" in (e.get("name") or "").lower()
+          and (e.get("category") or {}).get("name") == want_cat]
+    for e in ok:
+        if (e.get("name") or "").strip().lower() == (exact or "").strip().lower():
+            return e.get("id")
+    return ok[0].get("id") if ok else None
 
 
 async def _doubles_ids(db, draw: Draw, tournament: Tournament) -> Optional[tuple]:
@@ -583,14 +603,9 @@ async def _doubles_ids(db, draw: Draw, tournament: Tournament) -> Optional[tuple
     seen = []
     for q in queries:
         payload = await _get(f"/search/unique-tournaments?q={quote(q)}")
-        for row in payload.get("results", []):
-            ent = row.get("entity", {})
-            name = ent.get("name") or ""
-            cat = (ent.get("category") or {}).get("name")
-            seen.append(f"{ent.get('id')} {name} [{cat}]")
-            if "doubles" in name.lower() and cat == want_cat:
-                cand = ent.get("id")
-                break
+        rows = [r.get("entity", {}) for r in payload.get("results", [])]
+        seen += [f"{e.get('id')} {e.get('name')} [{(e.get('category') or {}).get('name')}]" for e in rows]
+        cand = pick_doubles_event(rows, want_cat, queries[0])
         if cand:
             break
     if not cand:

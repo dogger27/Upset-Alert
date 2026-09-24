@@ -7,7 +7,7 @@ residential proxy answering CONNECT with 402 was classified transient and
 logged at debug, so nobody saw the ban fallback was gone.
 """
 from app.services.sofascore import proxy_refused_tunnel
-from app.services.sofascore_doubles import doubles_queries
+from app.services.sofascore_doubles import doubles_queries, pick_doubles_event
 
 
 def test_a_singles_suffixed_name_searches_for_doubles_first():
@@ -15,9 +15,23 @@ def test_a_singles_suffixed_name_searches_for_doubles_first():
     assert q == ["WTA Sao Paulo, Brazil Women, Doubles", "WTA Sao Paulo, Brazil Women", "SP Open"]
 
 
-def test_an_old_style_name_goes_through_unchanged():
-    assert doubles_queries("Guadalajara Open", "Guadalajara Open") == ["Guadalajara Open"]
-    assert doubles_queries("Cincinnati", "Cincinnati Open") == ["Cincinnati", "Cincinnati Open"]
+def test_a_plain_name_is_searched_in_its_doubles_form_first():
+    # Singapore: "Singapore" alone never surfaces "Singapore, Doubles".
+    assert doubles_queries("Singapore", "Singapore Open") == ["Singapore, Doubles", "Singapore", "Singapore Open"]
+    assert doubles_queries("Guadalajara Open", "Guadalajara Open") == ["Guadalajara Open, Doubles", "Guadalajara Open"]
+
+
+def test_the_exact_doubles_name_beats_the_first_hit():
+    rows = [
+        {"id": 2677, "name": "Tour Finals Singapore, Doubles", "category": {"name": "WTA"}},
+        {"id": 24725, "name": "Singapore, Doubles", "category": {"name": "WTA"}},
+        {"id": 16616, "name": "Singapore, Doubles", "category": {"name": "ATP"}},
+    ]
+    assert pick_doubles_event(rows, "WTA", "Singapore, Doubles") == 24725
+    assert pick_doubles_event(rows, "ATP", "Singapore, Doubles") == 16616
+    # No exact name: the old first-match rule, on the right tour.
+    assert pick_doubles_event(rows, "WTA", "Somewhere, Doubles") == 2677
+    assert pick_doubles_event([], "WTA", "x") is None
 
 
 def test_nothing_to_search_for():
