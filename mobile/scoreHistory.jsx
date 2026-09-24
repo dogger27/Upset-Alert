@@ -132,9 +132,8 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   const [tab, setTab] = useState(null)
   const [captionW, setCaptionW] = useState(0)
   const [navW, setNavW] = useState(0)
-  // What the legend's pill can hold: the row less four buttons at their
-  // narrowest, the gaps between the five pieces, and the pill's padding.
-  const legendRoom = navW ? navW - 4 * NAV_MIN - 4 * S.sm - 2 * S.md - 4 : 0
+  // What the legend's pill can hold: its row, less the pill's padding.
+  const legendRoom = navW ? navW - 2 * S.md - 4 : 0
 
   /* Snapshots arrive in the MATCH's orientation (side 1 = the bracket's
      player1); the sheet shows the SHEET's order, which need not agree. Line
@@ -322,16 +321,11 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
             <Scrub max={max} pos={atEnd ? max : pos} onChange={v => setPos(v >= max ? null : v)}
                    onHold={setHolding} markers={markers} topIsP1={topIsP1}
                    top={initialsOf(a[0]?.name)} bottom={initialsOf(b[0]?.name)} />
-            {/* THE MOMENT NAVIGATOR (owner, 2026-09-24): previous / next big
-                moment either side of the legend, which sits centred in a pill
-                the arrows' own height. Two lines, fixed, so the tabs below
-                never move as kinds appear. */}
+            {/* THE LEGEND, ON ITS OWN ROW (owner, 2026-09-24): centred in a
+                pill, one line when everything fits the width, else balanced
+                lines with ace and DF on the bottom one. */}
             {markers.length > 0 && (
-              <View style={s.navRow} onLayout={e => setNavW(e.nativeEvent.layout.width)}>
-                {/* Outer pair: big moments (two arrows). Inner pair: one point
-                    at a time (owner, 2026-09-24). */}
-                <NavButton dir="back" jump disabled={prevMoment == null} onPress={() => goTo(prevMoment)} />
-                <NavButton dir="back" disabled={here <= 0} onPress={() => goTo(Math.max(0, here - 1))} />
+              <View style={s.legendRow} onLayout={e => setNavW(e.nativeEvent.layout.width)}>
                 <View style={s.legendPill}>
                   {(() => {
                     const shown = KINDS.filter(([k]) => markers.some(m => m.kind === k))
@@ -342,6 +336,14 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                     ))
                   })()}
                 </View>
+              </View>
+            )}
+            {/* THE BUTTONS, THE WHOLE LINE BELOW IT: outer pair jump big
+                moments (two arrows), inner pair step one point. */}
+            {max > 0 && (
+              <View style={s.navRow}>
+                <NavButton dir="back" jump disabled={prevMoment == null} onPress={() => goTo(prevMoment)} />
+                <NavButton dir="back" disabled={here <= 0} onPress={() => goTo(Math.max(0, here - 1))} />
                 <NavButton dir="forward" disabled={here >= max} onPress={() => goTo(here + 1)} />
                 <NavButton dir="forward" jump disabled={nextMoment == null} onPress={() => goTo(nextMoment)} />
               </View>
@@ -459,14 +461,15 @@ function Scrub({ max, pos, onChange, markers, topIsP1, top, bottom, onHold }) {
    the bottom line; the score moments (break point … match) above, wrapped to
    the room the pill has, then the last of them moved down while that makes
    the wider line narrower — "break point · break / ace · DF", not one long
-   line over a short one. Never fewer than two lines, so the pill's height
-   is the same match to match; a third only when the moments need it (set
-   and match points joined them). Widths from the font's own tables at the
+   line over a short one — and a single line when it all fits (since the
+   legend got its own row). Widths from the font's own tables at the
    reader's text size, against `room` (0 = not measured yet: no wrapping). */
 function legendLines(shown, room) {
   const itemW = ([, label]) => 8 + 4 + textWidth(label, 'Archivo_500Medium', 11 * FONT_SCALE)
   const lineW = (items) => items.reduce((w, it) => w + itemW(it), 0) + Math.max(0, items.length - 1) * S.sm
   const fits = (items) => !room || lineW(items) <= room
+  // One line when everything fits the room.
+  if (room && lineW(shown) <= room) return [shown]
   const lines = [[]]
   for (const it of shown.filter(([k]) => k !== 'ace' && k !== 'df')) {
     const cur = lines[lines.length - 1]
@@ -482,7 +485,7 @@ function legendLines(shown, room) {
     last.pop()
     bottom = moved
   }
-  return [...lines, bottom]
+  return [...lines, bottom].filter(line => line.length)
 }
 
 /* The two column heads. NEVER "…" (owner, restated 2026-09-24): each name
@@ -674,9 +677,9 @@ const s = StyleSheet.create({
      measurement (FitText) in the room that is left. */
   /* Arrows and pill in one row, stretched to one height: the pill's two
      fixed lines set it, the arrows take it. */
-  navRow: { flexDirection: 'row', alignItems: 'stretch', justifyContent: 'center', gap: S.sm },
-  /* The arrows take all the width the pill leaves, out to the sheet's
-     padding (owner, 2026-09-24): wide targets, the legend still centred. */
+  legendRow: { alignItems: 'center' },
+  navRow: { flexDirection: 'row', gap: S.sm, height: 40 },
+  /* Four equal buttons across the whole line (owner, 2026-09-24). */
   navBtn: {
     flex: 1, minWidth: NAV_MIN, borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn,
     backgroundColor: C.card, alignItems: 'center', justifyContent: 'center',
@@ -691,7 +694,6 @@ const s = StyleSheet.create({
     paddingHorizontal: S.md, paddingVertical: 6,
     borderWidth: 1, borderColor: C.borderOn, borderRadius: R.pill,
   },
-  /* A line is drawn even when empty, so the pill is at least two lines tall. */
   legendLine: { flexDirection: 'row', justifyContent: 'center', gap: S.sm, minHeight: leading(15) },
   /* A FIXED HEIGHT, EMPTY OR NOT (owner, 2026-09-24: "everything is
      bouncing"). It was a minHeight around a COLUMN, in which FitText's
