@@ -334,14 +334,19 @@ def _walked_over(entry) -> bool:
     from schedule._played: a result cell or a printed score that is "w/o"."""
     if _LAW_WALKOVER_RE.match(str(getattr(entry, "printed_score", None) or "")):
         return True
-    for side in (getattr(entry, "scores_json", None) or []):
+    return _scores_walked_over(getattr(entry, "scores_json", None))
+
+
+def _scores_walked_over(scores) -> bool:
+    """A result cell that reads "w/o" — on a row, or on its bracket match."""
+    for side in (scores if isinstance(scores, (list, tuple)) else []):
         for cell in (side if isinstance(side, (list, tuple)) else [side]):
             if _LAW_WALKOVER_RE.match(str(cell or "")):
                 return True
     return False
 
 
-def clock_runs_backwards(rows, tz_name) -> list[tuple]:
+def clock_runs_backwards(rows, tz_name, walked_over=_walked_over) -> list[tuple]:
     """(row, the row above it) wherever a court's printed clock goes BACK in time.
 
     Down one court, in `court_order`, each printed clock is at or after every
@@ -359,10 +364,18 @@ def clock_runs_backwards(rows, tz_name) -> list[tuple]:
     was ENTERED — it neither convicts nor is convicted. SP Open 2026-09-18:
     Dabrowski/Stefani's doubles QF went w/o, the feed stamped it 12:48, and it
     sat as QUADRA 1 #2 under the 2:00 PM opener, reported on every sweep.
+
+    A SINGLES WALKOVER IS WRITTEN ON THE BRACKET, not on the row: a main-draw
+    singles row carries no result of its own (see `_row_played`), so
+    `check_day` passes a `walked_over` that reads the linked match too.
+    Singapore 2026-09-23: Mertens v Krejcikova went w/o, match 5437 said
+    `[["w/o"], [""]]`, the row said nothing. The feed rightly dropped its
+    stamp, the row kept the sheet's "Not before 2:30 PM", sorted untimed-last
+    under the court's 19:56 finale, and the row-only reading convicted it.
     """
     courts: dict = {}
     for r in rows:
-        if r.court and not _walked_over(r):
+        if r.court and not walked_over(r):
             courts.setdefault(r.court, []).append(r)
     out = []
     for court_rows in courts.values():
@@ -1884,7 +1897,16 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
     # The floor check above passed it, because it reads the printed clock
     # through the same missing meridiem. An order of play never goes back in
     # time down a court, whatever the reading of any single clock is.
-    for e, prev in clock_runs_backwards(rows, venue_tz):
+    # The walkover is on the bracket for a singles row — see
+    # clock_runs_backwards. Both result columns, as the chain reads either.
+    wo_matches = {
+        mid for mid, sj, ssj in ((await db.execute(
+            select(Match.id, Match.scores_json, Match.sofa_scores_json)
+            .where(Match.id.in_(linked)))).all() if linked else [])
+        if _scores_walked_over(sj) or _scores_walked_over(ssj)}
+    for e, prev in clock_runs_backwards(
+            rows, venue_tz,
+            walked_over=lambda r: _walked_over(r) or r.match_id in wo_matches):
         flag("printed_clock_runs_backwards", e,
              f"{e.court} #{e.court_order} prints {e.start_time_local!r}, earlier "
              f"than #{prev.court_order}'s {prev.start_time_local!r} above it — "
