@@ -324,7 +324,14 @@ export function h2hPairOf(m, B) {
   const hA = m.player1 ?? (rA != null ? B.playerById[rA] : null)
   const hB = m.player2 ?? (rB != null ? B.playerById[rB] : null)
   if (!(hA?.name && hB?.name && hA.te_slug && hB.te_slug)) return null
-  return { a: h2hPlayer(hA), b: h2hPlayer(hB), matchId: m.id }
+  // A FINISHED match carries its result into the sheet (owner, 2026-09-24):
+  // decided means real players, so a/b are player1/player2 and the scores
+  // are already in that order.
+  const decided = m.winner?.id != null && m.player1?.id != null && m.player2?.id != null
+  const result = decided
+    ? { winner: m.winner.id === m.player1.id ? 0 : 1, line: scoreLine(m.scores, ', ') }
+    : null
+  return { a: h2hPlayer(hA), b: h2hPlayer(hB), matchId: m.id, result }
 }
 
 function lastNameOf(full) {
