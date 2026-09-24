@@ -1100,7 +1100,7 @@ export default function Admin() {
         {activeTab === 'Info'        && <InfoPanel />}
         {activeTab === 'Players'     && <PlayersPanel user={user} />}
         {activeTab === 'Rankings'    && <RankingsPanel user={user} />}
-        {activeTab === 'Settings'    && <SettingsPanel />}
+        {activeTab === 'Settings'    && <><SettingsPanel /><MarketOddsPanel /></>}
       </div>
     </div>
   )
@@ -1177,6 +1177,68 @@ function SettingsPanel() {
         Other players' picks stay hidden until a draw's first round is complete, under
         either rule.
       </p>
+    </div>
+  )
+}
+
+
+/* THE BETTING ODDS, ON DEMAND (owner, 2026-09-24). A yardstick for the rating
+   model only — nothing on the site reads them — so they are no longer fetched
+   every night. Refresh them here before retuning the model
+   (scripts/fit_own_elo.py --market). */
+function MarketOddsPanel() {
+  const [data, setData] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [result, setResult] = useState(null)
+
+  const load = async () => {
+    try {
+      const { default: client } = await import('../api/client')
+      setData((await client.get('/admin/market-odds')).data)
+    } catch { setErr('Could not load the betting odds status') }
+  }
+  useEffect(() => { load() }, [])
+
+  const refresh = async () => {
+    setBusy(true); setErr(''); setResult(null)
+    try {
+      const { default: client } = await import('../api/client')
+      const res = (await client.post('/admin/market-odds/refresh', null, { timeout: 180000 })).data
+      setResult(res); setData(res)
+    } catch { setErr('The refresh failed — see the Logs tab') } finally { setBusy(false) }
+  }
+
+  const when = data?.last_refresh?.at
+    ? new Date(data.last_refresh.at.endsWith('Z') ? data.last_refresh.at : data.last_refresh.at + 'Z').toLocaleString()
+    : 'never'
+  return (
+    <div className="admin-settings">
+      <h2>Betting odds</h2>
+      <p className="admin-settings-note">
+        The bookmakers' prices from tennis-data.co.uk, used only to measure how good our
+        match predictions are when the rating model is retuned. Nothing on the site uses
+        them, so they are not downloaded automatically. Refresh before a retune.
+      </p>
+      {err ? <p className="admin-error">{err}</p> : null}
+      {data ? (
+        <ul className="admin-settings-counts">
+          <li><strong>{data.held.toLocaleString()}</strong> priced matches held, {data.linked.toLocaleString()} linked to our record</li>
+          {Object.entries(data.latest_match || {}).map(([tour, d]) => (
+            <li key={tour}>Latest {tour.toUpperCase()} match priced: <strong>{d}</strong></li>
+          ))}
+          <li>Last refreshed: <strong>{when}</strong></li>
+        </ul>
+      ) : <p>Loading…</p>}
+      <button type="button" className="btn-secondary btn-sm" onClick={refresh} disabled={busy}>
+        {busy ? 'Refreshing… (up to a minute)' : 'Refresh betting odds'}
+      </button>
+      {result ? (
+        <p className="admin-settings-note">
+          Read {result.read.toLocaleString()} priced matches from {result.sources.join(', ') || 'no source'}.
+          {result.last_refresh?.level === 'warning' ? ' It logged a warning — see the Logs tab.' : ''}
+        </p>
+      ) : null}
     </div>
   )
 }
