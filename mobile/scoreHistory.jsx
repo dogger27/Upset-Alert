@@ -21,11 +21,11 @@ import { MatchCard } from './scorecard'
 import { pointStats, sanitizeSnapshots, timelineMarkers } from './scoreTimeline'
 import { Sheet } from './sheet'
 import { C, R, S, T } from './theme'
-import { leading } from './fontScale.js'
+import { FONT_SCALE, leading } from './fontScale.js'
+import { textWidth } from './measure'
 import { Loading } from './ui'
 import { useApi } from './useApi'
 import { surname } from './scoring'
-import { FitText } from './cards'
 
 const THUMB = 26
 /* A serve event sits on the SERVER's side of the rail and a break on the
@@ -43,6 +43,10 @@ const TICK = { bp: C.breakPoint, break: C.warn, set: C.info, match: C.lossMark, 
 /* The legend's order and words, and what the caption under it calls each
    moment the arrows land on. Break point before break: the chance, then the
    thing it became. */
+// The moment's words over the score: the size of the sheet's other small
+// text, scaled with the reader's text size (fixed per render, not by iOS).
+const CAPTION_SIZE = 14 * FONT_SCALE
+
 const KINDS = [
   ['bp', 'break point', 'Break point'], ['break', 'break', 'Break'], ['set', 'set', 'Set'],
   ['match', 'match', 'Match'], ['ace', 'ace', 'Ace'], ['df', 'DF', 'Double fault'],
@@ -120,6 +124,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   // whenever the point history is thin, which is exactly when the other one
   // matters most. Once the reader taps, their choice stands.
   const [tab, setTab] = useState(null)
+  const [captionW, setCaptionW] = useState(0)
 
   /* Snapshots arrive in the MATCH's orientation (side 1 = the bracket's
      player1); the sheet shows the SHEET's order, which need not agree. Line
@@ -178,6 +183,9 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
     const name = who(side)
     return name ? `${name}: ${words.join(' · ')}` : words.join(' · ')
   }).filter(Boolean).join('   ') || prevPoint || (here === 0 ? 'Match start' : null)
+  const captionSize = caption && captionW > 0
+    ? Math.min(CAPTION_SIZE, CAPTION_SIZE * (captionW - S.xs - 2) / textWidth(caption, 'Archivo_700Bold', CAPTION_SIZE))
+    : CAPTION_SIZE
   const stats = useMemo(() => pointStats(snapshots), [snapshots])
   const statsUsable = stats.counted >= 20 && stats.counted / Math.max(1, stats.transitions) >= 0.7
 
@@ -279,8 +287,17 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
             2026-09-24). A fixed line whenever there is a history, so the card
             never moves as it changes. */}
         {max > 0 && (
-          <View style={s.captionRow} accessibilityLiveRegion="polite">
-            {caption ? <FitText style={s.prevPointValue} min={9} align="right">{caption}</FitText> : null}
+          <View style={s.captionRow} accessibilityLiveRegion="polite"
+                onLayout={e => setCaptionW(e.nativeEvent.layout.width)}>
+            {/* NOT FitText: its adjustsFontSizeToFit backstop, in a box with
+                room to spare, drops to its floor on iOS — "Hurkacz: Match" at
+                a few points (owner's phone, 2026-09-24; the same trap as the
+                day strip's caption). Full size, measured here, and smaller
+                only when the words genuinely do not fit the line. */}
+            {caption ? (
+              <Text style={[s.caption, captionSize < CAPTION_SIZE && { fontSize: captionSize }]}
+                    allowFontScaling={false}>{caption}</Text>
+            ) : null}
           </View>
         )}
         <MatchCard e={row} />
@@ -607,14 +624,13 @@ const s = StyleSheet.create({
      bouncing"). It was a minHeight around a COLUMN, in which FitText's
      flex: 1 is a VERTICAL grow — so the line's height followed whether a
      caption was in it, and the card and everything under it jumped on every
-     point the thumb crossed. Now a ROW of one exact height: FitText's flex
-     fills it sideways and right-aligns, and an empty line holds the same
-     space waiting. */
+     point the thumb crossed. Now a ROW of one exact height, right-aligned,
+     and an empty line holds the same space waiting. */
   captionRow: {
-    height: leading(16), flexDirection: 'row', alignItems: 'center',
+    height: leading(20), flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
     marginBottom: -S.sm, paddingRight: S.xs,   // sits tight on the card it describes
   },
-  prevPointValue: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold' },
+  caption: { fontFamily: 'Archivo_700Bold', fontSize: CAPTION_SIZE, color: C.ink, flexShrink: 0 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendBox: { width: 8, height: 8, borderRadius: 2 },
   legendText: { ...T.tiny, color: C.faint },
