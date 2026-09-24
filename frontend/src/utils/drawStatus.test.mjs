@@ -185,6 +185,27 @@ check('a draw with no event of its own stands alone', () => {
   assert.notEqual(bucket(list, 1), 'active')
 })
 
+check('a week whose finals land two days apart is ONE last week (Guadalajara + SP)', () => {
+  // Guadalajara ended Saturday, SP Open the Monday after — the same week of
+  // tennis. A 1-day gap split them, and the Saturday one fell out of every
+  // section (owner, 2026-09-24).
+  const list = [
+    draw(1, 35, '2026-09-17', 'completed'),
+    draw(2, 80, '2026-09-19', 'completed'),
+  ]
+  assert.equal(bucket(list, 1), 'lastweek')
+  assert.equal(bucket(list, 2), 'lastweek')
+})
+
+check('…and consecutive weeks still split: the week before is Previous', () => {
+  const list = [
+    draw(1, 10, '2026-09-12', 'completed'),
+    draw(2, 11, '2026-09-19', 'completed'),
+  ]
+  assert.equal(bucket(list, 1), 'previous')
+  assert.equal(bucket(list, 2), 'lastweek')
+})
+
 check('no dates, no cohorts, and nothing thrown', () => {
   assert.deepEqual(computeCohortInfo([]), {})
   assert.deepEqual(computeCohortInfo(null), {})
