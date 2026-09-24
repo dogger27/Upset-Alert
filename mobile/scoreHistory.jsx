@@ -362,8 +362,11 @@ export function ScoreHistoryBody({ visible, entry, part = 'all' }) {
             ) : null}
           </View>
         )}
-        {/* In the match sheet the header already says the score. */}
-        {part === 'all' && <MatchCard e={row} />}
+        {/* THE SCORE AT THE THUMB (owner, 2026-09-24: brought back — "we need
+            the interactive updating score"). The match sheet's header holds
+            the result; this card is the match AS IT STOOD at the point the
+            slider is on. */}
+        {timeline && <MatchCard e={row} />}
         {hist.loading && !data ? <Loading /> : null}
         {hist.error ? <Text style={s.err}>Couldn’t load the match history.</Text> : null}
         {timeline && max > 0 && (
