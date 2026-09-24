@@ -1143,12 +1143,13 @@ function TournStamps({ stamps, name, small }) {
    floating on the rule between two of them. The two flexed sides stay — they
    used to exist to centre the round between them, and now simply pin the clock
    left and the tournament right. */
-function LineTags({ first, alt, when, tournament }) {
-  if (!when && !tournament) return null
+function LineTags({ first, alt, when, flag, tournament }) {
+  if (!when && !flag && !tournament) return null
   return (
     <View style={s.miniTagRow} pointerEvents="none">
       <View style={s.miniTagSide}>
-        {when ? <LineTag first={first} alt={alt} textStyle={s.miniTagWhen}>{when}</LineTag> : null}
+        {flag ? <LineTag first={first} alt={alt} style={s.miniTagFlag} textStyle={s.miniTagFlagText}>{flag}</LineTag>
+          : when ? <LineTag first={first} alt={alt} textStyle={s.miniTagWhen}>{when}</LineTag> : null}
       </View>
       <View style={[s.miniTagSide, s.miniTagSideRight]}>
         {tournament ? (
@@ -1190,8 +1191,15 @@ function h2hPairOf(e) {
    grouped BY round already — the heading above the cards says it, and saying
    it twice on every card would be noise. */
 function miniTags(e, { past, tournament, venueMode, venueTz }) {
+  /* POSTPONED SAYS SO, AND LOSES ITS CLOCK (owner, 2026-09-24). A match
+     carried off the day has not started, so it used to be given the row's
+     expected start — "10:10 PM" on a court whose day was over — reading as
+     still to come today. It carries a "Postponed" pill in the clock's place
+     instead, on the same top border, in both views. */
+  const postponed = e.status === 'postponed'
   return {
-    when: past || hasStarted(e) ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode),
+    flag: postponed ? 'Postponed' : '',
+    when: past || postponed || hasStarted(e) ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode),
     round: past ? '' : matchLine(e).round,
     tournament,
   }
@@ -1203,10 +1211,10 @@ function miniTags(e, { past, tournament, venueMode, venueTz }) {
    wrapper draws the first row's tags over the card's edge from outside, and
    the first row keeps the same padding as every other. */
 function MiniRows({ list, tagsOf, children }) {
-  const tags = list.length ? tagsOf(list[0]) : { when: '', round: '', tournament: null }
+  const tags = list.length ? tagsOf(list[0]) : { when: '', flag: '', round: '', tournament: null }
   return (
     <View style={s.miniWrap}>
-      <LineTags first when={tags.when} tournament={tags.tournament} />
+      <LineTags first when={tags.when} flag={tags.flag} tournament={tags.tournament} />
       <View style={[s.rows, s.rowsInWrap]}>{children}</View>
     </View>
   )
@@ -1238,8 +1246,8 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
      on the same line, far right, when the page mixes tournaments (owner,
      2026-09-17) - the past day groups by tournament instead, the court view
      heads each tournament's courts. */
-  const { when, round } = miniTags(e, { past, tournament, venueMode, venueTz })
-  const tagged = Boolean(when || round || tournament)
+  const { when, flag, round } = miniTags(e, { past, tournament, venueMode, venueTz })
+  const tagged = Boolean(when || flag || round || tournament)
   return (
     <Wrap style={[s.miniRow, !first && s.miniNext, alt && s.rowAlt]} onPress={openable ? () => onHistory(e) : undefined}
           onLongPress={menu || undefined} delayLongPress={320}
@@ -1248,12 +1256,12 @@ function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueT
           /* The tag is shortened; the SPOKEN name is not. "SaoPaolo" is a tag
              for a reader with 60pt of border to spend, not a name to read out
              (owner's rule on the predictors sheet, applied here). */
-          accessibilityLabel={tagged ? [when, round, matchLine(e).names,
+          accessibilityLabel={tagged ? [flag || when, round, matchLine(e).names,
                                         tournament ? e.tournament_name : null]
             .filter(Boolean).join(' ') : undefined}>
       {tourBar ? <View style={[s.rowBar, { backgroundColor: tourBar }]} /> : null}
       {/* The first row's tags are drawn by MiniRows, over the card's edge. */}
-      {!first ? <LineTags alt={alt} when={when} tournament={tournament} /> : null}
+      {!first ? <LineTags alt={alt} when={when} flag={flag} tournament={tournament} /> : null}
       {/* THE ROUND TRAVELS WITH THE CARD, not beside it: MatchCard puts it on
           the top player's line, after that player's entry chip, so the two
           chips are laid out by one row and cannot drift apart (owner,
@@ -1296,7 +1304,9 @@ function MatchRow({ e, first, alt, tourBar, past, leftW, venueMode, venueTz, onH
   // still said, in the accessibility label.
   // UPCOMING MATCHES ONLY (owner, 2026-09-17): once a match is on court or
   // over, the clock slot goes quiet even when there is no score to lead with.
-  const when = hasStarted(e) ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode)
+  // Postponed: the word in the clock's column, never a start time (miniTags).
+  const postponed = e.status === 'postponed'
+  const when = postponed ? 'Postponed' : hasStarted(e) ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode)
   const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
   const Wrap = openable ? Pressable : View
   return (
@@ -1315,7 +1325,7 @@ function MatchRow({ e, first, alt, tourBar, past, leftW, venueMode, venueTz, onH
         <View style={s.rowLeadSlot}><FitText style={[s.rowScore, s.rowScoreLead, live && s.rowScoreLive]} min={9}>{score}</FitText></View>
       ) : !past ? (
         <>
-          <View style={s.rowWhenSlot}><FitText style={s.rowWhen} min={9}>{when}</FitText></View>
+          <View style={s.rowWhenSlot}><FitText style={[s.rowWhen, postponed && s.miniTagFlagText]} min={7}>{when}</FitText></View>
           <View style={s.rowRoundSlot}><FitText style={s.rowRound} min={8}>{round}</FitText></View>
         </>
       ) : null}
@@ -1737,6 +1747,9 @@ const s = StyleSheet.create({
      Short names also stop the longest — "Dubai Tennis Championships" — from
      shrinking to fit the half-strip they get. */
   miniTagWhen: { color: C.gold },
+  // The postponed pill: an outlined box on the border, in the warning ink.
+  miniTagFlag: { borderWidth: 1, borderColor: C.warn, borderRadius: 4, overflow: 'hidden' },
+  miniTagFlagText: { color: C.warn, fontFamily: 'Archivo_700Bold' },
   miniTagTourn: { flexShrink: 1, color: C.gold },
   miniTagHalf: { position: 'absolute', left: 0, right: 0, height: 8 },
   // A clear rule between matches (owner, 2026-09-17): two lines of box score
