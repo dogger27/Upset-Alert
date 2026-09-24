@@ -240,8 +240,20 @@ export function singlesOnly(form) {
  * carries no level, so taking the word out of its name would quietly promote
  * a Challenger to the tour.
  */
+/* THE TOUR IS NOT PART OF THE NAME (owner, 2026-09-24: "Singapore WTA" in a
+   form line). Tennis Explorer writes it in to tell a combined event's two
+   halves apart; beside the other player's own result it is noise. Kept where
+   the tour IS the event's name — ATP/WTA Finals, the ATP Cup — and never
+   stripped to nothing. */
+function dropTour(name) {
+  const out = String(name || '')
+    .replace(/\b(?:ATP|WTA)\b(?!\s+(?:Finals|Cup|Elite))/gi, ' ')
+    .replace(/\s{2,}/g, ' ').trim()
+  return out || String(name || '').trim()
+}
+
 export function shortEvent(name) {
-  return String(name || '').replace(/\bchallengers?\b/gi, 'CH').trim()
+  return dropTour(String(name || '').replace(/\bchallengers?\b/gi, 'CH'))
 }
 
 /* THE RUNG IS A FIELD, NOT PART OF THE NAME (owner, 2026-09-23: "when we
@@ -252,7 +264,7 @@ export function shortEvent(name) {
  * it.
  */
 export function eventTitle(name) {
-  return String(name || '')
+  return dropTour(String(name || '')
     // Both rung words, because both appear in a name whose level repeats them:
     // "ITF M15 Cancun" beside a rung of ITF said it twice, exactly as
     // "Mallorca challenger" did. What is left — "M15 Cancun" — is the part
@@ -260,7 +272,7 @@ export function eventTitle(name) {
     .replace(/\bchallengers?\b/gi, ' ')
     .replace(/\bitf\b/gi, ' ')
     .replace(/\s{2,}/g, ' ')
-    .trim()
+    .trim())
 }
 
 /* A form line as the sheet draws it: the newest results first, at most `n`,

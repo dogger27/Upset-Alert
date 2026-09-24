@@ -259,4 +259,13 @@ assert.equal(teName(null), '')
   assert.ok(!rows.some(r => r.key === 'ua'), 'no odds, no row')
 }
 
+// The tour is dropped from an event name, except where it IS the name.
+assert.equal(shortEvent('Singapore WTA'), 'Singapore')
+assert.equal(shortEvent('Tokyo ATP'), 'Tokyo')
+assert.equal(shortEvent('WTA Finals'), 'WTA Finals')
+assert.equal(shortEvent('ATP Cup'), 'ATP Cup')
+assert.equal(shortEvent('Mallorca challenger'), 'Mallorca CH')
+assert.equal(eventTitle('ITF M15 Cancun'), 'M15 Cancun')
+assert.equal(shortEvent('WTA'), 'WTA')
+
 console.log('ok — h2hView')
