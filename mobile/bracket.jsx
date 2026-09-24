@@ -318,12 +318,12 @@ function h2hPlayer(e) {
    Both matched to a Tennis Explorer profile, or no button: the endpoint has
    nothing to say about a player it never matched. Exported so the draw page
    can step the sheet through every match that has one, in bracket order. */
-export function h2hPairOf(m, B) {
+export function h2hPairOf(m, B, { needSlugs = true } = {}) {
   if (!m || m.is_bye || m.champion) return null
   const { p1: rA, p2: rB } = B.resolved[m.id] || {}
   const hA = m.player1 ?? (rA != null ? B.playerById[rA] : null)
   const hB = m.player2 ?? (rB != null ? B.playerById[rB] : null)
-  if (!(hA?.name && hB?.name && hA.te_slug && hB.te_slug)) return null
+  if (!(hA?.name && hB?.name && (!needSlugs || (hA.te_slug && hB.te_slug)))) return null
   return { a: h2hPlayer(hA), b: h2hPlayer(hB), matchId: m.id }
 }
 
