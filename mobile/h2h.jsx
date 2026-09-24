@@ -412,16 +412,25 @@ function TwoLineName({ name, end = false, picked = false }) {
   /* 🤞 DIRECTLY BESIDE THE NAME (owner, 2026-09-24): on the surname line,
      after it on the left, before it on the right — so it can only belong to
      the name it touches, never read as floating between the two players. */
+  const fingersOn = (style) => style === s.whoName && picked
   const line = (text, style, extra) => {
     const size = fit(text, style)
-    const fingers = style === s.whoName && picked
-      ? <Text style={s.pickInline} accessibilityLabel="Your pick">🤞</Text> : null
-    return (
-      <Text style={[style, extra, { fontSize: size * FONT_SCALE, lineHeight: Math.round((style.lineHeight * size) / style.fontSize) },
+    const name = (
+      <Text style={[style, fingersOn(style) ? null : extra,
+                    { fontSize: size * FONT_SCALE, lineHeight: Math.round((style.lineHeight * size) / style.fontSize) },
                     end && s.whoNameEnd]}
-            allowFontScaling={false}>
-        {end && fingers ? <>{fingers}{' '}</> : null}{text}{!end && fingers ? <>{' '}{fingers}</> : null}
-      </Text>
+            allowFontScaling={false}>{text}</Text>
+    )
+    if (!fingersOn(style)) return name
+    /* ITS OWN BOX, NOT INLINE (owner, 2026-09-24: the 🤞 was cut off). Inside
+       the surname's Text it took that line's height, shorter than the emoji,
+       and iOS clipped its top. Beside the name in a row, it is as tall as it
+       needs, centred on the surname. */
+    const fingers = <Text style={s.pickInline} allowFontScaling={false} accessibilityLabel="Your pick">🤞</Text>
+    return (
+      <View style={[s.nameRow, end && s.nameRowEnd, extra]}>
+        {end ? fingers : null}{name}{end ? null : fingers}
+      </View>
     )
   }
   return (
@@ -457,7 +466,9 @@ const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: S.xs, marginTop: S.xs },
   // The marks' column, toward the middle; empty when there is nothing to say.
   marks: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 4 },
-  pickInline: { fontSize: 15 * FONT_SCALE },
+  pickInline: { fontSize: 15 * FONT_SCALE, lineHeight: Math.round(22 * FONT_SCALE) },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  nameRowEnd: { justifyContent: 'flex-end' },
   /* The tabs, the Points / Serve & Return pair's idiom: words, the chosen one
      in ink with a green underline. */
   tabsScroll: { flexGrow: 0, marginTop: S.sm, marginBottom: S.sm,
