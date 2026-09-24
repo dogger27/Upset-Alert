@@ -329,9 +329,10 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                 <View style={s.legendPill}>
                   {(() => {
                     const shown = KINDS.filter(([k]) => markers.some(m => m.kind === k))
-                    return legendLines(shown, legendRoom).map((line, n) => (
+                    const { lines, size } = legendLines(shown, legendRoom)
+                    return lines.map((line, n) => (
                       <View key={n} style={s.legendLine}>
-                        {line.map(([k, label]) => <Legend key={k} color={TICK[k]} label={label} />)}
+                        {line.map(([k, label]) => <Legend key={k} color={TICK[k]} label={label} size={size} />)}
                       </View>
                     ))
                   })()}
@@ -457,35 +458,45 @@ function Scrub({ max, pos, onChange, markers, topIsP1, top, bottom, onHold }) {
   )
 }
 
-/* THE LEGEND'S LINES, EVENED OUT (owner, 2026-09-24): ace and DF always on
-   the bottom line; the score moments (break point … match) above, wrapped to
-   the room the pill has, then the last of them moved down while that makes
-   the wider line narrower — "break point · break / ace · DF", not one long
-   line over a short one — and a single line when it all fits (since the
-   legend got its own row). Widths from the font's own tables at the
-   reader's text size, against `room` (0 = not measured yet: no wrapping). */
+/* THE LEGEND'S LAYOUT: ONE LINE IF IT CAN, TWO AT MOST, NEVER THREE (owner,
+   2026-09-24). Returns { lines, size }.
+     1. Everything on one line at the legend's size, or shrunk to no less
+        than LEGEND_MIN of it — a line that fits only smaller than that is
+        text too small to read, so it goes to two lines instead.
+     2. Two lines: every cut of the sequence with ace and DF on the bottom
+        line, the most even one (narrowest widest line) chosen. If even that
+        does not fit, the size comes down until it does — a third line is
+        never the answer.
+   Widths from the font's own tables at the reader's text size, against
+   `room` (0 = not measured yet: one line, full size). */
+const LEGEND_SIZE = 11
+const LEGEND_MIN = 0.85
 function legendLines(shown, room) {
-  const itemW = ([, label]) => 8 + 4 + textWidth(label, 'Archivo_500Medium', 11 * FONT_SCALE)
-  const lineW = (items) => items.reduce((w, it) => w + itemW(it), 0) + Math.max(0, items.length - 1) * S.sm
-  const fits = (items) => !room || lineW(items) <= room
-  // One line when everything fits the room.
-  if (room && lineW(shown) <= room) return [shown]
-  const lines = [[]]
-  for (const it of shown.filter(([k]) => k !== 'ace' && k !== 'df')) {
-    const cur = lines[lines.length - 1]
-    if (cur.length && !fits([...cur, it])) lines.push([it])
-    else cur.push(it)
+  const lineW = (items, size) => items.reduce(
+    (w, [, label]) => w + 12 + textWidth(label, 'Archivo_500Medium', size * FONT_SCALE), 0)
+    + Math.max(0, items.length - 1) * S.sm
+  if (!room) return { lines: [shown], size: LEGEND_SIZE }
+  const one = lineW(shown, LEGEND_SIZE)
+  if (one <= room) return { lines: [shown], size: LEGEND_SIZE }
+  // The 12pt swatch and gaps do not shrink with the text; solve for the text.
+  const fixed = shown.length * 12 + Math.max(0, shown.length - 1) * S.sm
+  const oneScale = (room - fixed) / (one - fixed)
+  if (oneScale >= LEGEND_MIN) return { lines: [shown], size: LEGEND_SIZE * oneScale }
+
+  const top = shown.filter(([k]) => k !== 'ace' && k !== 'df')
+  const tail = shown.filter(([k]) => k === 'ace' || k === 'df')
+  let best = null
+  for (let j = 1; j <= top.length; j++) {
+    const lines = [top.slice(0, j), [...top.slice(j), ...tail]]
+    if (!lines[1].length) continue   // that is one line, already judged above
+    const w = Math.max(...lines.map(l => lineW(l, LEGEND_SIZE)))
+    if (!best || w < best.w) best = { w, lines }
   }
-  let bottom = shown.filter(([k]) => k === 'ace' || k === 'df')
-  const last = lines[lines.length - 1]
-  while (last.length > 1) {
-    const moved = [last[last.length - 1], ...bottom]
-    const kept = last.slice(0, -1)
-    if (!fits(moved) || Math.max(lineW(kept), lineW(moved)) >= Math.max(lineW(last), lineW(bottom))) break
-    last.pop()
-    bottom = moved
-  }
-  return [...lines, bottom].filter(line => line.length)
+  if (!best) return { lines: [shown], size: LEGEND_SIZE * Math.max(0.5, oneScale) }
+  if (best.w <= room) return { lines: best.lines, size: LEGEND_SIZE }
+  const widest = best.lines.reduce((a, l) => (lineW(l, LEGEND_SIZE) > lineW(a, LEGEND_SIZE) ? l : a))
+  const fx = widest.length * 12 + Math.max(0, widest.length - 1) * S.sm
+  return { lines: best.lines, size: LEGEND_SIZE * Math.max(0.5, (room - fx) / (best.w - fx)) }
 }
 
 /* The two column heads. NEVER "…" (owner, restated 2026-09-24): each name
@@ -512,8 +523,8 @@ function StatNames({ left, right }) {
 function NavButton({ dir, jump = false, disabled, onPress }) {
   const back = dir === 'back'
   const icon = (
-    <Ionicons name={back ? 'chevron-back' : 'chevron-forward'} size={20}
-              color={disabled ? C.faint : C.ink} />
+    <Ionicons name={back ? 'chevron-back' : 'chevron-forward'} size={22}
+              color={disabled ? C.faint : jump ? C.greenBright : C.ink} />
   )
   return (
     <Pressable onPress={onPress} disabled={disabled} hitSlop={4}
@@ -521,7 +532,8 @@ function NavButton({ dir, jump = false, disabled, onPress }) {
                accessibilityLabel={jump ? (back ? 'Previous big moment' : 'Next big moment')
                                         : (back ? 'Previous point' : 'Next point')}
                accessibilityState={{ disabled }}
-               style={({ pressed }) => [s.navBtn, pressed && s.navBtnPressed, disabled && s.navBtnOff]}>
+               style={({ pressed }) => [s.navBtn, jump && s.navBtnJump, pressed && s.navBtnPressed,
+                                        disabled && s.navBtnOff]}>
       {jump ? (
         <View style={s.doubleArrow}>{icon}<View style={s.secondArrow}>{icon}</View></View>
       ) : icon}
@@ -529,11 +541,13 @@ function NavButton({ dir, jump = false, disabled, onPress }) {
   )
 }
 
-function Legend({ color, label }) {
+function Legend({ color, label, size = LEGEND_SIZE }) {
+  // Sized here, scaled with the reader's text size once (allowFontScaling
+  // off), so the width legendLines measured is the width drawn.
   return (
     <View style={s.legendItem}>
       <View style={[s.legendBox, { backgroundColor: color }]} />
-      <Text style={s.legendText}>{label}</Text>
+      <Text style={[s.legendText, { fontSize: size * FONT_SCALE }]} allowFontScaling={false}>{label}</Text>
     </View>
   )
 }
@@ -678,21 +692,35 @@ const s = StyleSheet.create({
   /* Arrows and pill in one row, stretched to one height: the pill's two
      fixed lines set it, the arrows take it. */
   legendRow: { alignItems: 'center' },
-  navRow: { flexDirection: 'row', gap: S.sm, height: 40 },
+  navRow: { flexDirection: 'row', gap: S.sm, height: 52 },
   /* Four equal buttons across the whole line (owner, 2026-09-24). */
+  /* A TRANSPORT DECK (owner, 2026-09-24: taller, squarer, better edge and
+     fill). Keys, not outlines: the raised control fill against the sheet's
+     card, a lit edge, and a darker 2pt lip underneath so each reads as
+     something pressed. The OUTER pair — big moments — carry the brand's green
+     edge and bright arrows; the one-point steps stay neutral, so which button
+     does more is visible before it is pressed. */
   navBtn: {
-    flex: 1, minWidth: NAV_MIN, borderRadius: R.pill, borderWidth: 1, borderColor: C.borderOn,
-    backgroundColor: C.card, alignItems: 'center', justifyContent: 'center',
+    flex: 1, minWidth: NAV_MIN, borderRadius: R.sm,
+    backgroundColor: C.control, borderWidth: 1, borderColor: C.borderLit,
+    borderBottomWidth: 2, borderBottomColor: C.sunken,
+    alignItems: 'center', justifyContent: 'center',
   },
+  navBtnJump: { borderColor: C.greenMid, borderBottomColor: C.greenDeep },
   // Two chevrons drawn into each other: ».
   doubleArrow: { flexDirection: 'row' },
   secondArrow: { marginLeft: -11 },
-  navBtnPressed: { backgroundColor: C.greenDeep },
-  navBtnOff: { opacity: 0.4 },
+  // Pressed sinks: the deep green fill, the lip gone flat.
+  navBtnPressed: { backgroundColor: C.greenDeep, borderBottomWidth: 1, marginTop: 1 },
+  // Nowhere to go: back to the sheet's own card, a quiet edge, no lip.
+  navBtnOff: { backgroundColor: C.card, borderColor: C.border, borderBottomColor: C.border, borderBottomWidth: 1 },
+  /* The key to the ticks is information, not a control, so it is set INTO
+     the sheet — the sunken page colour with a hairline — where the buttons
+     below stand out of it. Same corner as the buttons. */
   legendPill: {
-    flexShrink: 0, justifyContent: 'center', gap: 3,
-    paddingHorizontal: S.md, paddingVertical: 6,
-    borderWidth: 1, borderColor: C.borderOn, borderRadius: R.pill,
+    flexShrink: 0, justifyContent: 'center', gap: 4,
+    paddingHorizontal: S.md, paddingVertical: 8,
+    backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: R.sm,
   },
   legendLine: { flexDirection: 'row', justifyContent: 'center', gap: S.sm, minHeight: leading(15) },
   /* A FIXED HEIGHT, EMPTY OR NOT (owner, 2026-09-24: "everything is
