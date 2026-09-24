@@ -92,3 +92,12 @@ export function fitPillSize(pills, { avail, family, size, tierRatio = 0.8,
   if (unit <= 0) return size
   return Math.max(min, Math.min(size, (avail - fixed) / unit))
 }
+
+/* THE WIDTH OF TEXT AS DRAWN at `drawnSize` — a font size that ALREADY
+   includes the reader's text scale (allowFontScaling off, fontSize set to
+   base × FONT_SCALE). textWidth above applies FONT_SCALE itself, so handing
+   it a drawn size scaled twice and overstated every width by that factor
+   (2026-09-24: names shrunk more than needed, tab margins too wide). */
+export function drawnWidth(text, family, drawnSize) {
+  return textWidth(text, family, drawnSize / FONT_SCALE)
+}

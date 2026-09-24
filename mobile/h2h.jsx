@@ -42,7 +42,7 @@ import { FitText, FlagSlot, PlayerName } from './cards'
 import { nameLines } from './names'
 import { shortDay } from './dates'
 import { FONT_SCALE, leading } from './fontScale.js'
-import { textWidth } from './measure'
+import { drawnWidth } from './measure'
 import { FORM_GAP, compareRows, formChipText, formChips, formDetail, formGrid, orient, roundWord, shortEvent, singlesOnly }
   from './h2hView.js'
 import { ScrollPane } from './scrollPane'
@@ -151,7 +151,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   const TAB_PAD = 4
   const TAB_RULE = 1.5
   const TAB_MAX = 18 * FONT_SCALE
-  const tabUnit = tabs.map(([, l]) => textWidth(l, 'Archivo_700Bold', 1))
+  const tabUnit = tabs.map(([, l]) => drawnWidth(l, 'Archivo_700Bold', 1))
   const tabSize = (() => {
     if (!tabsW) return 13 * FONT_SCALE
     const room = tabsW - 1 - tabs.length * 2 * TAB_PAD - (tabs.length - 1) * TAB_RULE   // padding, rules
@@ -462,8 +462,11 @@ function TwoLineName({ name, end = false, won = null }) {
     const base = style.fontSize
     if (!w || !text) return base
     // The ✓ / ✗ rides on the surname line, so that line's width counts it.
-    const need = textWidth(text, style.fontFamily, base * FONT_SCALE) + (style === s.whoName && mark ? MARK_W : 0)
-    return need <= w - 1 ? base : Math.max(base * 0.7, (base * (w - 1)) / need)
+    const need = drawnWidth(text, style.fontFamily, base * FONT_SCALE) + (style === s.whoName && mark ? MARK_W : 0)
+    // NO FLOOR (owner, 2026-09-24: "Kovačevi / ć"): a name that needs to be
+    // smaller than 70% to fit is made smaller, never broken across lines.
+    // 3% held back for kerning, which the width tables do not carry.
+    return need <= 0.97 * (w - 1) ? base : (base * 0.97 * (w - 1)) / need
   }
   const line = (text, style, extra) => {
     const size = fit(text, style)
@@ -579,7 +582,7 @@ const s = StyleSheet.create({
   labelPress: { alignItems: 'center', justifyContent: 'center' },
   label: { ...T.tiny, color: C.faint, width: leading(74), textAlign: 'center' },
   // "form" is four letters; the room belongs to the squares either side.
-  labelNarrow: { width: Math.ceil(textWidth('form', 'Archivo_500Medium', 11 * FONT_SCALE)) + 10, fontSize: 11 * FONT_SCALE },
+  labelNarrow: { width: Math.ceil(drawnWidth('form', 'Archivo_500Medium', 11 * FONT_SCALE)) + 10, fontSize: 11 * FONT_SCALE },
 
   figureWrap: { flex: 1, minWidth: 0, alignItems: 'flex-end' },
   figureWrapEnd: { alignItems: 'flex-start' },
