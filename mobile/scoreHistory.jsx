@@ -91,12 +91,14 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
   // history under its own schedule-entry id; the response shape is identical.
   const entryOnly = !!entry && !entry.match_id
   const live = entry?.status === 'live'
-  // The app's fetch cache is keyed by string; a live match's history grows, so
-  // its key rolls every 15 s and a re-render picks up the new points. A
-  // finished match's history is fixed and its key is too.
-  const bucket = live ? Math.floor(Date.now() / 15000) : 'f'
+  /* ONE KEY PER MATCH, live or not. A live match's key used to roll every
+     15s to force a refresh — but a NEW key is a different answer to useApi,
+     which drops what is on screen until it lands: the whole timeline blinked
+     out to a spinner mid-scrub (owner, 2026-09-24). The effect below re-asks
+     on the SAME key instead, which keeps the current history showing while
+     the next one loads. */
   const key = visible && entry
-    ? (entryOnly ? `hist:e:${entry.id}:${bucket}` : `hist:${entry.draw_id}:${entry.match_id}:${bucket}`)
+    ? (entryOnly ? `hist:e:${entry.id}` : `hist:${entry.draw_id}:${entry.match_id}`)
     : null
   const hist = useApi(key, () => entryOnly
     ? getEntryScoreHistory(entry.id)
@@ -113,6 +115,21 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
      to re-render. */
   const refetchRef = useRef(hist.refetch)
   refetchRef.current = hist.refetch
+  /* A FRESH COPY ON EVERY OPEN, behind whatever is cached. With one key per
+     match, a match last seen live would otherwise reopen on that old history
+     (useApi serves a cached key without asking) — and, finished, never be
+     asked again. Same key, so the cached copy stays on screen meanwhile. */
+  // Only when something cached is showing: with nothing cached, useApi's
+  // own first fetch is already under way. Reset on close, so the next open
+  // refreshes again.
+  const opened = useRef(null)
+  const hasData = !!hist.data
+  useEffect(() => {
+    if (!key) { opened.current = null; return }
+    if (opened.current === key) return
+    opened.current = key
+    if (hasData) refetchRef.current()
+  }, [key, hasData])
   useEffect(() => {
     if (!visible) return undefined
     const again = data?.labels_pending ? 2000 : live ? 10000 : null
