@@ -888,6 +888,8 @@ const u = StyleSheet.create({
   badgeGap: { width: leading(26) },
   flagSlot: { flexDirection: 'row', alignItems: 'center', gap: leading(3) },
   nameSlot: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  // Pushes a trailing chip to the slot's end: its column.
+  trailPush: { flex: 1, minWidth: 0 },
   flagGlyph: { fontSize: 13, lineHeight: leading(16) },
   // Same footprint as a flag, so a name never moves because a country is
   // missing. 4:3, like the flag images the site uses.
@@ -993,6 +995,12 @@ export function entryChipWidth(entryType) {
   const label = ENTRY_LABEL[code] || code
   const size = label.length > 2 ? 9.5 : 11
   return textWidth(label, 'Archivo_700Bold', size) + 2 * leading(5) + 2 + leading(6) + 2
+}
+
+/* The round chip's width as drawn, for the line that holds its slot open. */
+export function roundChipWidth(round) {
+  if (!round) return 0
+  return textWidth(String(round), 'Archivo_700Bold', 11) + 2 * leading(5) + 2 + leading(6) + 2
 }
 
 export function EntryChip({ entryType }) {
@@ -1265,7 +1273,12 @@ export function withFlags(text, glyphs) {
   const parts = String(text).split(' / ')
   return parts.map((part, i) => (glyphs[i] ? `${glyphs[i]} ${part}` : part)).join(' / ')
 }
-export function PlayerName({ name, doubles = false, shrinkOnly = false, style, after = null, afterW = null, flags = null }) {
+/* `trail`: an entry chip, right-aligned at the END of the name's slot — its
+   column, just left of the round (owner, 2026-09-24). `reserve`: room at the
+   slot's end the name MAY borrow — the empty round slot on the line that
+   has none — pushing the chip right only by as much as the name needs. */
+export function PlayerName({ name, doubles = false, shrinkOnly = false, style, after = null, afterW = null,
+                             trail = null, trailW = 0, reserve = 0, flags = null }) {
   /* shrinkOnly: a USERNAME. It cannot be initialised or reduced to a surname —
      "koounderpressure" has neither — but the last two rungs still apply:
      shrink first, and only then "…". Truncating a handle is the same loss as
@@ -1283,62 +1296,51 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style, a
   let text = forms[0]
   let fontSize = size
   let flagged = glyphs.length > 0
+  let borrowed = 0
   if (avail != null) {
-    // A point of slack: kerning is not in the tables, and a name that is
-    // right on the line should shorten rather than gamble.
-    // 3% held back as well: with iOS's own shrink no longer behind this (see
-    // below), the tables' missing kerning must be covered here.
-    // `afterW`: what the caller put after the name, measured; else the 🤞's.
-    const room = 0.97 * (avail - 1 - (after ? (afterW ?? AFTER_PX * FONT_SCALE) : 0))
-    /* THE FLAGS GO BEFORE THE TYPE SHRINKS (owner, 2026-09-17): every rung
-       is tried wearing the flags, then every rung without them, and only
-       then does the shortest rung shrink. A flag is decoration; a name that
-       cannot be read is not a name. */
+    // A point of slack, and 3% for kerning the tables do not carry.
+    // `afterW`: what rides right after the name, measured; else the 🤞's.
+    const fixed = (after ? (afterW ?? AFTER_PX * FONT_SCALE) : 0) + trailW
+    const base = avail - 1 - fixed - reserve
     // Emoji grow with the reader's text size, as the letters do.
     const flagW = glyphs.filter(Boolean).length * FLAG_PX * (size / 15) * FONT_SCALE
     const rungs = glyphs.length
       ? [...forms.map(f => ({ f, flagged: true })), ...forms.map(f => ({ f, flagged: false }))]
       : forms.map(f => ({ f, flagged: false }))
-    /* FLAGS STAY, THE TYPE GIVES A LITTLE FIRST (owner, 2026-09-24: "look
-       at all those players with no flags"). Dropping every flag the moment a
-       name missed full size by a point stripped most doubles rows once the
-       flags were counted at their true width. Now a rung that fits wearing
-       its flags at up to 15% smaller is taken at that size; only a name that
-       cannot keep its flags even then loses them. */
-    const scaleFor = (r) => {
-      const fw = r.flagged ? flagW : 0
-      const tw = textWidth(r.f, family, size)
-      if (tw + fw <= room) return 1
-      // Flags scale with the type, so the whole line scales together.
-      const k = room / (tw + fw)
-      return k >= FLAG_KEEP ? k : null
-    }
-    /* In order: any flagged rung at full size (a shorter form keeps the
-       flags without shrinking); then flagged rungs shrunk up to FLAG_KEEP;
-       then unflagged rungs at full size. */
-    let fits = null, k = 1
-    const flaggedRungs = rungs.filter(r => r.flagged)
-    fits = flaggedRungs.find(r => scaleFor(r) === 1) || null
-    if (!fits) {
-      for (const r of flaggedRungs) {
-        const got = scaleFor(r)
-        if (got != null) { fits = r; k = got; break }
+    /* The ladder, for a given room. FLAGS STAY, THE TYPE GIVES A LITTLE
+       FIRST (owner, 2026-09-24): a flagged form at full size; a flagged form
+       shrunk to FLAG_KEEP; an unflagged form at full size; the shortest form
+       shrunk to fit — no floor and never "…". */
+    const solve = (room) => {
+      const scaleFor = (r) => {
+        const fw = r.flagged ? flagW : 0
+        const tw = textWidth(r.f, family, size)
+        if (tw + fw <= room) return 1
+        const k = room / (tw + fw)
+        return k >= FLAG_KEEP ? k : null
       }
+      const flaggedRungs = rungs.filter(r => r.flagged)
+      let r = flaggedRungs.find(x => scaleFor(x) === 1)
+      if (r) return { text: r.f, flagged: true, k: 1, full: true }
+      for (const x of flaggedRungs) {
+        const got = scaleFor(x)
+        if (got != null) return { text: x.f, flagged: true, k: got, full: false }
+      }
+      r = rungs.filter(x => !x.flagged).find(x => scaleFor(x) === 1)
+      if (r) return { text: r.f, flagged: false, k: 1, full: !glyphs.length }
+      const t = forms[forms.length - 1]
+      return { text: t, flagged: false, k: Math.max(6 / size, room / textWidth(t, family, size)), full: false }
     }
-    if (!fits) fits = rungs.filter(r => !r.flagged).find(r => scaleFor(r) === 1) || null
-    if (fits) {
-      text = fits.f
-      flagged = fits.flagged
-      if (k < 1) fontSize = size * k
-    } else {
-      flagged = false
-      // Every rung is too wide: the shortest one, shrunk TO FIT. No floor and
-      // never "…" — a cut name is a name nobody can read, and the user ruled
-      // it out outright (2026-09-04, "Auger-Aliassi…" on a four-set row).
-      text = forms[forms.length - 1]
-      const need = textWidth(text, family, size)
-      fontSize = Math.max(6, (size * room) / need)
+    const width = (x) => (textWidth(x.text, family, size) + (x.flagged ? flagW : 0)) * x.k
+    let got = solve(0.97 * base)
+    if (!got.full && reserve > 0) {
+      // Not at its best in its own column: borrow the reserve, as much as needed.
+      got = solve(0.97 * (base + reserve))
+      borrowed = Math.min(reserve, Math.max(0, width(got) / 0.97 - base))
     }
+    text = got.text
+    flagged = got.flagged
+    if (got.k < 1) fontSize = size * got.k
   }
 
   return (
@@ -1358,6 +1360,9 @@ export function PlayerName({ name, doubles = false, shrinkOnly = false, style, a
         {flagged ? withFlags(text, glyphs) : text}
       </Text>
       {after}
+      {trail ? <View style={u.trailPush} /> : null}
+      {trail}
+      {reserve > 0 ? <View style={{ width: Math.max(0, reserve - borrowed - 4) }} /> : null}
     </View>
   )
 }
