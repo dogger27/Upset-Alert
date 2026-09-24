@@ -36,6 +36,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { getH2H, getPairOdds, getPlayerForm } from './api'
 import { FitText, FlagSlot, PlayerName } from './cards'
 import { nameLines } from './names'
@@ -73,6 +74,20 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
      overlay on an overlay, so the detail arrives as a line of the card
      itself, under the form it belongs to. */
   const [open, setOpen] = useState(null)
+  /* SWIPE BETWEEN MATCHES (owner, 2026-09-24), the arrows' twin: left for
+     the next match, right for the one before. Sideways only — 20pt across
+     before it is ours, and any 12pt of vertical first hands the finger to
+     the scroll — so reading down the sheet never changes the match. On
+     only where the arrows are (the draw); the schedule's sheet has none. */
+  const swipe = useMemo(() => Gesture.Pan()
+    .enabled(!!(onPrev || onNext))
+    .activeOffsetX([-20, 20])
+    .failOffsetY([-12, 12])
+    .runOnJS(true)
+    .onEnd(e => {
+      if ((e.translationX < -60 || e.velocityX < -600) && onNext) onNext()
+      else if ((e.translationX > 60 || e.velocityX > 600) && onPrev) onPrev()
+    }), [onPrev, onNext])
   // Stepping to another match (the arrows) closes the result that was open.
   useEffect(() => { setOpen(null) }, [a?.te_slug, b?.te_slug])
   const d = h2h.data
@@ -87,6 +102,11 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
       {h2h.loading && !d ? <Loading /> : null}
       {h2h.error ? <Text style={s.err}>Couldn’t load the head-to-head.</Text> : null}
 
+      {/* Its own gesture root: a Modal is a separate native tree, outside
+          the app's GestureHandlerRootView. */}
+      <GestureHandlerRootView style={s.swipeRoot}>
+      <GestureDetector gesture={swipe}>
+      <View style={s.swipeRoot}>
       {view ? (
         <ScrollPane contentContainerStyle={s.body}>
           {/* THE TWO NAMES, WITH THE RECORD BETWEEN THEM. Each name wears its
@@ -235,6 +255,9 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
           )}
         </ScrollPane>
       ) : null}
+      </View>
+      </GestureDetector>
+      </GestureHandlerRootView>
     </Sheet>
   )
 }
@@ -341,6 +364,9 @@ function TwoLineName({ name, end = false }) {
 
 const s = StyleSheet.create({
   body: { paddingBottom: S.md, gap: S.md },
+  // Shrinks like the ScrollPane it wraps, never grows: the sheet sizes to
+  // its content, and flex: 1 there would collapse to nothing.
+  swipeRoot: { flexShrink: 1, minHeight: 0 },
 
   /* The headline. The record is the widest thing in the row and holds the
      middle; the names take what is left, evenly, and shrink into it. */
