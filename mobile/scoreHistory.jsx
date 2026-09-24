@@ -695,7 +695,7 @@ function Stats({ stats, pos, topIsP1, left, right }) {
           <View style={s.barL}><View style={[s.barFill, { backgroundColor: C.h2hP1, width: `${lt ? pct(lw, lt) : 0}%` }]} /></View>
           <Text style={s.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{label}</Text>
           <View style={s.barR}><View style={[s.barFill, { backgroundColor: C.h2hP2, width: `${rt ? pct(rw, rt) : 0}%` }]} /></View>
-          <Text style={[s.statNum, { textAlign: 'right' }, lead(lt ? pct(lw, lt) : null, rt ? pct(rw, rt) : null) === 1 && s.statBetter]}>{rt ? `${pct(rw, rt)}%` : '—'}</Text>
+          <Text style={[s.statNum, lead(lt ? pct(lw, lt) : null, rt ? pct(rw, rt) : null) === 1 && s.statBetter]}>{rt ? `${pct(rw, rt)}%` : '—'}</Text>
         </View>
       ))}
     </View>
@@ -752,7 +752,7 @@ function SofaStats({ rows, topIsP1, loading, left, right, splitSuspect }) {
               <View style={s.barL}><View style={[s.barFill, { backgroundColor: C.h2hP1, width: `${width(l)}%` }]} /></View>
               <Text style={s.statLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{r.label}</Text>
               <View style={s.barR}><View style={[s.barFill, { backgroundColor: C.h2hP2, width: `${width(rt)}%` }]} /></View>
-              <Text style={[s.statNum, { textAlign: 'right' }, win === 1 && s.statBetter]}>{ratio ? `${pct(rt)}%` : rt[0]}</Text>
+              <Text style={[s.statNum, win === 1 && s.statBetter]}>{ratio ? `${pct(rt)}%` : rt[0]}</Text>
             </View>
           </View>
         )
@@ -886,7 +886,9 @@ const s = StyleSheet.create({
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   /* As wide as the widest value it can hold — "100%" — at the reader's text
      size. A fixed 40 cut it to "10…" at a larger size (owner, 2026-09-24). */
-  statNum: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', width: NUM_W + 8,
+  // Centred in its column, both sides (owner, 2026-09-24), so the figures —
+  // plated or not — stand in two straight columns down the table.
+  statNum: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold', width: NUM_W + 8, textAlign: 'center',
              paddingHorizontal: 4, borderWidth: 1, borderColor: 'transparent', borderRadius: 4, overflow: 'hidden' },
   // The row's winner: the Bio tab's blue plate.
   statBetter: { color: BETTER.ink, backgroundColor: BETTER.plate, borderColor: BETTER.line },
