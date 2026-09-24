@@ -15,14 +15,13 @@
  */
 
 import { useMemo, useState } from 'react'
-import { Ionicons } from '@expo/vector-icons'
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getLeagues, getPredictors } from './api'
 import { nameForms } from './names'
 import { predictorsMessage } from './lock'
 import { shortRound } from './rounds'
 import { useApi } from './useApi'
-import { C, S, T } from './theme'
+import { C, R, S, T } from './theme'
 import { leading } from './fontScale'
 import { Loading } from './ui'
 
@@ -117,7 +116,6 @@ export function PredictorsBody({ active = true, drawId, match, meId, initialLeag
      here the sheet carries a scope pill of its own, and the reader can move
      it. null is Global. */
   const [leagueId, setLeagueId] = useState(initialLeagueId)
-  const [choosing, setChoosing] = useState(false)
   const key = active && match ? `predictors:${drawId}:${match.id}:${leagueId ?? 'global'}` : null
   const q = useApi(key, () => getPredictors(drawId, match.id, leagueId))
   const d = q.data
@@ -133,7 +131,6 @@ export function PredictorsBody({ active = true, drawId, match, meId, initialLeag
     for (const l of mine) for (const m of l.members || []) if (m.id !== meId) ids.add(m.id)
     return ids
   }, [mine, meId])
-  const scopeName = leagueId == null ? 'Global' : (d?.league_name ?? mine.find(l => l.id === leagueId)?.name ?? 'League')
 
   const fieldSize = (d?.correct?.length || 0) + (d?.incorrect?.length || 0)
   /* WITHHELD IS NOT EMPTY, and the difference is the whole sheet. Under
@@ -152,28 +149,23 @@ export function PredictorsBody({ active = true, drawId, match, meId, initialLeag
         {/* THE SCOPE PILL: which group these picks are from. Square-cornered,
             unlike the round/status pills above, so it reads as a control and
             not a label; a tap opens the reader's leagues beneath it. */}
-        <View style={s.scopeRow}>
-          <Pressable onPress={() => setChoosing(c => !c)} style={({ pressed }) => [s.scope, pressed && s.scopeDown]}
-                     accessibilityRole="button" accessibilityLabel={`Picks from ${scopeName}. Change group`}>
-            <Text style={s.scopeText} numberOfLines={1}>{scopeName}</Text>
-            <Ionicons name={choosing ? 'chevron-up' : 'chevron-down'} size={14} color={C.muted} />
-          </Pressable>
-        </View>
-        {choosing ? (
-          <View style={s.chooser}>
-            {[{ id: null, name: 'Global' }, ...mine].map(l => {
-              const on = (l.id ?? null) === (leagueId ?? null)
-              return (
-                <Pressable key={l.id ?? 'global'} onPress={() => { setLeagueId(l.id ?? null); setChoosing(false) }}
-                           style={({ pressed }) => [s.choice, on && s.choiceOn, pressed && s.scopeDown]}
-                           accessibilityRole="button" accessibilityState={{ selected: on }}>
-                  <Text style={[s.choiceText, on && s.choiceTextOn]} numberOfLines={1}>{l.name}</Text>
-                  {on ? <Ionicons name="checkmark" size={16} color={C.greenBright} /> : null}
-                </Pressable>
-              )
-            })}
-          </View>
-        ) : null}
+        {/* THE GROUPS AS A SLIDING ROW (owner, 2026-09-24), not a drop-down:
+            Global, then each of the reader's leagues, the chosen one lit; a
+            row longer than the screen scrolls sideways under the thumb. */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                    style={s.scopeScroll} contentContainerStyle={s.scopeRow}>
+          {[{ id: null, name: 'Global' }, ...mine].map(l => {
+            const on = (l.id ?? null) === (leagueId ?? null)
+            return (
+              <Pressable key={l.id ?? 'global'} onPress={() => setLeagueId(l.id ?? null)}
+                         style={({ pressed }) => [s.scopeChip, on && s.scopeChipOn, pressed && !on && s.scopeDown]}
+                         accessibilityRole="button" accessibilityState={{ selected: on }}
+                         accessibilityLabel={`Picks from ${l.name}`}>
+                <Text style={[s.scopeText, on && s.scopeTextOn]}>{l.name}</Text>
+              </Pressable>
+            )
+          })}
+        </ScrollView>
 
         {q.loading && !d ? <Loading /> : null}
         {q.error ? <Text style={s.err}>Couldn’t load predictions.</Text> : null}
@@ -266,10 +258,13 @@ function Column({ label, tone, people, fieldSize, meId, friends, cap, showPicks 
 
   return (
     <View style={s.column}>
-      <Text style={[s.colLabel, { color: tone }]}>{label}</Text>
-      <Text style={s.colCount}>
-        <Text style={[s.colCountNum, { color: tone }]}>{list.length}</Text>
-        {fieldSize ? `  ${pct}%` : ''}
+      {/* "Right (7 users, 33%)" — the count and share in brackets after the
+          word (owner, 2026-09-24). */}
+      <Text style={[s.colLabel, { color: tone }]}>
+        {label}
+        <Text style={s.colCount}>
+          {` (${list.length} ${list.length === 1 ? 'user' : 'users'}${fieldSize ? `, ${pct}%` : ''})`}
+        </Text>
       </Text>
       {!list.length ? <Text style={s.none}>No one</Text> : null}
       {groups.map(g => (
@@ -277,13 +272,13 @@ function Column({ label, tone, people, fieldSize, meId, friends, cap, showPicks 
           {showPicks ? (
             <Text style={s.pickHead}>
               {g.picked ? shortP(g.picked) : 'No pick'}
-              <Text style={s.pickHeadCount}>{`  ${g.total}`}</Text>
+              <Text style={s.pickHeadCount}>{` (${g.total})`}</Text>
             </Text>
           ) : null}
           {g.people.map(p => {
             const me = meId != null && p.id === meId
             return (
-              <Text key={p.id} style={[s.person, me && s.personMe]}>
+              <Text key={p.id} style={[s.person, showPicks && s.personIndented, me && s.personMe]}>
                 {p.username}{me ? ' 🤞' : ''}
               </Text>
             )
@@ -356,13 +351,15 @@ const s = StyleSheet.create({
   columns: { flexDirection: 'row', alignItems: 'flex-start' },
   column: { flex: 1, minWidth: 0, gap: 2 },
   columnRule: { width: 1, alignSelf: 'stretch', backgroundColor: C.border, marginHorizontal: S.md },
-  colLabel: { ...T.h2, lineHeight: leading(22) },
-  colCount: { ...T.small, color: C.faint, marginBottom: S.sm, fontVariant: ['tabular-nums'] },
-  colCountNum: { fontFamily: 'Archivo_700Bold' },
+  colLabel: { ...T.h2, lineHeight: leading(22), marginBottom: S.sm },
+  // Inside the heading's line; fontVariant carries, margins do not.
+  colCount: { ...T.small, color: C.faint, fontVariant: ['tabular-nums'] },
   pickGroup: { marginBottom: S.sm, gap: 2 },
   pickHead: { ...T.tiny, color: C.muted, fontFamily: 'Archivo_700Bold', marginBottom: 2 },
   pickHeadCount: { color: C.faint, fontFamily: 'Archivo_500Medium' },
   person: { ...T.small, color: C.inkBody },
+  // Under their pick, indented, so the list reads as belonging to it.
+  personIndented: { paddingLeft: S.md },
   personMe: { color: C.clay, fontFamily: 'Archivo_700Bold' },
   more: { ...T.small, fontFamily: 'Archivo_700Bold', paddingVertical: 4 },
   /* A pick and its backers. The header is a touch target, so it takes the
@@ -392,25 +389,17 @@ const s = StyleSheet.create({
   // The same 🤞 the score cards use for a pick, at the same size.
   // Indented under their heading, so an open bucket reads as belonging to it.
   err: { ...T.small, color: C.bad, textAlign: 'center', paddingVertical: S.md },
-  scopeRow: { flexDirection: 'row', marginTop: S.sm, marginBottom: S.xs },
-  scope: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 4, paddingHorizontal: 10, borderRadius: 3,
-    borderWidth: 1, borderColor: C.borderLit, backgroundColor: C.raised,
-  },
+
   scopeDown: { borderColor: C.greenBright },
-  scopeText: { ...T.smallMed, color: C.ink },
-  chooser: {
-    borderWidth: 1, borderColor: C.borderOn, borderRadius: 3, backgroundColor: C.raised,
-    marginBottom: S.sm, overflow: 'hidden',
+  scopeScroll: { flexGrow: 0, marginTop: S.sm, marginBottom: S.xs },
+  scopeRow: { flexDirection: 'row', gap: S.sm, paddingRight: S.sm },
+  scopeChip: {
+    paddingVertical: 6, paddingHorizontal: 12, borderRadius: R.pill,
+    borderWidth: 1.5, borderColor: C.borderLit, backgroundColor: C.raised,
   },
-  choice: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 1, borderColor: C.border,
-  },
-  choiceOn: { backgroundColor: C.card },
-  choiceText: { ...T.body, color: C.ink },
-  choiceTextOn: { fontFamily: 'Archivo_700Bold', color: C.greenBright },
+  scopeChipOn: { backgroundColor: C.greenDeep, borderColor: C.greenBright },
+  scopeText: { ...T.smallMed, color: C.inkBody },
+  scopeTextOn: { color: '#ffffff', fontFamily: 'Archivo_700Bold' },
   /* A ruled footer: a hairline across the sheet above "Close", and less
      height than the button used to take on its own. */
   close: {

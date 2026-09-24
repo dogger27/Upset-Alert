@@ -138,7 +138,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
     : prettyDuration(hd?.duration_min && hd.duration_min <= 900 ? hd.duration_min : null)
   const nMeet = view?.meetings?.length
   const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `Meetings (${nMeet})` : 'Meetings'],
-                ...(predictMatch ? [['prediction', 'Prediction']] : []),
+                ...(predictMatch ? [['prediction', 'Predictions']] : []),
                 ...(played ? [['history', 'Points'], ['stats', 'Stats']] : [])]
 
   /* THE TABS, AS LARGE AS THE ROW ALLOWS (owner, 2026-09-24): one type size
