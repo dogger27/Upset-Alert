@@ -155,7 +155,12 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   const tabSize = (() => {
     if (!tabsW) return 13 * FONT_SCALE
     const room = tabsW - 1 - tabs.length * 2 * TAB_PAD - (tabs.length - 1) * TAB_RULE   // padding, rules
-    return Math.max(8, Math.min(TAB_MAX, (room - 1) / tabUnit.reduce((a, b) => a + b, 0)))
+    /* 8% HELD BACK (owner, 2026-09-24: "Meetings (1)" wrapped). Fitted to
+       the last point, a label sat in a cell exactly its measured width, and
+       iOS draws a hair wider than the width tables (kerning, the parentheses)
+       — so it broke onto a second line. The spare is shared out equally as
+       margin, so the tabs still look even. */
+    return Math.max(6, Math.min(TAB_MAX, (0.92 * (room - 1)) / tabUnit.reduce((a, b) => a + b, 0)))
   })()
 
   return (
