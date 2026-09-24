@@ -1146,10 +1146,18 @@ function TournStamps({ stamps, name, small }) {
 function LineTags({ first, alt, when, flag, tournament }) {
   if (!when && !flag && !tournament) return null
   return (
+    <>
+    {/* THE POSTPONED PILL IS CENTRED ON THE MATCH (owner, 2026-09-24), across
+        the whole box rather than in the clock's slot, with its word centred
+        in it. Its own layer, so the tags either side keep their places. */}
+    {flag ? (
+      <View style={s.miniTagCentre} pointerEvents="none">
+        <LineTag first={first} alt={alt} style={s.miniTagFlag} textStyle={s.miniTagFlagText}>{flag}</LineTag>
+      </View>
+    ) : null}
     <View style={s.miniTagRow} pointerEvents="none">
       <View style={s.miniTagSide}>
-        {flag ? <LineTag first={first} alt={alt} style={s.miniTagFlag} textStyle={s.miniTagFlagText}>{flag}</LineTag>
-          : when ? <LineTag first={first} alt={alt} textStyle={s.miniTagWhen}>{when}</LineTag> : null}
+        {!flag && when ? <LineTag first={first} alt={alt} textStyle={s.miniTagWhen}>{when}</LineTag> : null}
       </View>
       <View style={[s.miniTagSide, s.miniTagSideRight]}>
         {tournament ? (
@@ -1157,6 +1165,7 @@ function LineTags({ first, alt, when, flag, tournament }) {
         ) : null}
       </View>
     </View>
+    </>
   )
 }
 
@@ -1748,8 +1757,10 @@ const s = StyleSheet.create({
      shrinking to fit the half-strip they get. */
   miniTagWhen: { color: C.gold },
   // The postponed pill: an outlined box on the border, in the warning ink.
-  miniTagFlag: { borderWidth: 1, borderColor: C.warn, borderRadius: 4, overflow: 'hidden' },
-  miniTagFlagText: { color: C.warn, fontFamily: 'Archivo_700Bold' },
+  miniTagCentre: { position: 'absolute', top: -9, left: 0, right: 0, alignItems: 'center', zIndex: 2 },
+  miniTagFlag: { borderWidth: 1, borderColor: C.warn, borderRadius: 4, overflow: 'hidden', paddingHorizontal: 6, alignItems: 'center' },
+  // A line box the pill's own inner height, so iOS cannot seat the word low.
+  miniTagFlagText: { color: C.warn, fontFamily: 'Archivo_700Bold', textAlign: 'center', lineHeight: 14 },
   miniTagTourn: { flexShrink: 1, color: C.gold },
   miniTagHalf: { position: 'absolute', left: 0, right: 0, height: 8 },
   // A clear rule between matches (owner, 2026-09-17): two lines of box score
