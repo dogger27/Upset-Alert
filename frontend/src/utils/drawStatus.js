@@ -1,4 +1,5 @@
 const ONE_DAY_MS = 86400000
+const WEEK_GAP_MS = 3 * ONE_DAY_MS
 
 /* How long a finished week may wear the "Last Week" heading. Two weeks covers
  * a fortnight-long Slam finishing as the next week's events start, and stops
@@ -74,14 +75,14 @@ export function computeCohortInfo(draws) {
 
   /* Split a list, sorted by end_date, wherever consecutive draws are more
      than a day apart. Used twice below, on two different groupings. */
-  const runs = (sorted) => {
+  const runs = (sorted, maxGap = ONE_DAY_MS) => {
     const out = []
     let start = 0
     for (let i = 1; i <= sorted.length; i++) {
       const isLast = i === sorted.length
       const gap = isLast ? Infinity
         : new Date(sorted[i].end_date + 'T00:00:00') - new Date(sorted[i - 1].end_date + 'T00:00:00')
-      if (isLast || gap > ONE_DAY_MS) {
+      if (isLast || gap > maxGap) {
         out.push(sorted.slice(start, i))
         start = i
       }
@@ -136,7 +137,14 @@ export function computeCohortInfo(draws) {
   //   since it was written.
   const today = todayPacific()
   const done = withDate.filter(t => t.status !== 'active' && t.end_date < today)
-  const weeks = runs([...done].sort(byEnd))
+  /* A WEEK'S FINALS CAN LAND DAYS APART, so its run allows a wider gap than
+     an event's halves do (owner, 2026-09-24: "why is Guadalajara not in last
+     week?"). Guadalajara finished Saturday the 19th and SP Open Monday the
+     21st — the same week — but a 1-day gap split them into two runs, only
+     SP's was "last week", and Guadalajara fell into no section at all.
+     Three days joins a week's Saturday, Sunday and rain-delayed Monday
+     finals; consecutive weeks finish ~7 days apart, so they still split. */
+  const weeks = runs([...done].sort(byEnd), WEEK_GAP_MS)
   const lastWeek = weeks[weeks.length - 1]
   const recent = lastWeek && daysBetween(lastWeek[lastWeek.length - 1].end_date, today)
     <= LAST_WEEK_MAX_AGE_DAYS
