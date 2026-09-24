@@ -51,6 +51,9 @@ const CAPTION_SIZE = 14 * FONT_SCALE
 const NAV_MIN = 38
 const NUM_W = Math.ceil(textWidth('100%', 'Archivo_700Bold', 11 * FONT_SCALE)) + 3
 
+// The ticks drawn twice as tall: the moments that end something.
+const TALL = new Set(['set', 'match'])
+
 const KINDS = [
   ['bp', 'break point', 'Break point'], ['break', 'break', 'Break'],
   ['sp', 'set point', 'Set point'], ['set', 'set', 'Set'],
@@ -336,7 +339,7 @@ export function ScoreHistoryBody({ visible, entry, part = 'all' }) {
             above the score, right-justified over the set columns (owner,
             2026-09-24). A fixed line whenever there is a history, so the card
             never moves as it changes. */}
-        {timeline && max > 0 && (
+        {part === 'all' && max > 0 && (
           <View style={s.captionRow} accessibilityLiveRegion="polite"
                 onLayout={e => setCaptionW(e.nativeEvent.layout.width)}>
             {/* NOT FitText: its adjustsFontSizeToFit backstop, in a box with
@@ -350,11 +353,26 @@ export function ScoreHistoryBody({ visible, entry, part = 'all' }) {
             ) : null}
           </View>
         )}
-        {timeline && <MatchCard e={row} />}
+        {/* In the match sheet the header already says the score. */}
+        {part === 'all' && <MatchCard e={row} />}
         {hist.loading && !data ? <Loading /> : null}
         {hist.error ? <Text style={s.err}>Couldn’t load the match history.</Text> : null}
         {timeline && max > 0 && (
           <>
+            {part === 'timeline' && max > 0 && (
+              <View style={[s.captionRow, s.captionCentre]} accessibilityLiveRegion="polite"
+                    onLayout={e => setCaptionW(e.nativeEvent.layout.width)}>
+                {/* NOT FitText: its adjustsFontSizeToFit backstop, in a box with
+                    room to spare, drops to its floor on iOS — "Hurkacz: Match" at
+                    a few points (owner's phone, 2026-09-24; the same trap as the
+                    day strip's caption). Full size, measured here, and smaller
+                    only when the words genuinely do not fit the line. */}
+                {caption ? (
+                  <Text style={[s.caption, captionSize < CAPTION_SIZE && { fontSize: captionSize }]}
+                        allowFontScaling={false}>{caption}</Text>
+                ) : null}
+              </View>
+            )}
             <Scrub max={max} pos={atEnd ? max : pos} onChange={v => setPos(v >= max ? null : v)}
                    onHold={setHolding} markers={markers} topIsP1={topIsP1}
                    top={initialsOf(a[0]?.name)} bottom={initialsOf(b[0]?.name)} />
@@ -507,7 +525,7 @@ function Scrub({ max, pos, onChange, markers, topIsP1, top, bottom, onHold }) {
           return (
             <View key={`${m.kind}${m.i}${m.adj ? 'a' : ''}`}
                   pointerEvents="none"
-                  style={[s.tick, up ? s.tickUp : s.tickDown, { left, backgroundColor: TICK[m.kind] }]} />
+                  style={[s.tick, up ? s.tickUp : s.tickDown, TALL.has(m.kind) && (up ? s.tickTallUp : s.tickTallDown), { left, backgroundColor: TICK[m.kind] }]} />
           )
         })}
         <View style={[s.thumb, { left: x - THUMB / 2 }]} pointerEvents="none" />
@@ -738,6 +756,10 @@ const s = StyleSheet.create({
   tick: { position: 'absolute', width: 3, height: 9, borderRadius: 1 },
   tickUp: { top: 8 },
   tickDown: { bottom: 8 },
+  /* A SET OR THE MATCH WON: twice the height (owner, 2026-09-24), grown away
+     from the rail so the end nearest it lines up with every other tick. */
+  tickTallUp: { height: 18, top: -1 },
+  tickTallDown: { height: 18, bottom: -1 },
   thumb: {
     position: 'absolute', width: THUMB, height: THUMB, borderRadius: THUMB / 2,
     backgroundColor: C.ink, borderWidth: 2, borderColor: C.card,
@@ -797,6 +819,8 @@ const s = StyleSheet.create({
     height: leading(20), flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
     marginBottom: -S.sm, paddingRight: S.xs,   // sits tight on the card it describes
   },
+  // The match sheet's timeline: centred over the slider (owner, 2026-09-24).
+  captionCentre: { justifyContent: 'center', paddingRight: 0, marginBottom: -S.xs },
   caption: { fontFamily: 'Archivo_700Bold', fontSize: CAPTION_SIZE, color: C.ink, flexShrink: 0 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendBox: { width: 8, height: 8, borderRadius: 2 },
