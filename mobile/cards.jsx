@@ -361,6 +361,18 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
      stamp names a tour and both are shown. logos.js::stampsFor — the
      schedule's tournament heading asks the same question. */
   const stamps = stampsFor(list)
+  /* A LONE TIER PLATE HANGS OVER ITS ROW (owner, 2026-09-24: "remove more of
+     the space between the text rows"). At 31pt the plate is half again the
+     name's 20pt line, so it — not the name — set the title row's height, and
+     that difference sat as air between the name and the city line. It now
+     overhangs the row equally above and below, the row is the name's height,
+     and the body's top padding grows by just enough to keep the plate inside
+     the card. Two stacked plates (a joint event) or a Slam crest keep the
+     row they need; so do the small week cards, which are already at their
+     floor. */
+  const loneOverhang = !compact && stamps.length === 1
+    && !tierStamp({ tour: 'ATP', tier: stamps[0].category }).crest
+    ? Math.max(0, (CAP + 16 - leading(20)) / 2) : 0
   /* ONE DECISION, TWO HALVES. The surface and the ink that has to read on it
      are chosen together and in one place — see CardSkinContext above and the
      ramp's derivation in theme.js. `rule` is the footer's hairline: it lifts
@@ -418,7 +430,8 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
               pill's own colour did not go away: it is the plate under the
               tier stamp. */}
           <CardTitle name={name} />
-          <View style={[u.stampStack, compact && u.stampStackTight]}>
+          <View style={[u.stampStack, compact && u.stampStackTight,
+                        loneOverhang ? { marginVertical: -loneOverhang } : null]}>
             {stamps.map(d => (
               <TierBadge key={d.id} tour={d.gender === 'F' ? 'WTA' : 'ATP'}
                          tier={d.category} name={name} small={compact} />
@@ -454,7 +467,8 @@ export function TourCard({ draws, name, children, footer, href, corner, compact 
             edge, outside the body's padding; the band is now three plates the
             caller puts on a row of its own choosing, so the body is the whole
             card again. */}
-        <View style={[u.body, compact && u.bodyTight]}>
+        <View style={[u.body, compact && u.bodyTight,
+                      loneOverhang ? { paddingTop: Math.max(5, loneOverhang + 1) } : null]}>
           {href
             ? <CardLink href={href} style={[u.bodyLink, compact && u.bodyLinkTight]}
                         pressedOpacity={0.75}>{body}</CardLink>
