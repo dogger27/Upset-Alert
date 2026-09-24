@@ -270,11 +270,12 @@ export function TierBadge({ tour, tier, name, small }) {
        on the same dark. A dark fill cannot get far from a dark card (1.5:1
        is its ceiling here), so the plate goes 70% toward black, which is also
        the most its own lettering has ever had (9.7:1 ATP, 11.9:1 WTA), and
-       the EDGE does the separating: the tour's bright ink, 5.6:1 and 6.2:1
-       on the card, past the 3:1 a non-text outline needs. */
+       the EDGE does the separating. 1pt in the tour's own border colour —
+       3.0:1 on the card, the 3:1 a non-text outline needs. The bright ink at
+       1.5pt (5.6–6.2:1) was "too thick and bright" (owner, same day). */
     <View style={[u.stamp, u.stampSet, small && u.stampSmall,
                   { height: plate, backgroundColor: mix(TOUR[key].plate, '#000000', 0.7),
-                    borderWidth: 1.5, borderColor: TOUR[key].fg }]}>
+                    borderWidth: 1, borderColor: TOUR[key].line }]}>
       <Text style={[u.stampMark, set]} allowFontScaling={false}>{mark}</Text>
       <Text style={[u.stampNum, set, { marginLeft: size * 0.06 }]} allowFontScaling={false}>{num}</Text>
     </View>
