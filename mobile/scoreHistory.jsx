@@ -318,7 +318,7 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
                 <View style={s.legendPill}>
                   {(() => {
                     const shown = KINDS.filter(([k]) => markers.some(m => m.kind === k))
-                    return [shown.slice(0, 3), shown.slice(3)].map((line, n) => (
+                    return legendLines(shown).map((line, n) => (
                       <View key={n} style={s.legendLine}>
                         {line.map(([k, label]) => <Legend key={k} color={TICK[k]} label={label} />)}
                       </View>
@@ -435,6 +435,27 @@ function Scrub({ max, pos, onChange, markers, topIsP1, top, bottom, onHold }) {
       </View>
     </View>
   )
+}
+
+/* THE LEGEND'S TWO LINES, EVENED OUT (owner, 2026-09-24): ace and DF always
+   on the bottom line; the score moments (break point, break, set, match) on
+   top, with the last of them moved down while that makes the wider line
+   narrower. "break point · break · ace / DF" made the pill as wide as its
+   longest line; "break point · break / ace · DF" is not. Widths from the
+   font's own tables, at the legend's size — only their ratio matters. */
+function legendLines(shown) {
+  const itemW = ([, label]) => 8 + 4 + textWidth(label, 'Archivo_500Medium', 11)
+  const lineW = (items) => items.reduce((w, it) => w + itemW(it), 0) + Math.max(0, items.length - 1) * S.sm
+  const top = shown.filter(([k]) => k !== 'ace' && k !== 'df')
+  let bottom = shown.filter(([k]) => k === 'ace' || k === 'df')
+  while (top.length > 1) {
+    const moved = [top[top.length - 1], ...bottom]
+    const kept = top.slice(0, -1)
+    if (Math.max(lineW(kept), lineW(moved)) >= Math.max(lineW(top), lineW(bottom))) break
+    top.pop()
+    bottom = moved
+  }
+  return [top, bottom]
 }
 
 function NavButton({ dir, disabled, onPress }) {
