@@ -258,6 +258,9 @@ _UNSUB_PREF_LABELS = {
     # just could not say what it had done. tests/test_email_unsubscribe_header
     # now fails if a footer names a type this map cannot.
     "standout_pick": "standout-pick emails",
+    "league_member_joined": "new-member emails",
+    # Address-level, not a preference: see email_suppression.INVITES.
+    "league_invites": "league invitation emails",
 }
 
 
@@ -301,6 +304,14 @@ async def _apply_unsubscribe(token: str) -> Optional[str]:
     from app.core.security import verify_unsubscribe_token
     from app.database import AsyncSessionLocal
     from app.models.notification import NotificationOptOut, NotificationPreference
+
+    from app.core.security import verify_email_unsubscribe_token
+    by_address = verify_email_unsubscribe_token(token)
+    if by_address:
+        from app.services.email_suppression import opt_out_address
+        email, scope = by_address
+        await opt_out_address(email, scope)
+        return _UNSUB_PREF_LABELS.get(scope, "the selected email type")
 
     result = verify_unsubscribe_token(token)
     if not result:

@@ -8,6 +8,8 @@ from typing import Optional
 import resend
 
 from app.core.config import settings
+from app.core.security import create_email_unsubscribe_token, create_unsubscribe_token
+from app.services.email_suppression import INVITES
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +72,8 @@ _BODY_CLOSE = '</div>'
 _FOOTER_MARK = "<!--ua-footer-->"
 
 
-def _footer(unsubscribe_url: str = "", unsubscribe_label: str = "") -> str:
+def _footer(unsubscribe_url: str = "", unsubscribe_label: str = "",
+            reason: str = "") -> str:
     """Who sent this and why it arrived; and the way out, when there is one.
 
     The identity lines are not filler. "Your message contains 25% of text"
@@ -90,9 +93,10 @@ def _footer(unsubscribe_url: str = "", unsubscribe_label: str = "") -> str:
         f'text-align:center;font-family:sans-serif;font-size:12px;line-height:1.7;'
         f'color:#9ca3af">'
         f'Upset Alert &middot; fantasy tennis predictions'
-        f'<br>You are receiving this because you have an account at '
-        f'<a href="{BASE_URL}" style="color:#9ca3af;text-decoration:underline">upsetalert.ca</a>.'
-        f'{manage}</div>'
+        + (f'<br>{reason}' if reason else
+           f'<br>You are receiving this because you have an account at '
+           f'<a href="{BASE_URL}" style="color:#9ca3af;text-decoration:underline">upsetalert.ca</a>.')
+        + f'{manage}</div>'
     )
 
 
@@ -145,7 +149,7 @@ def subject_line(text: str) -> str:
 
 
 def _finalise(params: "resend.Emails.SendParams", unsubscribe_url: str = "",
-              unsubscribe_label: str = "") -> dict:
+              unsubscribe_label: str = "", footer_reason: str = "") -> dict:
     """Add the footer to any message, and the unsubscribe headers to a
     subscription one. Pure and idempotent, so it is testable without a
     network and cannot append the footer twice.
@@ -158,7 +162,7 @@ def _finalise(params: "resend.Emails.SendParams", unsubscribe_url: str = "",
         out["subject"] = subject_line(out["subject"])
     html = out.get("html") or ""
     if html and _FOOTER_MARK not in html:
-        out["html"] = html + _footer(unsubscribe_url, unsubscribe_label)
+        out["html"] = html + _footer(unsubscribe_url, unsubscribe_label, footer_reason)
     if unsubscribe_url:
         # RFC 8058. List-Unsubscribe-Post is a PROMISE that this URL answers a
         # POST of exactly that body and unsubscribes without asking the reader
@@ -240,7 +244,9 @@ def _send(params: resend.Emails.SendParams) -> Optional[Exception]:
 async def send_async(params: resend.Emails.SendParams, *,
                      unsubscribe_url: str = "",
                      unsubscribe_label: str = "",
-                     essential: bool = False) -> None:
+                     essential: bool = False,
+                     category: str = "",
+                     footer_reason: str = "") -> None:
     if not settings.resend_api_key:
         return  # Email disabled in this environment (no RESEND_API_KEY set)
     if settings.environment != "production":
@@ -250,13 +256,13 @@ async def send_async(params: resend.Emails.SendParams, *,
         logger.info("Skipping email send (ENVIRONMENT=%r, not 'production'): %r", settings.environment, params.get("subject"))
         return
     from app.services.system_log import app_log
-    params = _finalise(params, unsubscribe_url, unsubscribe_label)
+    params = _finalise(params, unsubscribe_url, unsubscribe_label, footer_reason)
     # An address that bounced, or whose reader reported us as spam, is not
     # written to again: each repeat is scored against the domain, and the
     # domain's score is what files everyone else's mail as spam.
     from app.services.email_suppression import allowed
     wanted = list(params.get("to") or [])
-    to_send = await allowed(wanted, essential)
+    to_send = await allowed(wanted, essential, category)
     if not to_send:
         logger.info("Email not sent — every recipient suppressed: %r → %s",
                     params.get("subject"), wanted)
@@ -422,6 +428,7 @@ async def send_member_joined(
     league_id: int,
     new_username: str,
     new_full_name: Optional[str] = None,
+    owner_user_id: Optional[int] = None,
 ) -> None:
     from html import escape
 
@@ -445,7 +452,11 @@ async def send_member_joined(
             View League
           </a>
         {_BODY_CLOSE}{_WRAP_CLOSE}""",
-    })
+    }, **({
+        "unsubscribe_url": (f"{API_BASE}/unsubscribe?token="
+                            f"{create_unsubscribe_token(owner_user_id, 'league_member_joined')}"),
+        "unsubscribe_label": "new-member emails",
+    } if owner_user_id else {}))
 
 
 async def send_new_user_notification(
@@ -1767,7 +1778,12 @@ async def send_league_added_existing(
             View League
           </a>
         {_BODY_CLOSE}{_WRAP_CLOSE}""",
-    })
+    },
+        unsubscribe_url=(f"{API_BASE}/unsubscribe?token="
+                         f"{create_email_unsubscribe_token(to_email, INVITES)}"),
+        unsubscribe_label="league invitation emails",
+        category=INVITES,
+        footer_reason="You are receiving this because another player added your upsetalert.ca account to their league.")
 
 
 async def send_league_invite_new_user(
@@ -1800,4 +1816,9 @@ async def send_league_invite_new_user(
             Create Account
           </a>
         {_BODY_CLOSE}{_WRAP_CLOSE}""",
-    })
+    },
+        unsubscribe_url=(f"{API_BASE}/unsubscribe?token="
+                         f"{create_email_unsubscribe_token(to_email, INVITES)}"),
+        unsubscribe_label="league invitation emails",
+        category=INVITES,
+        footer_reason="You are receiving this because an Upset Alert player entered this address to invite you. You have no account, and are emailed only when someone invites you.")
