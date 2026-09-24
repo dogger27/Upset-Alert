@@ -131,6 +131,8 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
      for every label, the largest at which all of them fit side by side with
      just TAB_PAD either side, and each cell as wide as its own word. Measured
      in bold, the chosen tab's weight, so choosing one never overflows it. */
+  // Every cell starts at its padding and rule; only the WORD's share grows,
+  // so a short word is never squeezed below its own width.
   const TAB_PAD = 4
   const TAB_MAX = 18 * FONT_SCALE
   const tabUnit = tabs.map(([, l]) => textWidth(l, 'Archivo_700Bold', 1))
@@ -180,7 +182,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
         <View style={s.tabs} onLayout={e => setTabsW(e.nativeEvent.layout.width)}>
           {tabs.map(([k, label], i) => (
             <Pressable key={k} onPress={() => setTab(k)} hitSlop={4}
-                       style={[s.tabBtn, { flexGrow: tabUnit[i], flexBasis: 0 },
+                       style={[s.tabBtn, { flexGrow: tabUnit[i], flexBasis: 2 * TAB_PAD + (i > 0 ? 1 : 0) },
                                i > 0 && s.tabBtnRule, shownTab === k && s.tabBtnOn]}
                        accessibilityRole="tab" accessibilityState={{ selected: shownTab === k }}>
               <Text style={[s.tab, shownTab === k && s.tabOn, { fontSize: tabSize }]}
