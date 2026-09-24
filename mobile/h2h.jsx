@@ -43,7 +43,7 @@ import { nameLines } from './names'
 import { shortDay } from './dates'
 import { FONT_SCALE, leading } from './fontScale.js'
 import { drawnWidth } from './measure'
-import { FORM_GAP, compareRows, formChipText, formChips, formDetail, formGrid, orient, roundWord, shortEvent, singlesOnly }
+import { FORM_GAP, compareRows, leadLine, meetingOnSurface, formChipText, formChips, formDetail, formGrid, orient, roundWord, shortEvent, singlesOnly }
   from './h2hView.js'
 import { ScrollPane } from './scrollPane'
 import { Sheet } from './sheet'
@@ -137,6 +137,10 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
     ? (hd?.started_at ? `Started ${clockOf(hd.started_at)}` : null)
     : prettyDuration(hd?.duration_min && hd.duration_min <= 900 ? hd.duration_min : null)
   const nMeet = view?.meetings?.length
+  // The Meetings tab's surface switch; the draw's surface, as a word.
+  const [meetOnSurface, setMeetOnSurface] = useState(false)
+  const surfaceWord = surface ? String(surface).charAt(0).toUpperCase() + String(surface).slice(1).toLowerCase() : null
+  const shownMeetings = (view?.meetings || []).filter(m => !meetOnSurface || meetingOnSurface(m, surface))
   const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `Meetings (${nMeet})` : 'Meetings'],
                 ...(predictMatch ? [['prediction', 'Predictions']] : []),
                 ...(played ? [['history', 'Points'], ['stats', 'Stats']] : [])]
@@ -323,13 +327,33 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
                 {/* THE MEETINGS. One card each, with a bar down the winner's own
                     side in the winner's own colour: a column of green edges says one
                     player has owned this rivalry before a single score is read. */}
-                {view.meetings.length ? (
-                  <>
+                {/* THE RECORD AS A SENTENCE, and a switch between every meeting
+                    and those on this draw's surface (owner, 2026-09-24):
+                    "Ruse leads 2-1" · [All | Hard]. The sentence follows the
+                    switch. */}
+                {view.meetings.length && surfaceWord ? (
+                  <View style={s.meetHead}>
                     <Text style={s.section}>
-                      {view.meetings.length === 1 ? 'Their one meeting'
-                        : `All ${view.meetings.length} meetings`}
+                      {leadLine(shownMeetings, a?.name, b?.name, n => nameLines(n)[1]) ||
+                        `Never met on ${surfaceWord.toLowerCase()}`}
                     </Text>
-                    {view.meetings.map((m, i) => {
+                    <View style={s.surfSwitch}>
+                      {[[false, 'All'], [true, surfaceWord]].map(([on, label]) => (
+                        <Pressable key={label} onPress={() => setMeetOnSurface(on)} hitSlop={4}
+                                   accessibilityRole="button" accessibilityState={{ selected: meetOnSurface === on }}
+                                   style={[s.surfBtn, meetOnSurface === on && s.surfBtnOn]}>
+                          <Text style={[s.surfText, meetOnSurface === on && s.surfTextOn]}
+                                allowFontScaling={false}>{label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                ) : view.meetings.length ? (
+                  <Text style={s.section}>{leadLine(view.meetings, a?.name, b?.name, n => nameLines(n)[1])}</Text>
+                ) : null}
+                {shownMeetings.length ? (
+                  <>
+                    {shownMeetings.map((m, i) => {
                       const side = m.side === 0 ? SIDE.left : SIDE.right
                       return (
                         <View key={`${m.year}-${m.tournament}-${i}`}
@@ -354,7 +378,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
                     })}
                   </>
                 ) : (
-                  <Text style={s.none}>They have never met.</Text>
+                  <Text style={s.none}>{view.meetings.length ? `No meetings on ${String(surfaceWord).toLowerCase()} yet.` : 'They have never met.'}</Text>
                 )}
                 </>
               ) : null}
@@ -643,6 +667,13 @@ const s = StyleSheet.create({
   detailLine: { ...T.smallMed, color: C.inkBody },
   detailMeta: { ...T.tiny, color: C.faint },
 
+  meetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: S.sm },
+  // All | Hard: two joined segments, the chosen one lit like the tab bar's.
+  surfSwitch: { flexDirection: 'row', borderWidth: 1.5, borderColor: C.borderLit, borderRadius: R.sm, overflow: 'hidden' },
+  surfBtn: { paddingVertical: 5, paddingHorizontal: 12, backgroundColor: C.sunken },
+  surfBtnOn: { backgroundColor: C.greenDeep },
+  surfText: { fontFamily: 'Archivo_700Bold', fontSize: 13 * FONT_SCALE, color: C.faint },
+  surfTextOn: { color: '#ffffff' },
   section: { ...T.smallBold, color: C.muted, marginTop: S.xs },
   /* A card the bar belongs to rather than a card with a bar in it: the edge is
      drawn inside the rounded frame, and `row-reverse` puts it on the right

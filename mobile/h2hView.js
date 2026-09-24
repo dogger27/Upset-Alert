@@ -310,3 +310,27 @@ export function formDetail(m) {
            m.surface].filter(Boolean).join(' · '),
   }
 }
+
+/* IS THIS MEETING ON THE DRAW'S SURFACE — the Meetings tab's switch (owner,
+   2026-09-24). Tennis Explorer calls an indoor hard court "Indoors" (or
+   "I.hard"), and a reader asking about hard counts it, the same reading
+   onSurface above gives the splits. */
+export function meetingOnSurface(m, surface) {
+  if (!surface) return true
+  const want = String(surface).trim().toLowerCase()
+  const got = String(m?.surface || '').trim().toLowerCase().replace(/^i\./, '')
+  return got === want || (want === 'hard' && got === 'indoors')
+}
+
+/* THE RECORD AS A SENTENCE: "Ruse leads 2-1", "Level at 1-1". `meetings`
+   are oriented (side 0 = the left player, as orient() gives them); names by
+   surname, the way the headline reads them. */
+export function leadLine(meetings, leftName, rightName, surnameOf) {
+  const w = [0, 0]
+  for (const m of meetings || []) if (m.side === 0 || m.side === 1) w[m.side] += 1
+  if (!w[0] && !w[1]) return null
+  if (w[0] === w[1]) return `Level at ${w[0]}-${w[1]}`
+  const lead = w[0] > w[1] ? 0 : 1
+  const who = surnameOf(lead === 0 ? leftName : rightName)
+  return `${who} leads ${Math.max(...w)}-${Math.min(...w)}`
+}

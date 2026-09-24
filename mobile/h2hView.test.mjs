@@ -268,4 +268,15 @@ assert.equal(shortEvent('Mallorca challenger'), 'Mallorca CH')
 assert.equal(eventTitle('ITF M15 Cancun'), 'M15 Cancun')
 assert.equal(shortEvent('WTA'), 'WTA')
 
+// The meetings headline and the surface switch.
+{
+  const { leadLine, meetingOnSurface } = await import('./h2hView.js')
+  const sur = n => n.split(' ').pop()
+  const ms = [{ side: 1, surface: 'Indoors' }, { side: 1, surface: 'Clay' }, { side: 0, surface: 'Hard' }]
+  assert.equal(leadLine(ms, 'Anna Bondar', 'Elena-Gabriela Ruse', sur), 'Ruse leads 2-1')
+  assert.equal(leadLine(ms.slice(1), 'Anna Bondar', 'Elena-Gabriela Ruse', sur), 'Level at 1-1')
+  assert.equal(ms.filter(m => meetingOnSurface(m, 'Hard')).length, 2)   // Indoors counts as hard
+  assert.equal(ms.filter(m => meetingOnSurface(m, 'Clay')).length, 1)
+}
+
 console.log('ok — h2hView')
