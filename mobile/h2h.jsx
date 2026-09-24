@@ -257,7 +257,12 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
                             column for "#258"; here that width is better spent on
                             the squares, which is what the row is for. */}
                         <Form form={formA.data} side={0} open={open} onOpen={setOpen} />
-                        <FitText style={[s.label, s.labelNarrow]} min={8} align="center">form</FitText>
+                        {/* A PLAIN TEXT OF ITS OWN WIDTH, not FitText: FitText's slot is
+                            flex: 1, so the word took a full third of the row
+                            and each side's squares only a third too — why
+                            raising their size ceiling changed nothing (owner,
+                            2026-09-24, asked three times). */}
+                        <Text style={[s.label, s.labelNarrow]} allowFontScaling={false}>form</Text>
                         <Form form={formB.data} side={1} end open={open} onOpen={setOpen} />
                       </View>
                     ) : null}
@@ -562,7 +567,7 @@ const s = StyleSheet.create({
   labelPress: { alignItems: 'center', justifyContent: 'center' },
   label: { ...T.tiny, color: C.faint, width: leading(74), textAlign: 'center' },
   // "form" is four letters; the room belongs to the squares either side.
-  labelNarrow: { width: leading(42) },
+  labelNarrow: { width: Math.ceil(textWidth('form', 'Archivo_500Medium', 11 * FONT_SCALE)) + 10, fontSize: 11 * FONT_SCALE },
 
   figureWrap: { flex: 1, minWidth: 0, alignItems: 'flex-end' },
   figureWrapEnd: { alignItems: 'flex-start' },
