@@ -13,7 +13,7 @@
  * end of a set, the match's end — derived by scoreTimeline.js (the site's
  * module, copied). Each hangs toward the player who earned it.
  */
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PanResponder, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { getEntryScoreHistory, getMatchScoreHistory, getMatchStatistics } from './api'
 import { MatchCard } from './scorecard'
@@ -82,6 +82,24 @@ export function ScoreHistorySheet({ visible, onClose, entry }) {
     ? getEntryScoreHistory(entry.id)
     : getMatchScoreHistory(entry.draw_id, entry.match_id))
   const data = hist.data
+  /* ASK AGAIN WHILE THE ACES ARE ON THEIR WAY. The server waits 1.5s for the
+     point labels, then answers without them and says labels_pending while its
+     Sofascore request finishes — that request queues behind the live-score
+     poller, one call every 2s across the whole server, so on a busy day it
+     outruns the wait. The site re-asks every 2s (ScoreHistoryPopup); the app
+     did not, and a finished match's answer is cached for the life of the app,
+     so its aces and double faults never came (owner, 2026-09-24). A live match
+     also re-asks every 10s on its own, rather than whenever the page happens
+     to re-render. */
+  const refetchRef = useRef(hist.refetch)
+  refetchRef.current = hist.refetch
+  useEffect(() => {
+    if (!visible) return undefined
+    const again = data?.labels_pending ? 2000 : live ? 10000 : null
+    if (!again) return undefined
+    const t = setTimeout(() => refetchRef.current(), again)
+    return () => clearTimeout(t)
+  }, [data, live, visible])
 
   // null = fully right = follow live / show final. An index otherwise.
   const [pos, setPos] = useState(null)
