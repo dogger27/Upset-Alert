@@ -197,13 +197,17 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
             (the key the rest of the sheet is read with), sized by measurement
             rather than truncated. */}
         <View style={s.head}>
-          {/* FROM THE SCREEN'S EDGE IN (owner, 2026-09-24): the reader's 🤞
-              outermost, then the flag, the name, and the result's ✓ or ✗
-              right beside it — all over the side's underline. */}
+          {/* THE FLAG AND 🤞 ABOVE THE NAME (owner, 2026-09-25), so the name
+              has the column's whole width: "Fokina" beside its flag and 🤞
+              was shrunk to make room for them. From the screen's edge in,
+              the 🤞 outermost, then the flag; the ✓ or ✗ stays beside the
+              name — all over the side's underline. */}
           <View style={s.who}>
-            <View style={s.whoLine}>
+            <View style={s.whoMarks}>
               {pickSide === 0 ? <PickFingers /> : null}
               <FlagSlot codes={[a?.nationality]} />
+            </View>
+            <View style={s.whoLine}>
               <TwoLineName name={a?.name} won={status?.winner == null ? null : status.winner === 0} />
             </View>
             <View style={[s.rule, { backgroundColor: SIDE.left.line }]} />
@@ -213,10 +217,12 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
             {durText ? <Text style={s.midDur} allowFontScaling={false}>{durText}</Text> : null}
           </View>
           <View style={[s.who, s.whoEnd]}>
-            <View style={[s.whoLine, s.whoLineEnd]}>
-              <TwoLineName name={b?.name} end won={status?.winner == null ? null : status.winner === 1} />
+            <View style={[s.whoMarks, s.whoLineEnd]}>
               <FlagSlot codes={[b?.nationality]} />
               {pickSide === 1 ? <PickFingers /> : null}
+            </View>
+            <View style={[s.whoLine, s.whoLineEnd]}>
+              <TwoLineName name={b?.name} end won={status?.winner == null ? null : status.winner === 1} />
             </View>
             <View style={[s.rule, { backgroundColor: SIDE.right.line }]} />
           </View>
@@ -603,6 +609,7 @@ const s = StyleSheet.create({
   whoEnd: { alignItems: 'flex-end' },
   whoLine: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'stretch' },
   whoLineEnd: { justifyContent: 'flex-end' },
+  whoMarks: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'stretch', marginBottom: -2 },
   whoName: { ...T.bodyBold, color: C.ink, flexShrink: 1 },
   whoNames: { flex: 1, minWidth: 0 },
 
