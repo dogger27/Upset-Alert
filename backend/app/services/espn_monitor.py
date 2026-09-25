@@ -571,9 +571,16 @@ class ESPNMonitor:
         active = not (sofa_authoritative() and live_feed_healthy())
         if active != self._active:
             if active:
-                await app_log("warning", "espn_monitor",
+                # INFO: the failover is the handling, not the fault. Whatever
+                # stopped Sofascore raised its own alarm (the 403 breaker, the
+                # live poller's persistent-error escalation, the authority
+                # revocation); this line only says the standby took over.
+                from app.services.sofascore import blocked_for
+                await app_log("info", "espn_monitor",
                               "ESPN scoring ACTIVE — Sofascore is not delivering "
-                              "(not authoritative, feed stale or blocked)")
+                              "(not authoritative, feed stale or blocked)",
+                              detail={"authoritative": sofa_authoritative(),
+                                      "blocked_seconds": round(blocked_for())})
             else:
                 await app_log("info", "espn_monitor",
                               "ESPN scoring standing by — Sofascore is delivering")

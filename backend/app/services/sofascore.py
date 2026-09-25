@@ -512,8 +512,16 @@ async def _get(path: str) -> dict:
 
 
 async def _record_direct_block() -> None:
-    """Switch to the proxy and write down that direct is banned."""
+    """Switch to the proxy and write down that direct is banned.
+
+    NO PROXY, NO SWITCH. With nothing configured there is no other way out:
+    flipping the route and announcing "switched to the residential proxy"
+    reported a failover that never happened (2026-09-25), alongside the 403
+    warning that is the real news. The caller's breaker handles the refusal.
+    """
     global _egress_direct
+    if not _current_proxy():
+        return
     from datetime import datetime, timezone as _tz
     from app.database import AsyncSessionLocal
     from app.services import settings as st

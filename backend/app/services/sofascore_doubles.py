@@ -1125,7 +1125,11 @@ class SofascoreDoublesMonitor:
                 # only refills the log. Sleep until it actually reopens.
                 from app.services.sofascore import blocked_for
                 delay = max(self.BLOCKED_BACKOFF, blocked_for() + 30)
-                await app_log("warning", "sofascore_doubles",
+                # INFO, NOT A WARNING. The client already raised the one alarm
+                # for this refusal ("Sofascore returned 403 — all requests
+                # paused"); every consumer echoing it turned one ban into four
+                # warnings in the digest (2026-09-25). The pause is the handling.
+                await app_log("info", "sofascore_doubles",
                               "Doubles sweep paused",
                               detail={"paused_minutes": round(delay / 60),
                                       "reason": str(exc)},
