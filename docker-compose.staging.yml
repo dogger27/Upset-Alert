@@ -76,12 +76,16 @@ services:
       - VAPID_PRIVATE_KEY=
       - ENVIRONMENT=development
       - OUTBOUND_NOTIFICATIONS=false
-      - SOFASCORE_LIVE_ENABLED=true
-      - SOFASCORE_LIVE_FORCE=true
+      # OFF (owner, 2026-09-25: "our site DEPENDS on us not being blocked").
+      # Staging shares this host's IP with production; every Sofascore
+      # request it makes spends production's budget. Turn on only for a
+      # deliberate, bounded test — and never leave it running.
+      - SOFASCORE_LIVE_ENABLED=false
+      - SOFASCORE_LIVE_FORCE=false
       # Shadow results sweep — writes sofa_* columns only, so ESPN and Sofascore
       # can be diffed over a real tournament before either is trusted to own a
       # winner. See scripts/sofa_diff.py.
-      - SOFASCORE_RESULTS_ENABLED=true
+      - SOFASCORE_RESULTS_ENABLED=false
       # Serve Sofascore's results instead of ESPN's. This is what makes staging
       # a real test of "could Sofascore carry this alone" rather than a copy of
       # production with an extra column — ESPN does not run here at all, so its
@@ -89,7 +93,7 @@ services:
       - SOFASCORE_AUTHORITATIVE=true
       # Score doubles too. They have no draw and never will; this fills in the
       # rows on the order of play that ESPN could never bring to life.
-      - SOFASCORE_DOUBLES_ENABLED=true
+      - SOFASCORE_DOUBLES_ENABLED=false
       # The order of play is what this environment exists to test, and with the
       # scrapers off its schedule froze on the day the database was seeded.
       # These are static PDFs on the tours' own hosts, not the rate-limited
