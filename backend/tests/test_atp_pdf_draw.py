@@ -94,3 +94,38 @@ def test_a_transliteration_is_the_same_person():
     assert A._same_person("Elmer Møller", "MOLLER", "Elmer")
     assert A._same_person("Kwon Soon-woo", "KWON", "Soonwoo")
     assert not A._same_person("Martin Damm", "NAKASHIMA", "Brandon")
+
+
+def test_a_challenge_is_info_and_its_stand_down_survives_a_restart(tmp_path, monkeypatch):
+    """A 429 from protennislive is an expected state: logged at info, and the
+    six-hour stand-down is on disk, so a restarted process asks nobody."""
+    import asyncio
+    import httpx
+    from app.services import system_log
+
+    calls, logged = [], []
+
+    class Client:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url):
+            calls.append(url)
+            return NS(status_code=429, content=b"<html>challenge</html>")
+
+    async def fake_log(level, *a, **k):
+        logged.append(level)
+
+    monkeypatch.setattr(httpx, "AsyncClient", Client)
+    monkeypatch.setattr(system_log, "app_log", fake_log)
+    monkeypatch.setattr(A, "_CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(A, "_blocked_until", 0.0)
+
+    assert asyncio.run(A.fetch_pdf(329, 2026)) is None
+    assert logged == ["info"] and len(calls) == 1
+    assert (tmp_path / A._BLOCK_FILE).exists()
+
+    # A restart: the in-memory stand-down is gone, the marker is not.
+    monkeypatch.setattr(A, "_blocked_until", 0.0)
+    assert asyncio.run(A.fetch_pdf(330, 2026)) is None
+    assert len(calls) == 1 and logged == ["info"]

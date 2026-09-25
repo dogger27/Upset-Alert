@@ -33,6 +33,12 @@ apart earned a Cloudflare challenge page on this host — the host the order of
 play also comes from. So each sheet is cached on disk for an hour, and a
 challenge (an HTML answer where a PDF was asked for) stands the whole source
 down for six hours rather than being retried into.
+
+A challenge is an ordinary state of that host, not a fault: nothing is lost
+(the draw falls through to Tennis Explorer and Wikipedia), so it is logged at
+info. The stand-down is kept on disk, in wall-clock time, so a backend
+restart inside the six hours does not go straight back to a host that has
+just refused us (2026-09-25: a restart after the morning's backfill did).
 """
 import hashlib
 import io
@@ -55,7 +61,8 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleW
 _CACHE_DIR = os.environ.get("ATP_PDF_CACHE_DIR", "/data/atp-pdf-cache")
 _CACHE_TTL = 3600.0
 _STAND_DOWN = 6 * 3600.0
-_blocked_until = 0.0
+_blocked_until = 0.0          # wall clock; mirrored in _BLOCK_FILE
+_BLOCK_FILE = "blocked_until"
 
 _ENTRY = {"Q": "Q", "WC": "WC", "LL": "LL", "SE": "SE", "PR": "PR", "NG": "NG",
           "ALT": "Alt", "A": "Alt", "SR": "PR"}
@@ -301,10 +308,37 @@ def to_shape(slots: list) -> DrawShape:
 
 # ── fetching ──────────────────────────────────────────────────────────────
 
+def _standing_down() -> bool:
+    """True inside a stand-down — this process's own, or one an earlier
+    process wrote to disk before a restart."""
+    global _blocked_until
+    now = time.time()
+    if now < _blocked_until:
+        return True
+    try:
+        with open(os.path.join(_CACHE_DIR, _BLOCK_FILE)) as fh:
+            until = float(fh.read().strip() or 0)
+    except (OSError, ValueError):
+        return False
+    # Never trust a marker further out than one stand-down (a clock jump).
+    _blocked_until = min(until, now + _STAND_DOWN)
+    return now < _blocked_until
+
+
+def _stand_down() -> None:
+    global _blocked_until
+    _blocked_until = time.time() + _STAND_DOWN
+    try:
+        os.makedirs(_CACHE_DIR, exist_ok=True)
+        with open(os.path.join(_CACHE_DIR, _BLOCK_FILE), "w") as fh:
+            fh.write(f"{_blocked_until:.0f}")
+    except OSError as exc:
+        logger.info("ATP draw sheet stand-down not persisted: %s", exc)
+
+
 async def fetch_pdf(atp_id: int, year: int) -> Optional[bytes]:
     """The sheet, from the disk cache when fresh, else one request. None when
     it is not published, not a PDF, or the source is standing down."""
-    global _blocked_until
     import httpx
     url = URL.format(year=year, atp_id=atp_id)
     path = os.path.join(_CACHE_DIR, hashlib.sha1(url.encode()).hexdigest() + ".pdf")
@@ -314,7 +348,7 @@ async def fetch_pdf(atp_id: int, year: int) -> Optional[bytes]:
                 return fh.read()
     except OSError:
         pass
-    if time.monotonic() < _blocked_until:
+    if _standing_down():
         return None
     try:
         async with httpx.AsyncClient(timeout=20, headers=HEADERS, follow_redirects=True) as client:
@@ -325,9 +359,11 @@ async def fetch_pdf(atp_id: int, year: int) -> Optional[bytes]:
     body = r.content or b""
     if r.status_code in (403, 429) or (r.status_code == 200 and not body.startswith(b"%PDF")
                                         and b"<html" in body[:200].lower()):
-        _blocked_until = time.monotonic() + _STAND_DOWN
+        _stand_down()
         from app.services.system_log import app_log
-        await app_log("warning", "draws",
+        # Info: an expected state of this host, handled — the draw falls
+        # through to Tennis Explorer and Wikipedia.
+        await app_log("info", "draws",
                       "protennislive answered the ATP draw sheet with a challenge — "
                       "standing the source down for six hours",
                       {"atp_id": atp_id, "status": r.status_code},
