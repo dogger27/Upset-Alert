@@ -33,6 +33,10 @@ eq('SIN and SGP fly the same flag', [flagEmoji('SIN'), flagEmoji('SGP')], ['🇸
 eq('a three-letter surname is still a name', sheetName('Orlando LUZ'),
    { name: 'Orlando LUZ', nat: null })
 
+eq('either/or side shortens each name', pairForms('Anna Bondar or Elena-Gabriela Ruse', ' or '),
+  ['Anna Bondar or Elena-Gabriela Ruse', 'A. Bondar or E. Ruse', 'Bondar or Ruse'])
+eq('either/or keeps both surnames', pairForms('Katie Volynets or Kimberly Birrell', ' or ').at(-1), 'Volynets or Birrell')
+
 console.log(fail ? `\n${fail} failed` : '\n  all passed')
 process.exit(fail ? 1 : 0)
 
