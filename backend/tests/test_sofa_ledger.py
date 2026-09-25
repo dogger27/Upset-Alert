@@ -1,0 +1,63 @@
+"""Every Sofascore request recorded; a block leaves the record behind."""
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from app.services import sofa_ledger as L  # noqa: E402
+
+
+def test_requests_are_written_with_their_caller_and_summarised(tmp_path, monkeypatch):
+    monkeypatch.setattr(L, "DIR", str(tmp_path))
+    L._recent.clear()
+    tok = L.CALLER.set("sofascore_doubles.sweep_once")
+    L.record("/unique-tournament/24725/season/85662/events/last/0", "direct", 200, 120.4, 900)
+    L.record("/unique-tournament/24725/season/85662/events/next/0", "direct", 404, 80, 0)
+    L.CALLER.reset(tok)
+    L.record("/sport/tennis/events/live", "direct", 403, 50)
+    files = list(tmp_path.glob("*.jsonl"))
+    assert len(files) == 1
+    rows = [json.loads(x) for x in files[0].read_text().splitlines()]
+    assert rows[0]["caller"] == "sofascore_doubles.sweep_once" and rows[0]["status"] == 200
+    s = L.summary(60)
+    assert s["requests"] == 3
+    assert s["by_path"]["/unique-tournament/N/season/N/events/last/N"] == 1
+    assert s["by_status"] == {"200": 1, "404": 1, "403": 1}
+
+
+def test_a_block_snapshot_holds_the_requests_before_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(L, "DIR", str(tmp_path))
+    for i in range(5):
+        L.record(f"/event/{i}", "direct", 200, 10)
+    p = L.snapshot("403 on /sport/tennis/events/live")
+    lines = Path(p).read_text().splitlines()
+    head = json.loads(lines[0])
+    assert head["reason"].startswith("403") and head["summary_1h"]["requests"] == 5
+    assert len(lines) == 6
+
+
+def test_the_watch_warns_over_budget(tmp_path, monkeypatch):
+    monkeypatch.setattr(L, "DIR", str(tmp_path))
+    said = []
+
+    async def fake_log(level, cat, msg, detail=None, **kw):
+        said.append((level, msg))
+    import app.services.system_log as sl
+    monkeypatch.setattr(sl, "app_log", fake_log)
+    tok = L.CALLER.set("sofascore_doubles.sweep_once")
+    for i in range(L.CALLER_WARN_DEFAULT + 1):
+        L.record(f"/event/{i}", "direct", 200, 1)
+    L.CALLER.reset(tok)
+    asyncio.run(L.check())
+    assert said and said[0][0] == "warning" and "sofascore_doubles.sweep_once" in said[0][1]
+
+
+def test_caller_is_the_first_frame_outside_the_client():
+    def poller():
+        return L.caller_of()
+    # caller_of skips two frames (itself and sofascore._get); called from a
+    # nested helper here, it lands on this test module.
+    def wrapper():
+        return poller()
+    assert wrapper().startswith("test_sofa_ledger.")
