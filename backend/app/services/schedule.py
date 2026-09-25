@@ -2871,12 +2871,29 @@ def _as_settled_side(kept, win_rows) -> list:
     names = [(p.raw_name or "").strip() for p in win_rows]
     if not all(names) or any("/" in n for n in names):
         return [kept]
-    if not all(_is_sheet_form(n) for n in names):
-        return [kept]
     if join_surnames(names) != join_surnames([kept.raw_name]):
         return [kept]
-    return [SettledPlayer(kept.side, i, p.raw_name, p.nationality, p.draw_entry_id)
-            for i, p in enumerate(win_rows, 1)]
+    if all(_is_sheet_form(n) for n in names):
+        return [SettledPlayer(kept.side, i, p.raw_name, p.nationality, p.draw_entry_id)
+                for i, p in enumerate(win_rows, 1)]
+    # The deciding row is in FEED form ("R Galloway") — Chengdu 2026-09-26:
+    # the round before came from the feeds, the next day from the PDF, so
+    # the substitution above declined and a settled doubles side went out as
+    # ONE player called "[4] GALLOWAY USA / GORANSSON SWE". The alternative
+    # already names both people in sheet form; split it at the slash, seed
+    # on the first partner as the sheet prints a settled pair, and take each
+    # partner's draw link from the result row with the same surname.
+    halves = [h.strip() for h in (kept.raw_name or "").split("/")]
+    if len(halves) != len(win_rows) or not all(halves):
+        return [kept]
+    by_surname = {join_surnames([p.raw_name]): p for p in win_rows}
+    out = []
+    for i, half in enumerate(halves, 1):
+        src = by_surname.get(join_surnames([half]))
+        if src is None:
+            return [kept]
+        out.append(SettledPlayer(kept.side, i, half, None, src.draw_entry_id))
+    return out
 
 
 def settle_from_result_rows(side_players, index) -> tuple:

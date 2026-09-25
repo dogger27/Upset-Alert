@@ -956,8 +956,12 @@ class SofascoreLiveMonitor:
                 # only refills the log. Sleep until it actually reopens.
                 from app.services.sofascore import blocked_for
                 delay = max(self.BLOCKED_BACKOFF, blocked_for() + 30)
+                # INFO, NOT A WARNING. The client already raised the one alarm
+                # for this refusal ("Sofascore returned 403 — all requests
+                # paused"); every consumer echoing it turned one ban into four
+                # warnings in the digest (2026-09-25). The pause is the handling.
                 await app_log(
-                    "warning", "sofascore_live",
+                    "info", "sofascore_live",
                     # Stable sentence: the minutes and the reason vary every
                     # step of the backoff, and putting them in the text made
                     # one outage read as a dozen problems in triage.

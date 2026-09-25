@@ -600,10 +600,21 @@ async def _ingest_feed_days(tournament, draws, feed_days: dict, venue_tz) -> Non
 
 
 def _pdf_fallback_note(tournament, pdf_date, declined_days: dict,
-                       unfed_days: dict, thin_days: Optional[dict] = None
+                       unfed_days: dict, thin_days: Optional[dict] = None,
+                       refused_days: Optional[dict] = None
                        ) -> tuple[str, str, str]:
     """(level, message, dedup key) for a day the PDF filled in, by why."""
     thin_days = thin_days or {}
+    refused_days = refused_days or {}
+    if pdf_date in refused_days:
+        # INFO: Sofascore refused us (403, breaker open) or was down (5xx),
+        # so it was never really asked. A ban has its own warning in the
+        # client ("Sofascore returned 403 — all requests paused") and a 5xx is
+        # retried next pass; saying it again per tournament day made one
+        # refusal read as a schedule gap (Chengdu 2026-09-25).
+        return ("info",
+                f"{tournament.name} {pdf_date}: {refused_days[pdf_date]}; the PDF filled in",
+                f"pdf_refused_{tournament.id}")
     if pdf_date in thin_days:
         # INFO: the feeds had the day, only less of it than the sheet already
         # stored — a doubles Sofascore has not placed yet, a match it dropped
@@ -707,6 +718,7 @@ async def refresh_order_of_play() -> int:
             declined_rounds: dict = {}
             unfed_days: dict = {}
             thin_days: dict = {}
+            refused_days: dict = {}
             if tournament.name not in _SLAM_FEEDS:
                 for day_ in (today - timedelta(days=1), today,
                              today + timedelta(days=1), today + timedelta(days=2)):
@@ -725,6 +737,8 @@ async def refresh_order_of_play() -> int:
                         declined_rounds[day_] = fd.get("rounds") or {}
                     elif fd and fd.get("unfed"):
                         unfed_days[day_] = fd["unfed"]
+                    elif fd and fd.get("refused"):
+                        refused_days[day_] = fd["refused"]
                     elif fd and fd.get("thin"):
                         # Not a feed day: the sheet keeps it. Recorded only
                         # so the note says why, as for declined and unfed.
@@ -896,7 +910,8 @@ async def refresh_order_of_play() -> int:
                                             tournament.name, pdf_date, named)
                     if not (ingested or {}).get("skipped"):
                         level, msg, key = _pdf_fallback_note(
-                            tournament, pdf_date, declined_days, unfed_days, thin_days)
+                            tournament, pdf_date, declined_days, unfed_days, thin_days,
+                            refused_days)
                         await app_log(level, "order_of_play", msg,
                                       dedup_key=key, dedup_hours=24)
                 except Exception as exc:

@@ -361,14 +361,17 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
     sources, unplaced} ready for ingest_document, None when no feed has a row,
     {"declined": why, ...} when the feeds have the day but cannot state it
     (see `declined`), {"thin": why, ...} when they hold less of it than the
-    sheet already stored, or {"unfed": why} when nothing answered and a draw
-    had no feed to ask at all — the caller then gives the day to the PDF."""
+    sheet already stored, {"unfed": why} when nothing answered and a draw
+    had no feed to ask at all, or {"refused": why} when nothing answered
+    because Sofascore refused or was down — the caller then gives the day to
+    the PDF."""
     from app.services import schedule_shadow, wta_feed
 
     event_id = await schedule_shadow.wta_event_id(db, tournament.id, draws)
     parts = {"day": day.isoformat(), "wta": None, "sofa": []}
     sources = []
     unfed = []
+    refused = []
     for draw, src in plan(draws, event_id):
         try:
             if src == "none":
@@ -409,6 +412,9 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
                     parts["sofa"] += got
                     sources.append(f"sofa:{draw.sofa_tournament_id}")
         except Exception as exc:          # noqa: BLE001 — one feed failing must not lose the others
+            from app.services.sofascore import SofascoreBlocked, SofascoreUnavailable
+            if isinstance(exc, (SofascoreBlocked, SofascoreUnavailable)):
+                refused.append(f"Sofascore did not answer ({exc})")
             logger.info("feed %s unavailable for %s %s: %s", src, tournament.name, day, exc)
 
     if parts["wta"] is None and not [p for p in parts["sofa"] if not p.get("courts_only")]:
@@ -421,6 +427,12 @@ async def build_day_document(db, tournament, draws, day: date, season_year: int,
         # draw is due is sofa_resolver._coverage_check's to report.
         if unfed:
             return {"unfed": "; ".join(unfed), "sources": sources}
+        # A FEED THAT REFUSED IS NOT A FEED THAT HAD NOTHING (Chengdu
+        # 2026-09-25): the 403 breaker had just opened, so Sofascore was never
+        # asked, and the day reached the PDF as "no feed had a schedule" — a
+        # second alarm for the one ban the client already warned about.
+        if refused:
+            return {"refused": "; ".join(refused), "sources": sources}
         return None
     sheet_count = await _sheet_match_count(db, tournament.id, day)
     names = await schedule_shadow.court_names(db, tournament.id, min_votes=3)
