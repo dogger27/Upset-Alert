@@ -52,7 +52,17 @@ from app.services.system_log import app_log
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL = 60.0
+# HOW OFTEN, AND WHY SO RARELY (owner, 2026-09-25: "I don't really care too
+# much about doubles. Don't let it threaten our access!"). Sofascore refused
+# this server at 10:07 UTC that morning with four Asian events in session,
+# while this sweep ran every 60-80 seconds, uncached, re-reading every
+# season's pages whether or not a doubles match was on court — about as many
+# requests an hour as the live-score poller. Doubles and qualifying now pay
+# for what they need and no more: every two minutes while one of their rows
+# is on court, every fifteen otherwise.
+LIVE_INTERVAL = 120.0
+IDLE_INTERVAL = 900.0
+POLL_INTERVAL = IDLE_INTERVAL
 # STOPPED IS MORE THAN ONE WORD. Sofascore says "interrupted" for a short
 # halt and "suspended" once play is properly off — and a match sitting in the
 # second was matched by nothing here, so it took no writes at all and its row
@@ -81,7 +91,7 @@ _SUSPENDED = SOFA_SUSPENDED   # plus a long `interrupted` — stop_reads_suspend
 # How many claimed-but-unlisted events one sweep will fetch individually. A
 # Slam qualifying day needs a few dozen; the cap keeps a pathological day from
 # becoming a request storm against a host that answers a burst with a ban.
-_MAX_DIRECT_EVENTS = 40
+_MAX_DIRECT_EVENTS = 8
 
 # "[WC]" and "[2]" are the sheet's own annotations and never part of a name.
 _SHEET_TAGS = re.compile(r"\[[^\]]*\]")
@@ -735,7 +745,7 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
             ScheduleEntry.play_date.in_(days),
         ))).scalars().all()
     if not entries:
-        return {"entries": 0, "resolved": 0, "scored": 0}
+        return {"entries": 0, "resolved": 0, "scored": 0, "live": 0}
 
     # Draws carry the pointer to the doubles event; a tournament with no tracked
     # draw is not one we follow.
@@ -743,7 +753,7 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
         select(Draw).where(Draw.tournament_id.in_({e.tournament_id for e in entries}),
                            Draw.sofa_tournament_id.isnot(None)))).scalars().all()
     if not draws:
-        return {"entries": len(entries), "resolved": 0, "scored": 0}
+        return {"entries": len(entries), "resolved": 0, "scored": 0, "live": 0}
     tourns = {t.id: t for t in (await db.execute(
         select(Tournament).where(
             Tournament.id.in_({d.tournament_id for d in draws})))).scalars().all()}
@@ -775,8 +785,12 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
                 ids = await _mixed_ids(db, t, d)
                 if ids:
                     by_season[(d.tournament_id, "x")] = ids
+    # The UPCOMING page only while some row still needs its event found: a
+    # row already claimed is read off the `last` page or fetched directly.
+    need_next = any(not e.sofa_event_id and e.winner_side is None for e in entries)
+    kinds = ("last", "next") if need_next else ("last",)
     for ut, season in set(by_season.values()):
-        for kind in ("last", "next"):
+        for kind in kinds:
             # Same rule as sofascore_results: the writer never waits at the
             # pacing gate. _doubles_ids ratchets ids back onto entries above,
             # and holding those dirty rows through a queued fetch is the
@@ -1079,7 +1093,10 @@ async def sweep_once(db, day: Optional[date] = None) -> dict:
 
     if resolved or scored:
         await db.commit()
-    return {"entries": len(entries), "resolved": resolved, "scored": scored}
+    # On court now — what sets the sweep's pace (see LIVE_INTERVAL).
+    live = sum(1 for e in entries if e.status in ("live", "suspended")
+               and e.winner_side is None)
+    return {"entries": len(entries), "resolved": resolved, "scored": scored, "live": live}
 
 
 class SofascoreDoublesMonitor:
@@ -1107,10 +1124,13 @@ class SofascoreDoublesMonitor:
 
         logger.info("Sofascore doubles sweep started (interval=%ss)", POLL_INTERVAL)
         while not self._stop.is_set():
-            delay = POLL_INTERVAL
+            delay = IDLE_INTERVAL
             try:
                 async with AsyncSessionLocal() as db:
                     report = await sweep_once(db)
+                    # Quicker only while one of this sweep's rows is on court.
+                    if report.get("live"):
+                        delay = LIVE_INTERVAL
                     if report.get("resolved") or report.get("scored"):
                         logger.info("Sofascore doubles: %s", report)
                         from app.services import broadcaster
