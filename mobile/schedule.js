@@ -120,17 +120,21 @@ export function winnerSide(e) {
 
    A POSTPONED match leaves with the finished ones — it is off this day's sheet
    and nothing more will happen on it today, which is the same answer a reader
-   wants from "Completed" as a finished match. So does a carried one
-   ('to_be_completed'): its play on THIS day is over, and it reappears as a
-   fresh row on the day it resumes. The old Completed toggle hid postponed rows
-   with the finished ones for the same reason.
+   wants from "Completed" as a finished match. The old Completed toggle hid
+   postponed rows with the finished ones for the same reason.
+
+   A match TO BE COMPLETED is the opposite case, and is UPCOMING: the server
+   gives that status to the row on the day play RESUMES (the day it stopped is
+   'postponed'), so its play here is still ahead (owner, 2026-09-25: Korea's
+   Volynets–Birrell QF, stopped at 6-2 2-6 2-4 and due back at 11:00, sat
+   under Completed with a scoreline that read like a result).
 
    Suspended rows stay LIVE, because the server still calls them live and play
    is expected to resume within the day (see isSuspended below). */
 export function matchPhase(e) {
   const st = e?.status
   if (st === 'live') return 'live'
-  if (st === 'completed' || st === 'postponed' || st === 'to_be_completed') return 'completed'
+  if (st === 'completed' || st === 'postponed') return 'completed'
   return 'upcoming'
 }
 

@@ -762,6 +762,16 @@ def _status_of(entry, match) -> str:
     return entry.status or "scheduled"
 
 
+def _venue_date(ts, tz_name: Optional[str]):
+    """The venue's calendar date of a stored UTC timestamp (naive = UTC)."""
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    try:
+        return ts.astimezone(ZoneInfo(tz_name)).date() if tz_name else ts.date()
+    except Exception:
+        return ts.date()
+
+
 def _winner_side(entry, match, players) -> Optional[int]:
     """0 or 1 — the side that won, or None while undecided.
 
@@ -1134,7 +1144,14 @@ async def schedule_day(
         # be used either, because a sheet printed early lists matches that were
         # finished on THIS day, which would drop the very row that played them.
         # The stamp is the only thing that says play actually restarted later.
-        if later and getattr(m_of(e), "resumed_at", None) is not None:
+        # AND ONLY A RESUMPTION ON A LATER VENUE DAY (owner, 2026-09-25: a
+        # match belongs to the day of the order of play it was scheduled
+        # from). Korea's Volynets–Birrell QF started Friday, was stopped by
+        # rain, and was stamped "resumed" at 23:36 KST — still FRIDAY — before
+        # stopping again; the rule read that as play restarting on Saturday's
+        # sheet and dropped the Friday row, so the day it was played lost it.
+        resumed = getattr(m_of(e), "resumed_at", None)
+        if later and resumed is not None and _venue_date(resumed, tzs.get(e.tournament_id)) > e.play_date:
             dropped.add(e.id)
             continue
         # ONLY A MATCH THAT ACTUALLY STARTED is "to be completed" — one that

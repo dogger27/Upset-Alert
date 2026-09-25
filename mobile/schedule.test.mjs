@@ -144,10 +144,11 @@ test('hasStarted: live or over; a carried, postponed or waiting match has not', 
 test('every row lands in exactly one of the three phases', () => {
   assert.equal(matchPhase({ status: 'live' }), 'live')
   assert.equal(matchPhase({ status: 'completed' }), 'completed')
-  // Off today's sheet, or carried to another day: nothing more happens on it
-  // today, which is what a reader means by Completed.
+  // Off today's sheet: nothing more happens on it today, which is what a
+  // reader means by Completed.
   assert.equal(matchPhase({ status: 'postponed' }), 'completed')
-  assert.equal(matchPhase({ status: 'to_be_completed' }), 'completed')
+  // The day play RESUMES: still to come (Korea QF, 2026-09-25).
+  assert.equal(matchPhase({ status: 'to_be_completed' }), 'upcoming')
   assert.equal(matchPhase({ status: 'scheduled' }), 'upcoming')
   assert.equal(matchPhase({ status: 'pending' }), 'upcoming')
   // Nothing falls through — an unknown or absent status is still to come.
