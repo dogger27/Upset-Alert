@@ -1285,6 +1285,23 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                          f"side {side_key} resolves to {len(served)} player row(s), "
                          f"expected {want} for {e.discipline}: "
                          + " / ".join(p.raw_name or "" for p in served))
+                # 2026-09-26 Chengdu, doc 559: three settled doubles sides
+                # served "[4] GALLOWAY USA / GORANSSON SWE" as ONE row under
+                # ONE flag — the deciding results were feed-written ("R
+                # Galloway"), and the resolver only substituted sheet-form
+                # result rows. The count above caught it; this states the
+                # shape per ROW, so a side that reaches two rows with a team
+                # still inside one of them, or a flag that is not the country
+                # the row prints, cannot pass on the count alone.
+                for p in served:
+                    raw = p.raw_name or ""
+                    m = re.search(r'\s([A-Z]{3})\s*$', re.sub(r'\[[^\]]*\]', ' ', raw))
+                    printed = m.group(1) if m and m.group(1) in COUNTRY_CODES else None
+                    if "/" in raw or (printed and p.nationality
+                                      and p.nationality != printed):
+                        flag("settled_row_not_one_person", e,
+                             f"side {side_key} serves {raw!r} "
+                             f"(nationality {p.nationality}) as one player")
 
         # 2026-09-13, SP Open QUADRA CENTRAL slot 2: the row offered
         # "W. Osuigwe or F. Labrana" hours after Osuigwe had won that Q1 —
