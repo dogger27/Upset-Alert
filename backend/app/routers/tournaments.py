@@ -1883,8 +1883,8 @@ async def _shape_from_sources(tournament: Draw, db: AsyncSession, report: dict,
                               allow_sofascore_identity: bool = True):
     """The best complete shape any source has for this draw, or (None, None, {}).
 
-    Order of trust: the WTA's own sheet for a women's draw; Tennis Explorer
-    for either tour; Sofascore last — the cup tree of an already-resolved draw
+    Order of trust: the tour's own sheet — the WTA's JSON for a women's draw,
+    the ATP's mds.pdf for a men's; Tennis Explorer for either tour; Sofascore last — the cup tree of an already-resolved draw
     from the cache, or a fresh identity lookup when the caller allows it.
     Returns (shape, source_name, identity_fields_to_store).
     """
@@ -1908,6 +1908,26 @@ async def _shape_from_sources(tournament: Draw, db: AsyncSession, report: dict,
                 return got, "wta_official", {}
             if got:
                 report["wta_official"] = "incomplete"
+
+    # THE ATP'S OWN SHEET FIRST for a men's draw (owner, 2026-09-25):
+    # protennislive's mds.pdf — positions, seeds, entry types, byes and
+    # countries, from the tour itself. Tennis Explorer and Wikipedia remain
+    # behind it, and a cut name is resolved against them (atp_pdf_draw).
+    if (tournament.gender or "").upper() == "M":
+        from app.services import atp_pdf_draw
+        row = await db.get(Tournament, tournament.tournament_id) if tournament.tournament_id else None
+        if row is not None and row.atp_tournament_id:
+            report["tried"].append("atp_official")
+            try:
+                got, extra = await atp_pdf_draw.fetch_shape(tournament, row, db)
+                report.update(extra)
+            except Exception as exc:
+                logger.warning("ATP draw sheet failed for draw %s: %s", tournament.id, exc)
+                got = None
+            if got and bracket_is_complete(got):
+                return got, "atp_official", {}
+            if got:
+                report["atp_official"] = "incomplete"
 
     from app.services import te_draw
     report["tried"].append("tennisexplorer")

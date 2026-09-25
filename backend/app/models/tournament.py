@@ -307,7 +307,7 @@ class Draw(Base):
         Integer, ForeignKey("draw_category_variants.id"), nullable=True
     )
     status: Mapped[str] = mapped_column(String, default="upcoming")
-    # WHO AUTHORS THIS DRAW'S SHAPE: 'wta_official', 'tennisexplorer', 'sofascore',
+    # WHO AUTHORS THIS DRAW'S SHAPE: 'wta_official', 'atp_official', 'tennisexplorer', 'sofascore',
     # or NULL/'wikipedia' for the scrape that owned everything before 2026-09-21.
     # One writer per draw is what keeps two sources from ping-ponging a name's
     # spelling every half hour; the refresh loop consults this before scraping.
