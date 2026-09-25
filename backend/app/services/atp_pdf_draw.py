@@ -60,6 +60,15 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleW
            "Accept": "application/pdf,*/*"}
 _CACHE_DIR = os.environ.get("ATP_PDF_CACHE_DIR", "/data/atp-pdf-cache")
 _CACHE_TTL = 3600.0
+# BEFORE RELEASE, EVERY HALF HOUR (owner, 2026-09-25): an unreleased draw is
+# served as a ~2.6 KB placeholder PDF, and a sheet that small is re-asked
+# after 30 minutes rather than an hour. Only inside the release window —
+# PREWINDOW_DAYS before the start — so a draw weeks away costs nothing.
+# Measured headroom: the host answered ~20 requests an hour for weeks, and
+# challenged only bursts (11 in 22s; ~30 in 37 min on top of the baseline).
+_PLACEHOLDER_TTL = 1800.0
+_PLACEHOLDER_BYTES = 10_000
+PREWINDOW_DAYS = 4
 _STAND_DOWN = 6 * 3600.0
 _blocked_until = 0.0          # wall clock; mirrored in _BLOCK_FILE
 _BLOCK_FILE = "blocked_until"
@@ -343,7 +352,8 @@ async def fetch_pdf(atp_id: int, year: int) -> Optional[bytes]:
     url = URL.format(year=year, atp_id=atp_id)
     path = os.path.join(_CACHE_DIR, hashlib.sha1(url.encode()).hexdigest() + ".pdf")
     try:
-        if os.path.exists(path) and time.time() - os.path.getmtime(path) < _CACHE_TTL:
+        ttl = _PLACEHOLDER_TTL if (os.path.exists(path) and os.path.getsize(path) < _PLACEHOLDER_BYTES) else _CACHE_TTL
+        if os.path.exists(path) and time.time() - os.path.getmtime(path) < ttl:
             with open(path, "rb") as fh:
                 return fh.read()
     except OSError:
@@ -390,6 +400,12 @@ async def fetch_shape(draw, tournament, db) -> tuple[Optional[DrawShape], dict]:
     report: dict = {}
     atp_id = getattr(tournament, "atp_tournament_id", None)
     if not atp_id or (draw.gender or "").upper() != "M":
+        return None, report
+    # Not yet in the release window: no request at all.
+    from datetime import date, timedelta
+    start = getattr(draw, "start_date", None)
+    if start is not None and date.today() < start - timedelta(days=PREWINDOW_DAYS):
+        report["atp_pdf"] = "before the release window"
         return None, report
     pdf = await fetch_pdf(int(atp_id), int(draw.year))
     if not pdf:
