@@ -721,6 +721,30 @@ def _allcaps_name(seg):
     return bool(m and m.group(1) in COUNTRY_CODES)
 
 
+# A NEUTRAL doubles entrant: surname only and NO country at all. Russian and
+# Belarusian players compete without a flag, so the ATP prints the pair bare —
+# "LIUTAREVICH / SAFIULLIN or [2] NOUZA (CZE) / OBERLEITNER (AUT)" (Hangzhou,
+# doc 560, 2026-09-26). Both shapes above want the code as proof of a person,
+# so the line was rejected as furniture and the unresolved side kept ONE of its
+# two candidate teams — the site offered NOUZA / OBERLEITNER as if decided.
+#
+# With the code gone, what proves a person is the PAIR: this is admitted only
+# as one segment of a "/"-joined line (see _is_name), never on its own, so a
+# lone all-caps word of furniture still cannot pass. A bare country code
+# ("USA / FRA"), a role word ("TBA / LL"), an event or round word ("SINGLES /
+# DOUBLES") and a status token ("W/O") are not surnames.
+_BARE_SURNAME_RE = re.compile(r"^[A-Z][A-Z'\-]{2,}$")
+
+
+def _bare_surname(seg):
+    core = _MARKERS_RE.sub('', seg.strip()).strip()
+    return bool(_BARE_SURNAME_RE.match(core) and core not in COUNTRY_CODES
+                and not _ROLE_WORD_RE.match(core)
+                and not re.fullmatch(_EVENT_WORDS, core, re.I)
+                and not _ROUND_WORD_RE.fullmatch(core)
+                and not _STATUS_TOKEN_RE.match(core))
+
+
 def _is_name(text):
     if not text or NOISE_RE.search(text):
         return False
@@ -767,9 +791,18 @@ def _is_name(text):
     # the Arribage/Guinard quarter-final simply was not on the site. Same class
     # as JJ TRACY above — an all-caps name read as the sheet's own furniture —
     # through the one shape that rule could not describe.
+    #
+    # A PAIR MAY ALSO NAME A NEUTRAL, who has no code to prove him (see
+    # _bare_surname): doc 560's "LIUTAREVICH / SAFIULLIN". Only inside a
+    # "/"-joined line whose every segment is name-shaped, bare or coded — the
+    # pair vouches for itself where a lone all-caps word could not.
     if not re.search(r'[a-z]', text):
         segs = [s for s in (p.strip() for p in text.split('/')) if s]
-        if not segs or not all(_allcaps_name(s) for s in segs):
+        if not segs:
+            return False
+        ok = all(_allcaps_name(s) or (len(segs) >= 2 and _bare_surname(s))
+                 for s in segs)
+        if not ok:
             return False
     return bool(re.search(r'[A-Za-z]{2,}', text))
 
@@ -900,6 +933,11 @@ def parse_pdf(pdf_bytes):
                                           meta['orphan_codes'])
 
     settle_meridiems(matches)
+    # Every "/"-joined all-caps line a slot swallowed unread: a doubles pair
+    # the name rules could not place (doc 560's neutral "LIUTAREVICH /
+    # SAFIULLIN"). The caller alarms on it — check_parse, pair_line_rejected.
+    meta['rejected_pairs'] = [(m.court, t) for m in matches for t in m.rejected
+                              if re.fullmatch(r"[^a-z]*[A-Z]{2,}[^a-z]*/[^a-z]*[A-Z]{2,}[^a-z]*", t)]
     meta['unread_headers'] = [(m.court, t) for m in matches for t in m.rejected
                               if _HEADER_SHAPED_RE.match(t)]
     if not matches and meta['reason'] is None:
