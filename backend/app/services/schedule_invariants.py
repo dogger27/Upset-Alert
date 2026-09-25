@@ -2840,9 +2840,15 @@ def check_parse(meta, match_count: int | None = None,
 # on the ingest that was about to fix it. Same lesson as the two-transaction
 # window the sweep itself had to learn.
 # `expected_undercuts_printed_floor`, `player_on_two_courts` and the two rest
-# laws read the same half-written estimate.
+# laws read the same half-written estimate. So do `carried_slot_has_no_time`
+# and `untimed_slot_served_first`, which read a row the sheet has only just
+# CREATED — still NULL until the recompute (Korea Open doc 549, 2026-09-25:
+# a QF carried "Starting at 11:00 AM" was called untimed 0.5 s after insert).
+# tests/test_ingest_defers_expected_readers.py holds every reader to this set.
 INGEST_DEFERRED = frozenset({"expected_contradicts_printed",
                              "expected_undercuts_printed_floor",
+                             "carried_slot_has_no_time",
+                             "untimed_slot_served_first",
                              "player_on_two_courts",
                              "rest_slot_ahead_of_its_match",
                              "rest_slot_without_its_rest"})
