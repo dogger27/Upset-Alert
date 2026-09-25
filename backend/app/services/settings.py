@@ -67,6 +67,10 @@ SOFA_EGRESS_PROXY = "proxy"
 # until this is well behind us — retrying into a live ban is what extends it.
 SOFA_DIRECT_BLOCKED_AT = "sofa_direct_blocked_at"
 
+# The 403 circuit breaker: JSON {"until": epoch seconds, "blocks": n}. Stored
+# so a restart cannot close it and walk straight back into the refusal.
+SOFA_BREAKER = "sofa_breaker"
+
 _DEFAULTS = {PICK_LOCK_MODE: LOCK_AT_DRAW_START}
 _cache: dict[str, str] = {}
 
