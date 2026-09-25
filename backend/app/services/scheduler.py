@@ -899,10 +899,13 @@ QUALIFIERS_SETTLE_COOLDOWN = timedelta(minutes=10)
 
 
 async def _load_sofa_egress() -> None:
-    from app.services.sofascore import load_egress
+    from app.services.sofascore import load_breaker, load_egress
     async with AsyncSessionLocal() as db:
         direct = await load_egress(db)
+        paused = await load_breaker(db)
     logger.info("Sofascore egress: %s", "direct" if direct else "residential proxy")
+    if paused:
+        logger.info("Sofascore breaker still open for %.0fs from before the restart", paused)
 
 
 async def _shadow_schedule_sources() -> None:

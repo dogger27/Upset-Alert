@@ -219,6 +219,20 @@ _BLOCK_COOLDOWN = 1800.0
 # returns to the tight cadence immediately.
 _BLOCK_COOLDOWN_MAX = 21600.0
 _consecutive_blocks = 0
+# THE BREAKER OUTLIVES THE PROCESS. Held only in memory, every deploy (a
+# two-minute timer, often several an hour) closed it: the fresh process asked
+# the refusing host straight away, was refused, and warned again with
+# consecutive_blocks back at 1 — three warnings for one refusal on 2026-09-25
+# (10:07, 10:13, 10:17), each restart poking the very ban the cooldown exists
+# to leave alone. Mirrored into app_settings and adopted at startup.
+#
+# And a refusal the breaker is handling is not news. It stands down, the
+# consumers pause, ESPN covers scoring; the next half-hour usually answers.
+# What the owner needs to hear is a refusal that PERSISTS — the breaker
+# tripping this many times with no success between them (30+60 min of
+# waiting already behind it). Below that, the line is info.
+_BLOCKS_BEFORE_WARNING = 3
+_breaker_loaded = False
 
 
 # ── WHICH WAY OUT ────────────────────────────────────────────────────────────
@@ -409,6 +423,10 @@ async def _get(path: str) -> dict:
     global _last_request_at, _blocked_until, _consecutive_blocks
 
     loop = asyncio.get_running_loop()
+    # Before this process's first request, not merely "at startup": a dozen
+    # startup tasks reach Sofascore and any of them may be first.
+    if not _breaker_loaded:
+        await _adopt_stored_breaker()
     if loop.time() < _blocked_until:
         raise SofascoreBlocked(
             f"circuit open for another {_blocked_until - loop.time():.0f}s")
@@ -481,8 +499,10 @@ async def _get(path: str) -> dict:
         cooldown = min(_BLOCK_COOLDOWN * (2 ** (_consecutive_blocks - 1)),
                        _BLOCK_COOLDOWN_MAX)
         _blocked_until = loop.time() + cooldown
+        await _save_breaker(cooldown)
+        persistent = _consecutive_blocks >= _BLOCKS_BEFORE_WARNING
         await app_log(
-            "warning", "sofascore",
+            "warning" if persistent else "info", "sofascore",
             # STABLE TEXT, VARYING FACTS IN detail. The triage view groups by
             # the message and the alert digest fingerprints on it, so folding
             # the escalating minute count into the sentence split one problem
@@ -492,7 +512,8 @@ async def _get(path: str) -> dict:
             detail={"path": path, "paused_minutes": round(cooldown / 60),
                     "consecutive_blocks": _consecutive_blocks,
                     "proxy_configured": bool(os.environ.get(_PROXY_ENV))},
-            dedup_key="sofa_blocked", dedup_hours=1)
+            dedup_key="sofa_blocked_persistent" if persistent else "sofa_blocked",
+            dedup_hours=1)
         raise SofascoreBlocked(f"403 on {path}")
     # A 404 is an ANSWER, not a refusal. Sofascore returns one for a season
     # with no upcoming events, an event id that has aged out, and any path that
@@ -507,8 +528,56 @@ async def _get(path: str) -> dict:
     # Answered — so whatever was refusing us has stopped. Back to the tight
     # cooldown, or a restored proxy would inherit the six-hour wait its
     # predecessor earned.
-    _consecutive_blocks = 0
+    if _consecutive_blocks:
+        _consecutive_blocks = 0
+        await _save_breaker(0.0)
     return payload
+
+
+async def _save_breaker(cooldown: float) -> None:
+    """Mirror the breaker into app_settings as a wall-clock deadline (the loop
+    clock restarts with the process). Best effort: a breaker that cannot be
+    written still holds for this process, and a 403 path must not raise
+    anything but SofascoreBlocked."""
+    import json
+    import time
+    from app.database import AsyncSessionLocal
+    from app.services import settings as st
+    try:
+        async with AsyncSessionLocal() as db:
+            await st.set_setting(db, st.SOFA_BREAKER, json.dumps(
+                {"until": time.time() + cooldown, "blocks": _consecutive_blocks}))
+            await db.commit()
+    except Exception as e:
+        logger.warning("Sofascore breaker not persisted: %s", e)
+
+
+async def _adopt_stored_breaker() -> None:
+    from app.database import AsyncSessionLocal
+    try:
+        async with AsyncSessionLocal() as db:
+            await load_breaker(db)
+    except Exception as e:
+        logger.warning("Sofascore breaker not loaded: %s", e)
+
+
+async def load_breaker(db) -> float:
+    """Adopt a stored breaker at startup. Returns the seconds still to wait."""
+    global _blocked_until, _consecutive_blocks, _breaker_loaded
+    _breaker_loaded = True
+    import json
+    import time
+    from app.services import settings as st
+    raw = await st.get_setting(db, st.SOFA_BREAKER)
+    try:
+        stored = json.loads(raw) if raw else {}
+        until, blocks = float(stored.get("until", 0)), int(stored.get("blocks", 0))
+    except (ValueError, TypeError, AttributeError):
+        return 0.0
+    _consecutive_blocks = max(0, blocks)
+    remaining = max(0.0, until - time.time())
+    _blocked_until = asyncio.get_running_loop().time() + remaining
+    return remaining
 
 
 async def _record_direct_block() -> None:
