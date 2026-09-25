@@ -226,12 +226,15 @@ _consecutive_blocks = 0
 # (10:07, 10:13, 10:17), each restart poking the very ban the cooldown exists
 # to leave alone. Mirrored into app_settings and adopted at startup.
 #
-# And a refusal the breaker is handling is not news. It stands down, the
-# consumers pause, ESPN covers scoring; the next half-hour usually answers.
-# What the owner needs to hear is a refusal that PERSISTS — the breaker
-# tripping this many times with no success between them (30+60 min of
-# waiting already behind it). Below that, the line is info.
-_BLOCKS_BEFORE_WARNING = 3
+# A REFUSAL THE BREAKER IS HANDLING IS NEVER A WARNING. It stands down, the
+# consumers pause, ESPN covers scoring, and the ban lifts on its own — there is
+# no proxy to fall back on (the owner's decision), so nothing the owner could
+# do about it either. The first cut warned once a refusal "persisted" through
+# three trips; that only moved the alarm: the same ban warned again at 11:24
+# (trip 3) and would have again at every probe past the dedup hour, 2, 4 and
+# 6 hours apart, for as long as it lasted — and again at the next ban. The
+# episode's facts (trip count, pause length) ride in detail at info; the
+# request ledger and the admin view are where a long ban is seen.
 _breaker_loaded = False
 
 
@@ -450,9 +453,19 @@ async def _get(path: str) -> dict:
     sofa_ledger.CALLER.set(sofa_ledger.caller_of())
 
     async with _gate:
+        # AGAIN, INSIDE THE GATE. Everything queued here passed the check
+        # above before the request ahead of it was refused; without this the
+        # whole queue walked into the ban one by one when a cooldown ended —
+        # three refusals in four seconds on 2026-09-25 11:24, each counted as
+        # a trip, jumping the wait from two hours to six.
+        # Checked after the pacing sleep, which is when the answer to the
+        # request ahead has had time to land.
         delay = _MIN_INTERVAL - (loop.time() - _last_request_at)
         if delay > 0:
             await asyncio.sleep(delay)
+        if loop.time() < _blocked_until:
+            raise SofascoreBlocked(
+                f"circuit open for another {_blocked_until - loop.time():.0f}s")
         _last_request_at = loop.time()
 
     try:
@@ -518,7 +531,6 @@ async def _get(path: str) -> dict:
                        _BLOCK_COOLDOWN_MAX)
         _blocked_until = loop.time() + cooldown
         await _save_breaker(cooldown)
-        persistent = _consecutive_blocks >= _BLOCKS_BEFORE_WARNING
         # THE EXACT RECORD OF WHAT LED HERE (owner, 2026-09-25): the last six
         # hours of requests, copied aside, and the last hour summarised in the
         # alarm itself — only on the FIRST refusal of a run, since every retry
@@ -529,7 +541,7 @@ async def _get(path: str) -> dict:
             s1 = await asyncio.to_thread(sofa_ledger.summary, 60)
             ledger_detail = {"requests_snapshot": snap, "last_hour": s1}
         await app_log(
-            "warning" if persistent else "info", "sofascore",
+            "info", "sofascore",
             # STABLE TEXT, VARYING FACTS IN detail. The triage view groups by
             # the message and the alert digest fingerprints on it, so folding
             # the escalating minute count into the sentence split one problem
@@ -540,7 +552,7 @@ async def _get(path: str) -> dict:
                     "consecutive_blocks": _consecutive_blocks,
                     "proxy_configured": bool(os.environ.get(_PROXY_ENV)),
                     **ledger_detail},
-            dedup_key="sofa_blocked_persistent" if persistent else "sofa_blocked",
+            dedup_key="sofa_blocked",
             dedup_hours=1)
         raise SofascoreBlocked(f"403 on {path}")
     # A 404 is an ANSWER, not a refusal. Sofascore returns one for a season

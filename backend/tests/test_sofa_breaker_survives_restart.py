@@ -104,7 +104,9 @@ def test_success_clears_the_stored_breaker(monkeypatch):
     assert saved["blocks"] == 0 and saved["until"] <= time.time() + 1
 
 
-def test_one_refusal_is_info_a_persistent_one_warns(monkeypatch):
+def test_a_ban_never_warns_however_long_it_lasts(monkeypatch):
+    """2026-09-25: the ban that tripped at 10:07 warned again at 11:24 on its
+    third trip — the "persistent" escalation was the same alarm, later."""
     logged = []
     _wire(monkeypatch, 403, logged)
 
@@ -114,6 +116,28 @@ def test_one_refusal_is_info_a_persistent_one_warns(monkeypatch):
             await sofascore._get("/sport/tennis/events/live")
         except sofascore.SofascoreBlocked:
             pass
-    for _ in range(3):
+    for _ in range(6):
         asyncio.run(trip())
-    assert [lv for lv, _ in logged] == ["info", "info", "warning"]
+    assert sofascore._consecutive_blocks == 6
+    assert {lv for lv, _ in logged} == {"info"}
+
+
+def test_the_queue_behind_a_refusal_does_not_walk_into_the_ban(monkeypatch):
+    """11:24:21 logged trip 3; by 11:24:25 the stored breaker said 5. The
+    requests queued at the pacing gate had passed the breaker check before the
+    first was refused, and each went on to ask the banned host itself."""
+    logged = []
+    fetched = _wire(monkeypatch, 403, logged)
+    monkeypatch.setattr(sofascore, "_MIN_INTERVAL", 0.05)
+    monkeypatch.setattr(sofascore, "_last_request_at", 0.0)
+
+    async def burst():
+        async def one():
+            try:
+                await sofascore._get("/sport/tennis/events/live")
+            except sofascore.SofascoreBlocked:
+                pass
+        await asyncio.gather(*(one() for _ in range(4)))
+    asyncio.run(burst())
+    assert len(fetched) == 1
+    assert sofascore._consecutive_blocks == 1
