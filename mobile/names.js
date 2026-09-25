@@ -81,16 +81,19 @@ export function nameForms(name) {
 }
 
 /* Doubles arrive as "A / B". Each side is shortened on its own so the pair
-   collapses evenly rather than one name vanishing while the other stays whole. */
-export function pairForms(name) {
-  const sides = String(name || '').split('/').map(s => s.trim()).filter(Boolean)
+   collapses evenly rather than one name vanishing while the other stays whole.
+   `joiner` ' or ': a singles side the sheet has not settled, "Anna Bondar or
+   Elena-Gabriela Ruse". Read as ONE name it became "A. B. O. E. Ruse" and
+   then just "Ruse" — Korea SF, 2026-09-26. */
+export function pairForms(name, joiner = ' / ') {
+  const sides = String(name || '').split(joiner.trim() === '/' ? '/' : joiner).map(s => s.trim()).filter(Boolean)
   if (sides.length < 2) return nameForms(name)
 
   const each = sides.map(nameForms)
   const depth = Math.max(...each.map(f => f.length))
   const out = []
   for (let i = 0; i < depth; i++) {
-    out.push(each.map(f => f[Math.min(i, f.length - 1)]).join(' / '))
+    out.push(each.map(f => f[Math.min(i, f.length - 1)]).join(joiner))
   }
   return out.filter((f, i) => i === 0 || f !== out[i - 1])
 }

@@ -113,6 +113,7 @@ export function MatchCard({ e, scale = 1, badges = true, round = null }) {
             <PlayerName
               name={sideName(e.players, side, sideIsAlternatives(e, side))}
               doubles={doubles}
+              alternatives={sideIsAlternatives(e, side)}
               flags={doubles ? sideFlags(e.players, side) : null}
               /* 1.27x rather than bodyMed's 1.4: tight enough to pull the two
                  rows together, and still clear of the ~1.2 floor where

@@ -1277,15 +1277,16 @@ export function withFlags(text, glyphs) {
    column, just left of the round (owner, 2026-09-24). `reserve`: room at the
    slot's end the name MAY borrow — the empty round slot on the line that
    has none — pushing the chip right only by as much as the name needs. */
-export function PlayerName({ name, doubles = false, shrinkOnly = false, style, after = null, afterW = null,
+export function PlayerName({ name, doubles = false, alternatives = false, shrinkOnly = false, style, after = null, afterW = null,
                              trail = null, trailW = 0, reserve = 0, flags = null }) {
   /* shrinkOnly: a USERNAME. It cannot be initialised or reduced to a surname —
      "koounderpressure" has neither — but the last two rungs still apply:
      shrink first, and only then "…". Truncating a handle is the same loss as
      truncating a surname; it is the identifier. */
   const forms = useMemo(
-    () => (shrinkOnly ? [String(name || '')] : doubles ? pairForms(name) : nameForms(name)),
-    [name, doubles, shrinkOnly],
+    () => (shrinkOnly ? [String(name || '')] : doubles ? pairForms(name)
+      : alternatives ? pairForms(name, ' or ') : nameForms(name)),
+    [name, doubles, alternatives, shrinkOnly],
   )
   const [avail, setAvail] = useState(null)
   const flat = StyleSheet.flatten(style) || {}
