@@ -104,9 +104,11 @@ def test_success_clears_the_stored_breaker(monkeypatch):
     assert saved["blocks"] == 0 and saved["until"] <= time.time() + 1
 
 
-def test_a_ban_never_warns_however_long_it_lasts(monkeypatch):
+def test_a_ban_warns_once_however_long_it_lasts(monkeypatch):
     """2026-09-25: the ban that tripped at 10:07 warned again at 11:24 on its
-    third trip — the "persistent" escalation was the same alarm, later."""
+    third trip — the "persistent" escalation was the same alarm, later. One
+    ban is ONE warning, at its start (the owner must hear of every ban), and
+    the breaker's later trips are info."""
     logged = []
     _wire(monkeypatch, 403, logged)
 
@@ -119,7 +121,7 @@ def test_a_ban_never_warns_however_long_it_lasts(monkeypatch):
     for _ in range(6):
         asyncio.run(trip())
     assert sofascore._consecutive_blocks == 6
-    assert {lv for lv, _ in logged} == {"info"}
+    assert [lv for lv, _ in logged if lv == "warning"] == ["warning"]
 
 
 def test_the_queue_behind_a_refusal_does_not_walk_into_the_ban(monkeypatch):

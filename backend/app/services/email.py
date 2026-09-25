@@ -1638,7 +1638,9 @@ def _headline(message: str, limit: int = 90) -> str:
     text = " ".join(_NOISE.sub(" ", message or "").split())
     if len(text) <= limit:
         return text
-    return text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+    # Whole words, and NEVER "…" (owner's standing rule, 2026-09-25: the
+    # ban alert arrived as "Sofascore returned 403 — all…").
+    return text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:—–-")
 
 
 async def send_system_alert_digest(
