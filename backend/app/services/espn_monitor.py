@@ -47,6 +47,7 @@ from app.database import AsyncSessionLocal
 from app.models.tournament import DrawEntry, Match, Draw, LOCK_LEAD_DAYS
 from app.services.rankings import _norm
 from app.services.live_state import note_resumption, note_espn_live
+from app.services.live_state import is_suspended as live_is_suspended
 from app.services.settings import load_sofa_authoritative, sofa_authoritative
 from app.services.system_log import app_log
 from app.services.sofascore_live import live_feed_healthy
@@ -1327,7 +1328,14 @@ class ESPNMonitor:
                 key = (tournament.id, entry_a.id, entry_b.id)
                 seen_suspect.add(key)
                 since = _SUSPECT_SUSPENDED_SINCE.setdefault(key, now_mono)
-                is_suspended = (now_mono - since) >= _SUSPEND_DWELL_SECONDS
+                # None = undecided: the match keeps whatever it already says.
+                # The dwell only guards ENTERING a suspension. The timer is
+                # in memory, so after a restart a match already suspended
+                # read as playing for ten minutes, and that false
+                # suspended -> playing edge stamped resumed_at — Volynets v
+                # Birrell (Korea QF, 2026-09-25) "resumed" at every deploy,
+                # and a resumption after midnight dropped her Friday row.
+                is_suspended = True if (now_mono - since) >= _SUSPEND_DWELL_SECONDS else None
 
             if kind != "live":
                 serving = None  # nobody is serving a match that is not being played
@@ -1361,6 +1369,8 @@ class ESPNMonitor:
                 live = in_progress.get(key)
                 if live:
                     suspended = live[4]
+                    if suspended is None:
+                        suspended = live_is_suspended(m.live_scores_json)
                     raw_serving = live[2]  # from ESPN possession; may be None
 
                     # Total completed games determines serve parity from match start.
