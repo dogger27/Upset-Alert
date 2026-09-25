@@ -76,3 +76,21 @@ def test_the_shape_is_complete():
     shape = A.to_shape(s)
     assert shape.bracket_size == 32 and shape.num_rounds == 5 and len(shape.byes) == 4
     assert bracket_is_complete(shape)
+
+
+def test_a_two_page_draw_under_its_watermark():
+    # Miami: 96 players in a 128 bracket over two pages, a sideways
+    # "Prize Money" watermark through the name column, and three-digit
+    # positions that run into their entry mark ("108Q").
+    pdf, s = _slots("atp_mds_miami_2026.pdf")
+    assert len(s) == 128 and sum(x["bye"] for x in s) == 32
+    by = {x["pos"]: x for x in s}
+    assert by[7]["surname"] == "KORDA" and by[7]["seed"] == 32     # was "K O RDA"
+    assert by[108]["entry"] == "Q" and by[108]["surname"] == "BARRIOS VERA"
+
+
+def test_a_transliteration_is_the_same_person():
+    assert A._same_person("Max Schönhaus", "SCHOENHAUS", "Max")
+    assert A._same_person("Elmer Møller", "MOLLER", "Elmer")
+    assert A._same_person("Kwon Soon-woo", "KWON", "Soonwoo")
+    assert not A._same_person("Martin Damm", "NAKASHIMA", "Brandon")
