@@ -1255,6 +1255,24 @@ async def check_day(db, tournament_id: int, play_date) -> list[dict]:
                          f"side {side_key} has {len(side)}: "
                          + " / ".join(p.raw_name or "" for p in side))
 
+        # 2026-09-26 Hangzhou, doc 560: COURT 1's fourth slot printed
+        # "LIUTAREVICH / SAFIULLIN or [2] NOUZA (CZE) / OBERLEITNER (AUT)" and
+        # the parser read the neutral pair (no country codes) as furniture.
+        # The side stayed declared unresolved, so `doubles_side_not_two`
+        # exempted it — and the page offered ONE team as the open question.
+        # An unresolved side is a choice: it holds two or more candidates, or
+        # a role the tour prints for a seat nobody has taken ("Qualifier").
+        # One real name alone on an open side is an alternative that was lost.
+        # Measured over every stored tbd row: this incident alone.
+        if e.is_tbd:
+            for side_key in tbd_side:
+                side = na if side_key == "a" else nb
+                if len(side) == 1 and not _names_nobody(side[0].raw_name or ""):
+                    flag("open_side_one_candidate", e,
+                         f"side {side_key} is unresolved but offers only "
+                         f"{side[0].raw_name!r} — the sheet's other "
+                         f"alternative was lost")
+
         # 2026-08-26, Winston-Salem Court 3: once Schnaitter/Wallner beat
         # Lammons/Withrow, the page served "[1] ARRIBAGE / GUINARD" against a
         # single player called "SCHNAITTER / WALLNER" — a two-person team in
@@ -2841,6 +2859,20 @@ def check_parse(meta, match_count: int | None = None,
                       f"nationality's shape but is not in "
                       f"oop_parser.COUNTRY_CODES, so it was dropped — add it "
                       f"if it is a country",
+        })
+
+    # 2026-09-26 Hangzhou, doc 560: the neutral pair "LIUTAREVICH /
+    # SAFIULLIN" was rejected as furniture, but its slot still filled from the
+    # other alternative, so `slot_dropped` (empty slots only) never saw it and
+    # the line survived only in `rejected`. A "/" between all-caps words is a
+    # doubles PAIR, so a pair line the parser threw away is a lost team however
+    # full the slot looks. Measured over 413 sheets: this line alone, and zero
+    # once the parser learned neutrals.
+    for court, text in (meta or {}).get('rejected_pairs') or []:
+        out.append({
+            "code": "pair_line_rejected", "entry_id": None, "court": court,
+            "detail": f"{court or '?'}: the sheet prints the pair {text!r} and "
+                      f"the parser discarded it — see oop_parser._is_name",
         })
     return out
 
