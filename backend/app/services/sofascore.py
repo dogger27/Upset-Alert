@@ -310,13 +310,26 @@ def _fetch(path: str, rotate: bool = False) -> tuple:
     """Blocking GET. curl_cffi has no async API, so callers use _get()."""
     from curl_cffi import requests as cr
 
+    from app.services import sofa_ledger
+
     kwargs = {"impersonate": _IMPERSONATE, "timeout": _TIMEOUT}
     proxy = _current_proxy()
     if proxy:
         if rotate:
             proxy = _rotate_session(proxy)
         kwargs["proxies"] = {"http": proxy, "https": proxy}
-    r = cr.get(f"{_BASE}{path}", **kwargs)
+    # EVERY REQUEST INTO THE LEDGER (sofa_ledger) — including the ones that
+    # fail before an answer, which are requests Sofascore may still have seen.
+    t0 = sofa_ledger.timed()
+    route = "proxy" if proxy else "direct"
+    try:
+        r = cr.get(f"{_BASE}{path}", **kwargs)
+    except Exception as exc:
+        sofa_ledger.record(path, route, f"error:{type(exc).__name__}",
+                           (sofa_ledger.timed() - t0) * 1000)
+        raise
+    sofa_ledger.record(path, route, r.status_code, (sofa_ledger.timed() - t0) * 1000,
+                       len(r.content or b""))
     if r.status_code != 200:
         return r.status_code, None
     return 200, r.json()
@@ -431,6 +444,11 @@ async def _get(path: str) -> dict:
         raise SofascoreBlocked(
             f"circuit open for another {_blocked_until - loop.time():.0f}s")
 
+    # Who is asking, for the request ledger — the caller's frames are here,
+    # not in the worker thread _fetch runs on (to_thread copies the context).
+    from app.services import sofa_ledger
+    sofa_ledger.CALLER.set(sofa_ledger.caller_of())
+
     async with _gate:
         delay = _MIN_INTERVAL - (loop.time() - _last_request_at)
         if delay > 0:
@@ -501,6 +519,15 @@ async def _get(path: str) -> dict:
         _blocked_until = loop.time() + cooldown
         await _save_breaker(cooldown)
         persistent = _consecutive_blocks >= _BLOCKS_BEFORE_WARNING
+        # THE EXACT RECORD OF WHAT LED HERE (owner, 2026-09-25): the last six
+        # hours of requests, copied aside, and the last hour summarised in the
+        # alarm itself — only on the FIRST refusal of a run, since every retry
+        # after it is the breaker's own probe, not a cause.
+        ledger_detail = {}
+        if _consecutive_blocks == 1:
+            snap = await asyncio.to_thread(sofa_ledger.snapshot, f"403 on {path}")
+            s1 = await asyncio.to_thread(sofa_ledger.summary, 60)
+            ledger_detail = {"requests_snapshot": snap, "last_hour": s1}
         await app_log(
             "warning" if persistent else "info", "sofascore",
             # STABLE TEXT, VARYING FACTS IN detail. The triage view groups by
@@ -511,7 +538,8 @@ async def _get(path: str) -> dict:
             "Sofascore returned 403 — all requests paused",
             detail={"path": path, "paused_minutes": round(cooldown / 60),
                     "consecutive_blocks": _consecutive_blocks,
-                    "proxy_configured": bool(os.environ.get(_PROXY_ENV))},
+                    "proxy_configured": bool(os.environ.get(_PROXY_ENV)),
+                    **ledger_detail},
             dedup_key="sofa_blocked_persistent" if persistent else "sofa_blocked",
             dedup_hours=1)
         raise SofascoreBlocked(f"403 on {path}")

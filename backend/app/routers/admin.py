@@ -319,6 +319,25 @@ async def _odds_last_refresh(db) -> Optional[dict]:
     return {"at": row[0].isoformat() if row[0] else None, "level": row[1], "message": row[2]} if row else None
 
 
+@router.get("/sofascore-requests")
+async def sofascore_requests(
+    minutes: int = 60, recent: int = 50,
+    current_user: User = Depends(get_current_user),
+):
+    """Every request we have sent Sofascore (services/sofa_ledger): the
+    window's totals by caller, path and status, and the latest raw rows."""
+    if not current_user.is_admin:
+        raise HTTPException(403, "Admin only")
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    from app.services import sofa_ledger
+    minutes = max(1, min(minutes, 60 * 24 * 7))
+    rows = await asyncio.to_thread(
+        sofa_ledger._read_since, datetime.now(timezone.utc) - timedelta(minutes=minutes))
+    return {"summary": sofa_ledger.summary(minutes, rows),
+            "recent": rows[-max(0, min(recent, 1000)):]}
+
+
 @router.get("/market-odds")
 async def market_odds_status(
     db: AsyncSession = Depends(get_db),

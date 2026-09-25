@@ -1874,6 +1874,11 @@ async def _check_rankings_health() -> None:
             )
 
 
+async def _sofa_ledger_check() -> None:
+    from app.services import sofa_ledger
+    await sofa_ledger.check()
+
+
 async def _sync_email_suppressions() -> None:
     from app.services.email_suppression import sync
     await sync()
@@ -2468,6 +2473,16 @@ def start_scheduler() -> None:
         minutes=30,
         id="refresh_active",
         misfire_grace_time=300,
+    )
+    # EVERY SOFASCORE REQUEST, WATCHED (sofa_ledger): the last hour against
+    # the budget, a warning before a ban rather than after, and the ledger
+    # pruned to its thirty days.
+    scheduler.add_job(
+        _on_shutdown_quietly(_sofa_ledger_check),
+        "interval",
+        minutes=5,
+        id="sofa_ledger_check",
+        misfire_grace_time=240,
     )
     # Addresses that bounced or reported spam, read back from Resend so
     # send_async stops writing to them (email_suppression.py).
