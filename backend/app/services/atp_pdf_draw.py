@@ -71,7 +71,13 @@ def _rows(pdf_bytes: bytes) -> list:
     out = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         for pi, page in enumerate(pdf.pages):
-            words = page.extract_words(keep_blank_chars=False, use_text_flow=False)
+            # UPRIGHT LETTERS ONLY, before words are formed: the big draws
+            # (96, 128) print a sideways "Prize Money / Points" watermark
+            # whose letters fall between a name's own — "M [r] E [i] NSIK",
+            # "B [z] y [e] e" (Rome, Miami). Filtering whole words afterwards
+            # left the name split into pieces.
+            upright = page.filter(lambda o: o.get("object_type") != "char" or o.get("upright", True))
+            words = upright.extract_words(keep_blank_chars=False, use_text_flow=False)
             lines: dict = {}
             for w in words:
                 key = round(w["top"])
@@ -79,7 +85,16 @@ def _rows(pdf_bytes: bytes) -> list:
                 hit = next((k for k in lines if abs(k - key) <= 1), None)
                 lines.setdefault(hit if hit is not None else key, []).append(w)
             for top in sorted(lines):
-                out.append((pi, top, sorted(lines[top], key=lambda w: w["x0"])))
+                ws = sorted(lines[top], key=lambda w: w["x0"])
+                # A three-digit position runs into its entry mark: "108Q",
+                # "96WC". Split it back into the number and the mark.
+                if ws:
+                    m = re.fullmatch(r"(\d{1,3})([A-Za-z]{1,3})", ws[0]["text"])
+                    if m:
+                        first = dict(ws[0], text=m.group(1))
+                        mark = dict(ws[0], text=m.group(2), x0=ws[0]["x0"] + 12)
+                        ws = [first, mark] + ws[1:]
+                out.append((pi, top, ws))
     return out
 
 
@@ -99,23 +114,27 @@ def parse_slots(pdf_bytes: bytes) -> Optional[list]:
     pos_x = min(w["x0"] for w in starts)
     cand = [(p, t, ws) for p, t, ws in rows
             if ws and ws[0]["text"].isdigit() and abs(ws[0]["x0"] - pos_x) < 6]
-    # Where names begin: the x of "Bye" and of every "SURNAME," token.
-    name_xs = [w["x0"] for _, _, ws in cand for w in ws[1:4]
-               if w["text"] == "Bye" or w["text"].endswith(",")]
-    if not name_xs:
-        return None
-    name_x = Counter(round(x) for x in name_xs).most_common(1)[0][0]
-    # The country column: the commonest x of a 3-capital token right of names.
-    ioc_xs = [round(w["x0"]) for _, _, ws in cand for w in ws
-              if _IOC.match(w["text"]) and w["x0"] > name_x + 25]
-    country_x = Counter(ioc_xs).most_common(1)[0][0] if ioc_xs else None
+    # Where names begin and where the country sits — PER PAGE: the halves of
+    # a big draw are laid out a point or two apart.
+    cols = {}
+    for page in {p for p, _, _ in cand}:
+        mine = [ws for p, _, ws in cand if p == page]
+        name_xs = [w["x0"] for ws in mine for w in ws[1:4]
+                   if w["text"] == "Bye" or w["text"].endswith(",")]
+        if not name_xs:
+            return None
+        nx = min(Counter(round(x) for x in name_xs).most_common(3))[0]
+        ioc_xs = [round(w["x0"]) for ws in mine for w in ws
+                  if _IOC.match(w["text"]) and w["x0"] > nx + 25]
+        cols[page] = (nx, Counter(ioc_xs).most_common(1)[0][0] if ioc_xs else None)
 
     slots = []
-    for _, _, ws in cand:
+    for page, _, ws in cand:
+        name_x, country_x = cols[page]
         pos = int(ws[0]["text"])
-        lead = [w["text"] for w in ws[1:] if w["x0"] < name_x - 1]
+        lead = [w["text"] for w in ws[1:] if w["x0"] < name_x - 2]
         edge = (country_x - 2) if country_x else name_x + 90
-        body = [w for w in ws[1:] if name_x - 1 <= w["x0"] < edge]
+        body = [w for w in ws[1:] if name_x - 2 <= w["x0"] < edge]
         country = None
         if country_x:
             c = next((w["text"] for w in ws if abs(w["x0"] - country_x) <= 4 and _IOC.match(w["text"])), None)
@@ -125,7 +144,8 @@ def parse_slots(pdf_bytes: bytes) -> Optional[list]:
         text = " ".join(w["text"] for w in body).strip()
         slot = {"pos": pos, "bye": False, "placeholder": False, "seed": seed, "entry": entry,
                 "surname": None, "given": None, "country": country, "cut": False}
-        if text == "Bye" or text.startswith("Bye "):
+        # "B y e": the watermark's gap can still space out the word itself.
+        if text.replace(" ", "") == "Bye" or text.startswith("Bye "):
             slot["bye"] = True
         elif not text or text.lower().startswith(("qualifier", "lucky loser", "special exempt")):
             slot["placeholder"] = True
@@ -133,7 +153,11 @@ def parse_slots(pdf_bytes: bytes) -> Optional[list]:
             slot["cut"] = _ELLIPSIS in text or text.endswith("...")
             text = text.replace(_ELLIPSIS, "").replace("...", "").strip()
             sur, _, given = text.partition(",")
-            slot["surname"], slot["given"] = sur.strip(), given.strip()
+            # Letters the watermark still split off a surname: "K O RDA",
+            # "M E NSIK" -> "KORDA", "MENSIK". Single capitals only — a real
+            # particle ("DE", "LA") is two letters and keeps its space.
+            sur = re.sub(r"\b([A-Z]) (?=[A-Z])", r"\1", sur.strip())
+            slot["surname"], slot["given"] = sur, given.strip()
         slots.append(slot)
 
     slots.sort(key=lambda s: s["pos"])
@@ -170,8 +194,24 @@ def seeded_table(pdf_bytes: bytes) -> dict:
 # ── names ─────────────────────────────────────────────────────────────────
 
 def _fold(s: str) -> str:
-    s = unicodedata.normalize("NFKD", s or "")
-    return "".join(c for c in s if not unicodedata.combining(c)).lower().replace("-", " ").strip()
+    """Accents, the letters NFKD cannot split, and the German/Nordic
+    transliterations the sheet uses: Møller = Moller, Schönhaus =
+    Schoenhaus, Schwärzler = Schwaerzler."""
+    s = (s or "").replace("ø", "o").replace("Ø", "O").replace("æ", "ae").replace("ß", "ss")
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c)).lower().replace("-", " ")
+    return " ".join(s.replace("oe", "o").replace("ue", "u").replace("ae", "a").split())
+
+
+def _same_person(held: str, surname: str, given: str) -> bool:
+    """The name we hold in this slot is the sheet's person: the sheet's
+    surname is in it, and one of its OTHER words starts as the sheet's given
+    name does — Kwon Soon-woo / KWON, Soonwoo; Alexander / Aleksa… Shevchenko."""
+    h, sur, g = _fold(held), _fold(surname), _fold(given)
+    if not sur or sur not in h:
+        return False
+    rest = h.replace(sur, " ").split()
+    return not g or any(w[:1] == g[:1] for w in rest)
 
 
 def _title(word: str) -> str:
@@ -207,13 +247,13 @@ def resolve_names(slots: list, *, held: dict, te_players: list, seeded: dict,
             # sheet writes "Aleksandr" (2026-09-25). Every other source this
             # project matches against knows him by the name we hold.
             h = held.get(s["pos"])
-            if h and _fold(sur) and _fold(sur) in _fold(h) and _fold(h)[:1] == _fold(given)[:1]:
+            if h and _same_person(h, sur, given):
                 s["name"] = h
             continue
         stats["cut"] += 1
         # 1. The same slot in the draw we hold.
         h = held.get(s["pos"])
-        if h and _agrees(h, sur, given):
+        if h and (_agrees(h, sur, given) or _same_person(h, sur, given)):
             s["name"] = h
             stats["by_slot"] += 1
             continue
