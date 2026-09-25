@@ -540,8 +540,14 @@ async def _get(path: str) -> dict:
             snap = await asyncio.to_thread(sofa_ledger.snapshot, f"403 on {path}")
             s1 = await asyncio.to_thread(sofa_ledger.summary, 60)
             ledger_detail = {"requests_snapshot": snap, "last_hour": s1}
+        # A BAN IS REPORTED ONCE, AND ALWAYS (owner, 2026-09-25: "Our site
+        # DEPENDS on us not being blocked"). The FIRST refusal of a run is a
+        # warning, carrying the request ledger's snapshot; every retry the
+        # breaker makes while the ban lasts is info, so one ban is one alert.
+        # Never downgrade the first: it is the owner's alarm, not a fault
+        # the code can fix — a self-heal pass once made every ban silent.
         await app_log(
-            "info", "sofascore",
+            "warning" if _consecutive_blocks == 1 else "info", "sofascore",
             # STABLE TEXT, VARYING FACTS IN detail. The triage view groups by
             # the message and the alert digest fingerprints on it, so folding
             # the escalating minute count into the sentence split one problem
@@ -552,8 +558,8 @@ async def _get(path: str) -> dict:
                     "consecutive_blocks": _consecutive_blocks,
                     "proxy_configured": bool(os.environ.get(_PROXY_ENV)),
                     **ledger_detail},
-            dedup_key="sofa_blocked",
-            dedup_hours=1)
+            dedup_key="sofa_ban_start" if _consecutive_blocks == 1 else "sofa_blocked",
+            dedup_hours=6 if _consecutive_blocks == 1 else 1)
         raise SofascoreBlocked(f"403 on {path}")
     # A 404 is an ANSWER, not a refusal. Sofascore returns one for a season
     # with no upcoming events, an event id that has aged out, and any path that
