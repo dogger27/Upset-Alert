@@ -144,7 +144,6 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `H2H (${nMeet})` : 'H2H'],
                 ...(predictMatch ? [['prediction', 'Picks']] : []),
                 ...(played ? [['history', 'Points'], ['stats', 'Stats']] : [])]
-  // its word (owner, 2026-09-24), not one in proportion to its length.
   const TAB_PAD = 4
   const TAB_RULE = 1.5
   const TAB_MAX = 18 * FONT_SCALE
