@@ -134,6 +134,93 @@ def summary(minutes: int = 60, rows: Optional[list] = None) -> dict:
     }
 
 
+def bucket_minutes(minutes: int) -> int:
+    """How wide one bar is, so a window draws as ~60-170 bars."""
+    if minutes <= 60:
+        return 1
+    if minutes <= 6 * 60:
+        return 5
+    if minutes <= 24 * 60:
+        return 15
+    return 60
+
+
+def series(rows: list, minutes: int, bucket: int) -> list:
+    """The window as consecutive buckets, empty ones included, oldest first:
+    {t, n, blocked, failed, by_caller}. `blocked` is 403s and 429s — a
+    refusal; `failed` is everything else that was not a 2xx or 404
+    (timeouts come back with no status)."""
+    now = datetime.now(timezone.utc)
+    width = timedelta(minutes=bucket)
+    epoch = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    start = now - timedelta(minutes=minutes)
+    first = epoch + width * ((start - epoch) // width)
+    count = int((now - first) // width) + 1
+    out = [{"t": (first + width * i).isoformat(timespec="seconds"), "n": 0,
+            "blocked": 0, "failed": 0, "by_caller": {}} for i in range(count)]
+    for r in rows:
+        try:
+            t = datetime.fromisoformat(r["t"])
+        except (KeyError, ValueError):
+            continue
+        i = int((t - first) // width)
+        if not 0 <= i < count:
+            continue
+        b = out[i]
+        b["n"] += 1
+        st = r.get("status")
+        if st in (403, 429):
+            b["blocked"] += 1
+        elif not (isinstance(st, int) and (200 <= st < 300 or st == 404)):
+            b["failed"] += 1
+        c = r.get("caller") or "?"
+        b["by_caller"][c] = b["by_caller"].get(c, 0) + 1
+    return out
+
+
+def last_outcomes(days: int = 14) -> dict:
+    """The newest answered request and the newest refusal, however long ago
+    — the window may hold neither while we are blocked and barely asking."""
+    found = {"ok": None, "blocked": None}
+    today = datetime.now(timezone.utc).date()
+    for back in range(days + 1):
+        p = os.path.join(DIR, f"{today - timedelta(days=back):%Y-%m-%d}.jsonl")
+        try:
+            with open(p, encoding="utf-8") as fh:
+                lines = fh.readlines()
+        except OSError:
+            continue
+        for line in reversed(lines):
+            try:
+                r = json.loads(line)
+            except ValueError:
+                continue
+            st = r.get("status")
+            key = "ok" if isinstance(st, int) and 200 <= st < 300 else "blocked" if st in (403, 429) else None
+            if key and found[key] is None:
+                found[key] = r
+        if all(found.values()):
+            break
+    return found
+
+
+def snapshots(limit: int = 20) -> list:
+    """The block snapshots, newest first: when, why, and the hour before."""
+    out = []
+    for p in sorted(glob.glob(os.path.join(DIR, "block-*.jsonl")), reverse=True)[:limit]:
+        try:
+            with open(p, encoding="utf-8") as fh:
+                head = json.loads(fh.readline())
+        except (OSError, ValueError):
+            continue
+        s1 = head.get("summary_1h") or {}
+        out.append({"file": os.path.basename(p), "reason": head.get("reason"),
+                    "requests_1h": s1.get("requests"), "busiest_minute": s1.get("busiest_minute"),
+                    "by_caller_1h": s1.get("by_caller"),
+                    "requests_6h": (head.get("summary_6h") or {}).get("requests")})
+    return out
+
+
 def snapshot(reason: str) -> Optional[str]:
     """On a block: the last SNAPSHOT_HOURS of requests, copied beside the
     ledger. Returns the file's path, or None if it could not be written."""

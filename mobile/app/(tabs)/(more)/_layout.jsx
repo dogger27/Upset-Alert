@@ -42,6 +42,9 @@ export default function MoreLayout() {
       <Stack.Screen name="hall-of-fame" options={{ title: 'Hall of Fame' }} />
       <Stack.Screen name="rules" options={{ title: 'Rules' }} />
       <Stack.Screen name="about" options={{ title: 'About' }} />
+      <Stack.Screen name="admin/index" options={{ title: 'Admin' }} />
+      <Stack.Screen name="admin/sofascore" options={{ title: 'Sofascore requests' }} />
+      <Stack.Screen name="admin/logs" options={{ title: 'System log' }} />
     </Stack>
   )
 }

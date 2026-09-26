@@ -376,3 +376,10 @@ export const getGlobalGSTotals = () => request('/tournaments/global-gs-totals')
 export const getFinalGuess = (tournamentId) => request(`/tournaments/${tournamentId}/final-guess`)
 export const putFinalGuess = (tournamentId, body) =>
   request(`/tournaments/${tournamentId}/final-guess`, { method: 'PUT', body })
+
+/* ADMIN (owner, 2026-09-26: "make the admin menu accessible on the app").
+   The server refuses both to anyone who is not an admin. */
+export const getSofaRequests = (minutes = 1440, recent = 50) =>
+  request(`/admin/sofascore-requests?minutes=${minutes}&recent=${recent}`)
+export const getAdminLogs = (level) =>
+  request(`/admin/logs?limit=500${level ? `&level=${encodeURIComponent(level)}` : ''}`)
