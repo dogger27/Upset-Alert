@@ -156,7 +156,8 @@ def test_every_digest_hands_its_url_to_send_async():
             assert "unsubscribe_label" in kw, \
                 f"{fn.name} sends no label, so the footer reads 'these emails'"
         found += 1
-    assert found >= 6, f"only {found} digests found; the scan is not seeing them"
+    # Five since the standout-pick digest was removed (2026-09-26).
+    assert found >= 5, f"only {found} digests found; the scan is not seeing them"
 
 
 def test_the_footer_and_the_landing_page_say_the_same_words():

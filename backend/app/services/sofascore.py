@@ -1414,7 +1414,7 @@ async def resolve_tournament(db: AsyncSession, draw: Draw) -> Optional[tuple]:
 
 async def _compare_shape(db: AsyncSession, draw: Draw, shape, rows: list,
                          report: dict) -> None:
-    """Where the cup tree and our stored draw disagree — logged, never written.
+    """Fill the seeds and entry types the cup tree states and we lack.
 
     AFTER RESOLUTION, NEVER BEFORE, and that ordering is the fix for the alarm
     this kept raising. The comparison joins the two sources by NAME, and the
@@ -1437,7 +1437,7 @@ async def _compare_shape(db: AsyncSession, draw: Draw, shape, rows: list,
     Seeds and entry types Sofascore states and we lack are filled here for the
     same reason: after resolution there are more entries to fill, not fewer.
     """
-    from app.services.sofa_draw_shape import compare_to_entries, disagreement_summary
+    from app.services.sofa_draw_shape import compare_to_entries
 
     cmp = compare_to_entries(shape, rows)
     report["shape_matched"] = cmp["matched"]
@@ -1445,7 +1445,7 @@ async def _compare_shape(db: AsyncSession, draw: Draw, shape, rows: list,
     # print seeds two days out (Chengdu had none the afternoon Hangzhou had
     # all eight) and a Wikipedia draft can miss an entry type; the cup tree's
     # teamSeed carries both once its events exist. Only ever fills a NULL — a
-    # seed we hold is never overwritten here; disagreement is logged below.
+    # seed we hold is never overwritten here.
     filled = 0
     for mine, seed, entry_type in cmp.get("fillable", []):
         if seed is not None and mine.seed is None:
@@ -1460,31 +1460,12 @@ async def _compare_shape(db: AsyncSession, draw: Draw, shape, rows: list,
             f"Filled {filled} seed/entry-type value(s) for {draw.year} "
             f"{draw.name} ({draw.gender}) from the cup tree",
             {"draw_id": draw.id, "filled": filled})
-    why = disagreement_summary(cmp)
-    report["shape_disagreement"] = why
-    if why:
-        await app_log(
-            "warning", "sofascore",
-            f"Draw shape disagrees with Wikipedia for {draw.year} "
-            f"{draw.name} ({draw.gender}): {why}",
-            {"draw_id": draw.id, "matched": cmp["matched"],
-             "position": cmp["position"][:10], "seed": cmp["seed"][:10],
-             "entry_type": cmp["entry_type"][:10],
-             "byes_ours": cmp["byes_ours"],
-             "byes_sofascore": cmp["byes_sofascore"],
-             "unfilled_sofascore": cmp["unfilled_sofascore"]},
-            dedup_key=f"shape_disagree_{draw.id}", dedup_hours=24)
-    else:
-        # A tree still filling in agrees on everything it states; the slots it
-        # has not stated yet are said here, at info, because they fill on
-        # their own (compare_to_entries).
-        logger.info(
-            "Draw shape agrees with Wikipedia for %s %s (%s): "
-            "%d entrant(s), byes %s; not yet filled — %d slot(s) "
-            "on Sofascore, %d of ours",
-            draw.year, draw.name, draw.gender,
-            cmp["matched"], cmp["byes_sofascore"],
-            len(cmp["unfilled_sofascore"]), len(cmp["pending_ours"]))
+    # NO "DISAGREES WITH WIKIPEDIA" WATCH ANY MORE (owner, 2026-09-26). It was
+    # a measurement: whether the cup tree could stand in for Wikipedia's draw
+    # shape. Draws are built from official sources now (WTA JSON, the ATP
+    # sheet, Tennis Explorer), and draw_invariants checks the shape we hold —
+    # a second opinion from a tree that fills later than all of them said
+    # nothing anyone acted on. Only the fill above remains.
 
 
 async def resolve_draw(db: AsyncSession, draw: Draw, *, force: bool = False) -> dict:

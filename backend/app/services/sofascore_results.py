@@ -9,15 +9,14 @@ feed sees matches vanish and can never record who won. So results come from
 events with `winnerCode`, full per-set scores including tiebreaks, and a real
 `startTimestamp`.
 
-WHY THIS WRITES SHADOW COLUMNS AND NOTHING ELSE. `espn_monitor` is the only
-writer of `winner_id` / `completed_at` / `scores_json` / `started_at`; eighteen
-other modules read them — scoring, standings, pick locking, notifications, H2H,
-upsets. That makes the eventual cutover a one-writer swap, but it also means a
-wrong winner does not render badly: it scores the league wrong and emails
-everyone about it, and the notification dedup tables mean a bad send cannot be
-un-sent. So this writes `sofa_*` beside the real columns, changes nothing a user
-can see, and earns its promotion by being diffed against ESPN over a full
-tournament. `scripts/sofa_diff.py` is that report.
+WHY SHADOW COLUMNS FIRST, AND WHY THEY ARE NOT SHADOW ANY MORE. A wrong
+winner does not render badly: it scores the league wrong and emails everyone
+about it, and a bad send cannot be un-sent. So this began by writing `sofa_*`
+beside ESPN's columns and was diffed against ESPN over real tournaments before
+it was allowed to own a result. It earned that on 2026-08-23 (app_settings
+sofa_authoritative) and now promotes its result into `winner_id` /
+`scores_json` itself; the comparison job that granted it is retired
+(2026-09-26). ESPN stands by only while Sofascore's live feed is unhealthy.
 
 WHY THE CADENCE IS MINUTES, NOT SECONDS. A result is final — being 90 seconds
 late to record it costs nothing, whereas a point score is worthless at 60s. One
@@ -51,7 +50,7 @@ POLL_INTERVAL = 180.0
 # finished event in the SEASON, and a season is singles plus doubles plus
 # qualifying — around 175 for one gender of a combined Masters. The oldest
 # fifty-odd matches sat past the wall and never came back, which is exactly
-# where sofa_diff's two missing first-round matches were.
+# where the handover diff's two missing first-round matches were.
 #
 # Cheap to raise. Pages run newest-first and the walk stops as soon as one
 # teaches us nothing, so steady state is a single page per draw either way —

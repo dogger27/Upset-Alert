@@ -123,14 +123,12 @@ async def _latest_content(db: AsyncSession, pref_key: str, user_id: int) -> dict
 
     user_id scopes the types that are personal by construction. A draw release
     or a round digest is the same message for everyone, so the newest one is the
-    honest replay; a standout pick is a statement about the caller's own bracket
-    and replaying somebody else's would describe the type wrongly.
+    honest replay; a league join is about the caller's own league and
+    replaying somebody else's would describe the type wrongly.
     """
     from datetime import timedelta
-    from app.models.prediction import UserPrediction
     from app.models.tournament import Draw, DrawEntry
     from app.services import push_content
-    from app.services.email import _tournament_label
 
     if pref_key == "draw_released":
         # The most recent SEND, not the most recent week. Week 30 went out as
@@ -290,69 +288,6 @@ async def _latest_content(db: AsyncSession, pref_key: str, user_id: int) -> dict
                             "opponent_bye": opponents.get(q.id, (None, "", False))[2],
                         } for q in quals],
                     }], True, 0)
-
-    if pref_key == "standout_pick":
-        from app.models.notification import StandoutPickNotification
-        from app.models.tournament import Match
-        from app.services.notifications import (
-            STANDOUT_MAX_SHARE, STANDOUT_MIN_PREDICTIONS, _email_round_label,
-        )
-        from app.services.email import _tier_badge
-
-        # The caller's OWN most recent standout, not the site's: this replays a
-        # notification that is personal by construction, and showing someone
-        # another competitor's minority call would misrepresent the type
-        # entirely. Falls through to the sample when they have never had one.
-        #
-        # The share conditions are not decoration. Every match that had already
-        # finished when this feature shipped carries a placeholder row —
-        # notified, zero counts, never actually sent (see the ledger-guarded
-        # backfill in database.py). Matching on notified_at alone replayed one of
-        # those as "You called it — Sinner def. Kecmanović … 0 of 0 got it",
-        # which is neither true nor a standout. Only a row that genuinely
-        # qualified can stand in for a real notification.
-        row = (await db.execute(
-            select(StandoutPickNotification, Match)
-            .join(Match, Match.id == StandoutPickNotification.match_id)
-            .join(
-                UserPrediction,
-                (UserPrediction.match_id == StandoutPickNotification.match_id)
-                & (UserPrediction.predicted_winner_id == Match.winner_id)
-                & (UserPrediction.user_id == user_id),
-            )
-            .where(
-                StandoutPickNotification.notified_at.isnot(None),
-                StandoutPickNotification.correct_count > 0,
-                StandoutPickNotification.prediction_count >= STANDOUT_MIN_PREDICTIONS,
-                StandoutPickNotification.correct_count
-                < StandoutPickNotification.participant_count * STANDOUT_MAX_SHARE,
-            )
-            .order_by(StandoutPickNotification.notified_at.desc())
-            .limit(1)
-        )).first()
-        if row:
-            spn, match = row
-            draw = await db.get(Draw, spn.draw_id)
-            winner = await db.get(DrawEntry, match.winner_id)
-            loser_id = match.player2_id if match.winner_id == match.player1_id else match.player1_id
-            loser = await db.get(DrawEntry, loser_id) if loser_id else None
-            if draw and winner and loser:
-                from app.services.notifications import _match_score_str
-                return push_content.standout_pick([{
-                    "match_id": match.id,
-                    "draw_id": draw.id,
-                    "draw_name": draw.name,
-                    "gender": draw.gender,
-                    "category": draw.category,
-                    "label": _tournament_label(draw.name, draw.category or "", draw.gender or "M"),
-                    "tier": _tier_badge(draw.category or "", draw.gender),
-                    "round_name": _email_round_label(draw.round_name(match.round_number)),
-                    "winner": winner.name,
-                    "loser": loser.name,
-                    "score": _match_score_str(match),
-                    "correct_count": spn.correct_count,
-                    "participant_count": spn.participant_count,
-                }])
 
     if pref_key == "league_member_joined":
         from app.models.league import League, LeagueMember

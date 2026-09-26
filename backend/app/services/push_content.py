@@ -18,13 +18,12 @@ from typing import Optional
 # is only a guard against an absurd payload, not a display budget.
 MAX_BODY = 900
 
-# Item caps for the two list-shaped notifications. MAX_BODY alone is not enough:
+# Item caps for the list-shaped notifications. MAX_BODY alone is not enough:
 # it slices mid-word, so a long batch ended "... — 2 of 6 got" with no way for
 # the reader to tell whether that was the end. These cap the item COUNT and say
 # how many were left out, which is both honest and readable. A round of 64
 # finishing can genuinely produce a dozen minority-correct picks for one user.
 MAX_LISTED_CHANGES = 8
-MAX_LISTED_PICKS = 5
 # Qualifier placements are listed in full, not sampled: this notification says
 # "here is who is in the draw now", and a truncated answer to that is worse than
 # none. Sixteen covers a Grand Slam's full complement (a 1000 has twelve), and
@@ -284,64 +283,6 @@ def qualifiers_added(draws: list[dict], affects_your_picks: bool, event_seq: int
     }
 
 
-def standout_pick(picks: list[dict]) -> dict:
-    """
-    picks: [{draw_name, gender, category, draw_id, winner, loser,
-             correct_count, participant_count}, ...] rarest call first.
-
-    One user's correct calls that most of the field missed.
-
-    The result leads the BODY, not the title, and that placement is load-bearing.
-    A newline in the title does not break the line on iOS — it truncates there,
-    silently dropping everything after it, so "You called it!\\nBergs def. Fritz"
-    arrived as bare "You called it!" with the result gone. The title is therefore
-    one short line, and the result is the body's first line, which lands
-    immediately under the OS's "from Upset Alert" — near enough to the intended
-    reading, and the attribution line between them is not ours to move.
-
-    Everything here is written for the COLLAPSED banner, which shows several
-    lines and is where this will actually be read. So each line has to fit
-    without wrapping: the round ("· R32") was the one thing pushing the draw line
-    onto a second row, and it is dropped. The email keeps it, having room.
-
-    The share is a percentage as well as a fraction — "2 / 11" needs arithmetic
-    before it means anything, "(18%)" does not. The set-by-set score is
-    deliberately absent: it says nothing about the pick being a standout, which
-    is the only reason this notification exists.
-
-    Ordered rarest-first by the caller, so the batch leads with its best call and
-    the link points at that draw.
-    """
-    n = len(picks)
-    top = picks[0]
-
-    lines = []
-    for p in picks[:MAX_LISTED_PICKS]:
-        share = round(100 * p["correct_count"] / p["participant_count"])
-        lines.append(
-            f"{p['winner']} def. {p['loser']}\n"
-            f"{p['draw_name']} · {tier_label(p.get('category'), p['gender'])}\n"
-            f"Only {p['correct_count']} / {p['participant_count']} ({share}%) got this!"
-        )
-    if n > MAX_LISTED_PICKS:
-        lines.append(f"…and {n - MAX_LISTED_PICKS} more")
-
-    # Constant regardless of batch size: it is the one line guaranteed not to
-    # wrap, and the body enumerates whatever else is in there.
-    title = "You called it!"
-
-    url = f"/tournaments/{top['draw_id']}"
-    return {
-        "title": title,
-        "body": "\n\n".join(lines)[:MAX_BODY],
-        "url": url,
-        # Keyed on the matches themselves: two different batches must never
-        # collapse into one another on the lock screen.
-        "tag": "standout-" + "-".join(str(p["match_id"]) for p in picks[:4]),
-        "actions": [{"action": "open", "title": "View draw", "url": url}],
-    }
-
-
 def league_join(new_username: str, league_name: str, league_id: int) -> dict:
     """
     Fixed title, names in the body — the same shape as every other type.
@@ -416,14 +357,6 @@ def sample(pref_key: str) -> dict:
                     "Bergs (Q) vs Alcaraz [1]\nDamm (Q) vs de Minaur [7]\n…and 9 more",
             "url": "/",
             "tag": "sample-qualifiers-added",
-            "actions": [{"action": "open", "title": "View draw", "url": "/"}],
-        },
-        "standout_pick": {
-            "title": "You called it!",
-            "body": "Bergs def. Fritz\nCincinnati Open · ATP 1000\n"
-                    "Only 2 / 11 (18%) got this!",
-            "url": "/",
-            "tag": "sample-standout",
             "actions": [{"action": "open", "title": "View draw", "url": "/"}],
         },
     }.get(pref_key, {
