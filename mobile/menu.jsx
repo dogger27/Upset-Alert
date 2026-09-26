@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Sheet } from './sheet'
+import { useAuth } from './auth'
 import { C, R, S, T } from './theme'
 
 const ITEMS = [
@@ -17,12 +18,17 @@ const ITEMS = [
   { href: '/about',        label: 'About',        sub: 'Upset Alert, and where its data comes from', icon: 'information-circle-outline' },
 ]
 
+// Admins only (owner, 2026-09-26); the server refuses its data to anyone else.
+const ADMIN = { href: '/admin', label: 'Admin', sub: 'Sofascore requests, the system log', icon: 'construct-outline' }
+
 export function MenuSheet({ visible, onClose }) {
   const router = useRouter()
+  const { me } = useAuth()
+  const items = me?.is_admin ? [...ITEMS, ADMIN] : ITEMS
   return (
     <Sheet visible={visible} onClose={onClose}>
       <View style={s.list}>
-        {ITEMS.map(it => (
+        {items.map(it => (
           <Pressable key={it.href} onPress={() => { onClose(); router.push(it.href) }}
                      style={({ pressed }) => [s.row, pressed && { opacity: 0.7 }]}
                      accessibilityRole="link" accessibilityLabel={it.label}>

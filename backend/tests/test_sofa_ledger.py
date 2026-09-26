@@ -61,3 +61,30 @@ def test_caller_is_the_first_frame_outside_the_client():
     def wrapper():
         return poller()
     assert wrapper().startswith("test_sofa_ledger.")
+
+
+def test_the_series_buckets_every_minute_and_counts_refusals(tmp_path, monkeypatch):
+    monkeypatch.setattr(L, "DIR", str(tmp_path))
+    tok = L.CALLER.set("sofascore_live.poll_once")
+    L.record("/sport/tennis/events/live", "direct", 200, 10)
+    L.record("/sport/tennis/events/live", "direct", 403, 10)
+    L.record("/sport/tennis/events/live", "direct", None, 10)
+    L.CALLER.reset(tok)
+    rows = L._read_since(L.datetime.now(L.timezone.utc) - L.timedelta(minutes=60))
+    ser = L.series(rows, 60, L.bucket_minutes(60))
+    assert 60 <= len(ser) <= 62                      # empty minutes included
+    last = ser[-1]
+    assert last["n"] == 3 and last["blocked"] == 1 and last["failed"] == 1
+    assert last["by_caller"] == {"sofascore_live.poll_once": 3}
+    assert L.bucket_minutes(7 * 24 * 60) == 60
+
+
+def test_last_outcomes_and_snapshots_are_found(tmp_path, monkeypatch):
+    monkeypatch.setattr(L, "DIR", str(tmp_path))
+    L.record("/a", "direct", 200, 10)
+    L.record("/b", "direct", 403, 10)
+    last = L.last_outcomes()
+    assert last["ok"]["path"] == "/a" and last["blocked"]["path"] == "/b"
+    L.snapshot("403 on /b")
+    snaps = L.snapshots()
+    assert len(snaps) == 1 and snaps[0]["reason"] == "403 on /b" and snaps[0]["requests_1h"] == 2

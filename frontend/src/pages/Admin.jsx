@@ -8,6 +8,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { computeCohortInfo, getDisplayStatus, DISPLAY_STATUS_LABELS } from '../utils/drawStatus.js'
 import './Admin.css'
+import SofascorePanel from './AdminSofascore'
 import './Tournaments.css'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -16,11 +17,13 @@ const WTA_URL = `https://en.wikipedia.org/wiki/${CURRENT_YEAR}_WTA_Tour`
 // Every category app_log() is actually called with. A category missing here is
 // a filter that silently can't reach its own rows.
 const CATEGORIES = [
-  'admin', 'alerts', 'api', 'contact', 'discovery', 'espn', 'h2h',
-  'highest_rank_bot', 'leagues', 'notifications', 'rankings', 'scheduler', 'scraper',
+  'admin', 'alerts', 'api', 'auth', 'contact', 'discovery', 'draws', 'espn', 'espn_monitor', 'h2h',
+  'highest_rank_bot', 'history', 'leagues', 'live_activity', 'notifications', 'oop_verify',
+  'order_of_play', 'rankings', 'schedule', 'scheduler', 'score_history', 'scoring', 'scraper',
+  'sofascore', 'sofascore_doubles',
 ]
 
-const TABS = ['Users', 'Tournaments', 'Logs', 'Info', 'Players', 'Rankings', 'Settings']
+const TABS = ['Users', 'Tournaments', 'Logs', 'Sofascore', 'Info', 'Players', 'Rankings', 'Settings']
 
 const CATEGORY_ORDER = { 'Grand Slam': 0, 'ATP 1000': 1, 'WTA 1000': 1, 'ATP 500': 2, 'WTA 500': 2, 'ATP 250': 3, 'WTA 250': 3 }
 const GENDER_COLORS = { M: 'var(--atp-tint)', F: 'var(--wta-tint)' }
@@ -1097,6 +1100,7 @@ export default function Admin() {
         {activeTab === 'Users'       && <UsersPanel user={user} />}
         {activeTab === 'Tournaments' && <TournamentsPanel user={user} />}
         {activeTab === 'Logs'        && <LogsPanel user={user} />}
+        {activeTab === 'Sofascore'   && <SofascorePanel />}
         {activeTab === 'Info'        && <InfoPanel />}
         {activeTab === 'Players'     && <PlayersPanel user={user} />}
         {activeTab === 'Rankings'    && <RankingsPanel user={user} />}

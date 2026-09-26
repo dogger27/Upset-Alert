@@ -331,10 +331,24 @@ async def sofascore_requests(
     import asyncio
     from datetime import datetime, timedelta, timezone
     from app.services import sofa_ledger
+    from app.services import sofascore
     minutes = max(1, min(minutes, 60 * 24 * 7))
     rows = await asyncio.to_thread(
         sofa_ledger._read_since, datetime.now(timezone.utc) - timedelta(minutes=minutes))
+    bucket = sofa_ledger.bucket_minutes(minutes)
+    last = await asyncio.to_thread(sofa_ledger.last_outcomes)
+    snaps = await asyncio.to_thread(sofa_ledger.snapshots)
+    # The charts' data (admin Sofascore tab, web and app): buckets, the
+    # budgets they are drawn against, and whether we are blocked right now.
     return {"summary": sofa_ledger.summary(minutes, rows),
+            "series": sofa_ledger.series(rows, minutes, bucket),
+            "bucket_minutes": bucket,
+            "budgets": {"hourly": sofa_ledger.HOURLY_WARN,
+                        "callers": sofa_ledger.CALLER_WARN,
+                        "caller_default": sofa_ledger.CALLER_WARN_DEFAULT},
+            "breaker": {"blocked_for_s": round(sofascore.blocked_for())},
+            "last": last,
+            "snapshots": snaps,
             "recent": rows[-max(0, min(recent, 1000)):]}
 
 
