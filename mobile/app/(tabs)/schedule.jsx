@@ -285,6 +285,7 @@ export default function ScheduleScreen() {
   }, [openSheet])
   // Only a row with a score to show: the sheet's Points tab exists once there is play.
   const showHist = useCallback((e) => {
+    if (e && !PLAYED.includes(e.status)) { openSheet(e, 'auto'); return }
     if (!(e && h2hPairOf(e, { needSlugs: false })?.status && openSheet(e, 'history'))) setHist(e)
   }, [openSheet])
   const openHist = useMemo(() => unlessSwiping(showHist), [showHist])
@@ -1212,6 +1213,15 @@ function LineTags({ first, alt, when, flag, tournament }) {
 
 /* The H2H pair a row can open — singles, both players known to Tennis
    Explorer — in the shape the H2H sheet takes. */
+/* WHAT A TAP ON A ROW OPENS. Play started: the match sheet on its point
+   history (or the history sheet for doubles). Not started (owner,
+   2026-09-26): the match sheet too, on H2H when the two have met and Bio when
+   they have not — any singles row with both players named. */
+const PLAYED = ['live', 'completed', 'postponed', 'to_be_completed']
+function canOpen(e) {
+  return PLAYED.includes(e.status) || !!h2hPairOf(e, { needSlugs: false })
+}
+
 function h2hPairOf(e, { needSlugs = true } = {}) {
   const a = (e.players || []).find(p => p.side === 'a'), b = (e.players || []).find(p => p.side === 'b')
   /* THE WHOLE PLAYER, not a name and a slug (2026-09-23): the sheet compares
@@ -1286,7 +1296,7 @@ function MiniRows({ list, tagsOf, children }) {
 }
 
 function MatchMini({ e, first, alt, tourBar, past, tournament, venueMode, venueTz, onHistory, onH2H, onPredictors, onMenu, inCourt }) {
-  const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
+  const openable = onHistory && canOpen(e)
   const pair = onH2H ? h2hPairOf(e) : null
   const picks = onPredictors && e.match_id != null
   /* HELD, NOT WORN (owner, 2026-09-20): what this match can open used to be
@@ -1372,7 +1382,7 @@ function MatchRow({ e, first, alt, tourBar, past, leftW, venueMode, venueTz, onH
   // Postponed: the word in the clock's column, never a start time (miniTags).
   const postponed = e.status === 'postponed'
   const when = postponed ? 'Postponed' : hasStarted(e) ? '' : rowWhen(e, venueMode ? venueTz : undefined, venueMode)
-  const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
+  const openable = onHistory && canOpen(e)
   const Wrap = openable ? Pressable : View
   return (
     <Wrap style={[s.row, !first && s.rowNext, alt && s.rowAlt]} onPress={openable ? () => onHistory(e) : undefined}
@@ -1456,7 +1466,7 @@ function EntryRow({ e, venueMode, venueTz, onH2H, onHistory, onPredictors, onCha
      and card the draw page opens, because the two surfaces describe the same
      match. Scheduled rows stay inert: nothing to show, and a dead tap reading
      as a broken page is the draw page's own documented lesson. */
-  const openable = onHistory && ['live', 'completed', 'postponed', 'to_be_completed'].includes(e.status)
+  const openable = onHistory && canOpen(e)
   const Wrap = openable ? Pressable : View
   return (
     <View style={s.edge}>
