@@ -1,18 +1,19 @@
-"""Run the structured schedule sources beside the PDF and report the difference.
+"""Court names, learned by setting a feed's day beside the sheet's.
 
-Nothing here writes a schedule row. The sheet stays authoritative while this
-answers the only question worth answering before demoting it: on a real day, of
-a real tournament, does the feed say the same thing?
+THE SHADOW IS RETIRED (owner, 2026-09-26: "haven't we already learned what
+we needed to know from this shadowing?"). This module began as a 30-minute
+job comparing the structured feeds with the PDF sheet, to decide whether the
+feeds could become the schedule. They did, on 2026-09-18, and the job went on
+reporting an agreement figure nobody needed while re-fetching Sofascore pages
+the ingest had just fetched. The job and its report are gone.
 
-Measured on staging before this existed — Monterrey 54/54 from the WTA's own
-JSON, Winston-Salem 68/75 from Sofascore — but a fixture is not a season. This
-runs the same comparison continuously, so the decision to switch is made on
-days we watched rather than on two tournaments I happened to pick.
-
-It also LEARNS the court names the WTA feed does not give. Tour events carry
-CourtID (1, 2, 3) where the sheet says ESTADIO or GRANDSTAND; every day both
-sources describe teaches the mapping by majority, and the winner is kept in
-app_settings so the feed can eventually stand alone.
+What stays is the one thing the comparison still does for the site: it
+LEARNS COURT NAMES. The WTA feed says "CourtID 1" and Sofascore "Court 2"
+where the sheet says CENTER COURT and GRANDSTAND, and a feed-built day is
+rendered with the names learned here (schedule_feeds, min_votes=3). Every
+tournament has to learn its own, so order_of_play calls learn_from_sheet
+whenever it imports a new sheet, and the Sofascore half reads only the pages
+the ingest already fetched (offer_events) — it sends no request of its own.
 """
 
 import logging
@@ -414,21 +415,16 @@ async def court_names(db, tournament_id: int, min_votes: int = 1) -> dict:
     return court_winners(tally, min_votes)
 
 
-async def run_shadow(db, tournament, draws, day: date) -> Optional[dict]:
-    """Compare, learn, and record one line. Never raises into the caller."""
+async def learn_from_sheet(tournament, draws, day: date) -> None:
+    """Vote the day's court names in, from a sheet just imported. Its own
+    session, after the ingest's write transaction — the WTA feed fetch
+    inside compare_day must not hold the writer (see _remember_setting).
+    Never raises into the order-of-play job."""
     try:
-        report = await compare_day(db, tournament, draws, day)
+        async with AsyncSessionLocal() as db:
+            report = await compare_day(db, tournament, draws, day)
+            if report and report["court_votes"]:
+                await learn_courts(db, tournament.id, report["court_votes"])
     except Exception as exc:              # noqa: BLE001
-        logger.warning("shadow comparison failed for %s: %s", tournament.name, exc)
-        return None
-    if not report:
-        return None
-    if report["court_votes"]:
-        await learn_courts(db, tournament.id, report["court_votes"])
-    agree = report["matched"] / report["sheet"] if report["sheet"] else 0
-    # No longer an app_log row: the agreement figure was the case for making
-    # the feeds the schedule, made on 2026-09-18 — 33 rows a day of it in the
-    # admin log told nobody anything. The process log keeps the line.
-    logger.info("shadow %s %s: feed matched %s/%s of the sheet",
-                tournament.name, report["day"], report["matched"], report["sheet"])
-    return report | {"agreement": round(agree, 3)}
+        logger.warning("court-name learning failed for %s %s: %s",
+                       tournament.name, day, exc)

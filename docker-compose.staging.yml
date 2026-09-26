@@ -105,7 +105,6 @@ services:
       # Structured schedule feeds measured against the sheet they would
       # replace. Staging only: the job writes no schedule row, but this is
       # where the numbers are gathered before the PDF is demoted anywhere.
-      - SCHEDULE_SHADOW=true
       - SOFASCORE_PROXY=${SOFASCORE_PROXY:-}
     extra_hosts:
       # So SOFASCORE_PROXY can name the docker gateway for a host-side tunnel.

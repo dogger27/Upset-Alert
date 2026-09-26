@@ -908,6 +908,11 @@ async def refresh_order_of_play() -> int:
                                 logger.info("%s %s: named %d round(s) from the "
                                             "feed the sheet did not print",
                                             tournament.name, pdf_date, named)
+                    # A NEW SHEET TEACHES THE FEEDS ITS COURT NAMES — see
+                    # schedule_shadow. After the write lock, in its own session.
+                    if not feed_doc and not (ingested or {}).get("skipped"):
+                        from app.services.schedule_shadow import learn_from_sheet
+                        await learn_from_sheet(tournament, draws, pdf_date)
                     if not (ingested or {}).get("skipped"):
                         level, msg, key = _pdf_fallback_note(
                             tournament, pdf_date, declined_days, unfed_days, thin_days,
