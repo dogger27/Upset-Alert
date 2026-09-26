@@ -34,7 +34,7 @@
  * the endpoint's own a/b again.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { getH2H, getPairOdds, getPlayerForm } from './api'
@@ -95,7 +95,16 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   /* OPENED FOR A REASON (owner, 2026-09-24): the H2H chip opens Bio, "who
      called it" Prediction, a tap on a score Points. Applied on each OPENING
      (openKey), never on stepping to the next match, which keeps the tab. */
-  useEffect(() => { if (visible && initialTab) setTab(initialTab) }, [visible, openKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  /* 'auto' (owner, 2026-09-26 — a tap on a match not yet played): Bio while
+     the meetings load, then H2H if the two have met. Only until the reader
+     picks a tab themselves; the meetings landing must never pull them off it. */
+  const autoTab = useRef(false)
+  useEffect(() => {
+    if (!visible || !initialTab) return
+    autoTab.current = initialTab === 'auto'
+    setTab(initialTab === 'auto' ? 'bio' : initialTab)
+  }, [visible, openKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const pickTab = (k) => { autoTab.current = false; setTab(k) }
   /* POINT HISTORY AND MATCH STATS, once there is play to show (owner,
      2026-09-24) — a live or finished match; `histEntry` is the row the
      history sheet reads. */
@@ -137,6 +146,14 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
     ? (hd?.started_at ? `Started ${clockOf(hd.started_at)}` : null)
     : prettyDuration(hd?.duration_min && hd.duration_min <= 900 ? hd.duration_min : null)
   const nMeet = view?.meetings?.length
+  // Decided on THIS pair's meetings only: the hook still holds the last
+  // pair's for a render after the sheet switches players.
+  const ours = !!d && [d.slug_a, d.slug_b].includes(a?.te_slug) && [d.slug_a, d.slug_b].includes(b?.te_slug)
+  useEffect(() => {
+    if (!autoTab.current || !ours) return
+    autoTab.current = false
+    if (nMeet) setTab('meetings')
+  }, [ours, nMeet])
   // The Meetings tab's surface switch; the draw's surface, as a word.
   const [meetOnSurface, setMeetOnSurface] = useState(false)
   const surfaceWord = surface ? String(surface).charAt(0).toUpperCase() + String(surface).slice(1).toLowerCase() : null
@@ -219,7 +236,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
             their words, the words as large as the row allows (tabSize). */}
         <View style={s.tabs} onLayout={e => setTabsW(e.nativeEvent.layout.width)}>
           {tabs.map(([k, label], i) => (
-            <Pressable key={k} onPress={() => setTab(k)} hitSlop={4}
+            <Pressable key={k} onPress={() => pickTab(k)} hitSlop={4}
                        style={[s.tabBtn, tabW ? { width: tabW[i] } : { flex: 1 },
                                i > 0 && s.tabBtnRule, shownTab === k && s.tabBtnOn]}
                        accessibilityRole="tab" accessibilityState={{ selected: shownTab === k }}>
