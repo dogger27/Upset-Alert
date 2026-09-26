@@ -142,7 +142,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   const surfaceWord = surface ? String(surface).charAt(0).toUpperCase() + String(surface).slice(1).toLowerCase() : null
   const shownMeetings = (view?.meetings || []).filter(m => !meetOnSurface || meetingOnSurface(m, surface))
   const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `H2H (${nMeet})` : 'H2H'],
-                ...(predictMatch ? [['prediction', 'Predictions']] : []),
+                ...(predictMatch ? [['prediction', 'Picks']] : []),
                 ...(played ? [['history', 'Points'], ['stats', 'Stats']] : [])]
 
   /* THE TABS, AS LARGE AS THE ROW ALLOWS (owner, 2026-09-24): one type size
