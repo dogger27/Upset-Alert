@@ -111,8 +111,12 @@ def _refused(source: str, path: str, status) -> None:
     if now - _last_snapshot.get(source, 0) < _SNAPSHOT_EVERY:
         return
     _last_snapshot[source] = now
+    # Off the event loop: reading six hours of rows back takes ~40 ms, and
+    # every other request the server is answering would wait for it.
     try:
-        sofa_ledger.snapshot(f"{status} on {path}", dir_=dir_for(source))
+        import asyncio
+        asyncio.get_running_loop().run_in_executor(
+            None, sofa_ledger.snapshot, f"{status} on {path}", dir_for(source))
     except Exception:
         pass
 
