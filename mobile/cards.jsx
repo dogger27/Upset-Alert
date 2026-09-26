@@ -1269,9 +1269,9 @@ const FLAG_PX = 22
 const FLAG_KEEP = 0.85
 /* "A / B" with each side's flag ahead of its name; a side with no country
    keeps its name alone. pairForms joins with " / ", so the split is exact. */
-export function withFlags(text, glyphs) {
-  const parts = String(text).split(' / ')
-  return parts.map((part, i) => (glyphs[i] ? `${glyphs[i]} ${part}` : part)).join(' / ')
+export function withFlags(text, glyphs, joiner = ' / ') {
+  const parts = String(text).split(joiner)
+  return parts.map((part, i) => (glyphs[i] ? `${glyphs[i]} ${part}` : part)).join(joiner)
 }
 /* `trail`: an entry chip, right-aligned at the END of the name's slot — its
    column, just left of the round (owner, 2026-09-24). `reserve`: room at the
@@ -1293,7 +1293,10 @@ export function PlayerName({ name, doubles = false, alternatives = false, shrink
   const family = flat.fontFamily || 'Archivo_500Medium'
   const size = flat.fontSize || 15
 
-  const glyphs = doubles && flags ? flags.map(c => flagEmoji(c)) : []
+  /* An either/or side too (owner, 2026-09-26): each candidate's flag right
+     before her own name — "🇭🇺 Bondar or 🇷🇴 Ruse" — never the two side by
+     side ahead of both. */
+  const glyphs = (doubles || alternatives) && flags ? flags.map(c => flagEmoji(c)) : []
   let text = forms[0]
   let fontSize = size
   let flagged = glyphs.length > 0
@@ -1358,7 +1361,7 @@ export function PlayerName({ name, doubles = false, alternatives = false, shrink
           backstop shrink names that fit. */}
       <Text style={[style, { flexShrink: 1 }, fontSize !== size && { fontSize }]} numberOfLines={1}
             adjustsFontSizeToFit minimumFontScale={0.88}>
-        {flagged ? withFlags(text, glyphs) : text}
+        {flagged ? withFlags(text, glyphs, alternatives && !doubles ? ' or ' : ' / ') : text}
       </Text>
       {after}
       {trail ? <View style={u.trailPush} /> : null}

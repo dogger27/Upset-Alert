@@ -60,7 +60,9 @@ export function MatchCard({ e, scale = 1, badges = true, round = null }) {
   const doubles = e.discipline !== 'singles'
   /* Both rows get the SAME number of flag slots — a doubles pair needs two —
      so the two names still start at the same x. */
-  const flagSlots = Math.max(1, sideFlags(e.players, 'a').length, sideFlags(e.players, 'b').length)
+  // An either/or side carries its flags inline, beside each name — no slot.
+  const slotFlags = side => (sideIsAlternatives(e, side) ? 0 : sideFlags(e.players, side).length)
+  const flagSlots = Math.max(1, slotFlags('a'), slotFlags('b'))
   /* The column is sized for the widest thing it can hold, per match: a "10"
      from a match tiebreak, else one digit — the site's --sched-set-w. */
   const twoDigit = (sets || []).some(row => (row || []).some(c => parseSet(c).g.length > 1))
@@ -108,13 +110,13 @@ export function MatchCard({ e, scale = 1, badges = true, round = null }) {
                 on the left (owner, 2026-09-17). */}
             {badges && <PosBadge seed={sideSeed(e.players, side)} drawRank={sideDrawRank(e.players, side)} />}
             {/* A pair's flags ride inside the name, one before each (owner, 2026-09-17). */}
-            {!doubles && <FlagSlot codes={sideFlags(e.players, side)} slots={flagSlots} />}
+            {!doubles && !sideIsAlternatives(e, side) && <FlagSlot codes={sideFlags(e.players, side)} slots={flagSlots} />}
             <View style={s.nameWrap}>
             <PlayerName
               name={sideName(e.players, side, sideIsAlternatives(e, side))}
               doubles={doubles}
               alternatives={sideIsAlternatives(e, side)}
-              flags={doubles ? sideFlags(e.players, side) : null}
+              flags={doubles || sideIsAlternatives(e, side) ? sideFlags(e.players, side) : null}
               /* 1.27x rather than bodyMed's 1.4: tight enough to pull the two
                  rows together, and still clear of the ~1.2 floor where
                  descenders start to clip. */
