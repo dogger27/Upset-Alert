@@ -144,46 +144,30 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `H2H (${nMeet})` : 'H2H'],
                 ...(predictMatch ? [['prediction', 'Picks']] : []),
                 ...(played ? [['history', 'Points'], ['stats', 'Stats']] : [])]
-
-  /* THE TABS, AS LARGE AS THE ROW ALLOWS (owner, 2026-09-24): one type size
-     for every label, the largest at which all of them fit side by side with
-     just TAB_PAD either side, and each cell as wide as its own word. Measured
-     in bold, the chosen tab's weight, so choosing one never overflows it. */
-  // Every cell starts at its own word's width plus padding, and any room
-  // left over is shared EQUALLY — so every tab has the same margin around
   // its word (owner, 2026-09-24), not one in proportion to its length.
   const TAB_PAD = 4
   const TAB_RULE = 1.5
   const TAB_MAX = 18 * FONT_SCALE
-  /* NO CELL NARROWER THAN "Picks" (owner, 2026-09-26): "Bio" in a cell its
-     own width was a sliver beside the rest. A shorter word is counted as
-     Picks' width, so its cell is Picks' cell — word plus the same share. */
-  const TAB_MIN_UNIT = drawnWidth('Picks', 'Archivo_700Bold', 1)
-  const tabUnit = tabs.map(([, l]) => Math.max(TAB_MIN_UNIT, drawnWidth(l, 'Archivo_700Bold', 1)))
-  const tabSizeRaw = (() => {
+  /* EVERY TAB THE SAME WIDTH (owner, 2026-09-26), each word centred in its
+     cell. One type size for all of them: the largest at which the WIDEST
+     label fits its cell with TAB_PAD either side. Measured in bold, the
+     chosen tab's weight, so choosing one never overflows it. */
+  const tabUnit = Math.max(...tabs.map(([, l]) => drawnWidth(l, 'Archivo_700Bold', 1)))
+  const tabSize = (() => {
     if (!tabsW) return 13 * FONT_SCALE
-    const room = tabsW - 1 - tabs.length * 2 * TAB_PAD - (tabs.length - 1) * TAB_RULE   // padding, rules
-    /* 8% HELD BACK (owner, 2026-09-24: "Meetings (1)" wrapped). Fitted to
-       the last point, a label sat in a cell exactly its measured width, and
-       iOS draws a hair wider than the width tables (kerning, the parentheses)
-       — so it broke onto a second line. The spare is shared out equally as
-       margin, so the tabs still look even. */
-    return Math.max(6, Math.min(TAB_MAX, (0.92 * (room - 1)) / tabUnit.reduce((a, b) => a + b, 0)))
+    const cell = (tabsW - 1 - (tabs.length - 1) * TAB_RULE) / tabs.length - 2 * TAB_PAD
+    /* 8% HELD BACK (owner, 2026-09-24: "Meetings (1)" wrapped): iOS draws a
+       hair wider than the width tables (kerning, the parentheses). */
+    return Math.max(6, Math.min(TAB_MAX, (0.92 * cell) / tabUnit))
   })()
-  const tabSize = tabSizeRaw
-  /* EACH TAB'S WIDTH, STATED (owner, 2026-09-24: "Meetings" had far wider
-     margins than the other two). Left to flex-grow, iOS's layout gives a
-     label drawn a hair wider than its basis its content width and hands the
-     spare to the others — so one tab collected nearly all of it. Here every
-     tab is its word's width plus the same share of what is left over, and
-     the last absorbs the rounding, so the margins are equal by construction. */
+  /* The widths STATED, not left to flex (iOS handed one tab the others'
+     spare); the last absorbs the rounding. A rule rides on every cell but
+     the first. */
   const tabW = (() => {
     if (!tabsW) return null
-    const words = tabUnit.map(u => u * tabSize)
-    const rules = (tabs.length - 1) * TAB_RULE
-    const spare = (tabsW - rules - words.reduce((a, b) => a + b, 0)) / tabs.length
-    const out = words.map((w, i) => Math.floor(w + spare + (i > 0 ? TAB_RULE : 0)))
-    out[out.length - 1] += Math.floor(tabsW - out.reduce((a, b) => a + b, 0))
+    const each = (tabsW - (tabs.length - 1) * TAB_RULE) / tabs.length
+    const out = tabs.map((_, i) => Math.floor(each + (i > 0 ? TAB_RULE : 0)))
+    out[out.length - 1] += Math.floor(tabsW - out.reduce((x, y) => x + y, 0))
     return out
   })()
 
