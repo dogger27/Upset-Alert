@@ -599,13 +599,29 @@ async def _ingest_feed_days(tournament, draws, feed_days: dict, venue_tz) -> Non
                           dedup_key=f"feed_ingest_{tournament.id}", dedup_hours=6)
 
 
+def _days_the_sheet_owes(today: date, draws, feed_days: dict) -> list:
+    """Today and tomorrow, where a draw is running, that no feed stated.
+
+    The sheet for the next day is published the evening before, usually hours
+    before the WTA's JSON carries it and while Sofascore may be refusing us.
+    Fetching the PDF only when the feeds had NOTHING (or declined a day) meant
+    a feed holding today kept tomorrow's sheet from ever being read — Korea
+    Open's final, live on wtafiles from 10:51 UTC on 26 September, was never
+    fetched. A day the feeds do hold is still theirs: the caller drops a PDF
+    dated to one of them."""
+    return [d for d in (today, today + timedelta(days=1))
+            if d not in feed_days and any(_running(dr, d) for dr in draws)]
+
+
 def _pdf_fallback_note(tournament, pdf_date, declined_days: dict,
                        unfed_days: dict, thin_days: Optional[dict] = None,
-                       refused_days: Optional[dict] = None
+                       refused_days: Optional[dict] = None,
+                       unstated_days: Optional[dict] = None
                        ) -> tuple[str, str, str]:
     """(level, message, dedup key) for a day the PDF filled in, by why."""
     thin_days = thin_days or {}
     refused_days = refused_days or {}
+    unstated_days = unstated_days or {}
     if pdf_date in refused_days:
         # INFO: Sofascore refused us (403, breaker open) or was down (5xx),
         # so it was never really asked. A ban has its own warning in the
@@ -640,6 +656,14 @@ def _pdf_fallback_note(tournament, pdf_date, declined_days: dict,
                 f"{tournament.name} {pdf_date}: no feed to ask yet "
                 f"({unfed_days[pdf_date]}); the PDF filled in",
                 f"pdf_unfed_{tournament.id}")
+    if pdf_date in unstated_days:
+        # INFO: the feeds hold earlier days of this tournament and have simply
+        # not reached this one yet — the day-ahead sheet is out before the
+        # WTA's JSON lists it. The ordinary evening state, not a feed down.
+        return ("info",
+                f"{tournament.name} {pdf_date}: {unstated_days[pdf_date]}; "
+                f"the PDF filled in",
+                f"pdf_unstated_{tournament.id}")
     # A warning, deliberately: every draw had a feed and none of them had the
     # day — a feed down, or one that has dropped the tournament — and the
     # watcher should look at it.
@@ -710,9 +734,10 @@ async def refresh_order_of_play() -> int:
             # THE FEEDS FIRST (owner, 2026-09-18): every day in the window the
             # WTA's JSON or Sofascore can supply is written from them — see
             # schedule_feeds. A Slam keeps its own feed below. The PDF is
-            # fetched only when no feed has a row for any day, or when a feed
-            # had a day it could not state (`declined`: no court, or no order
-            # on a court), and then the log says so.
+            # fetched when no feed has a row for any day, when a feed had a
+            # day it could not state (`declined`: no court, or no order on a
+            # court), or when today or tomorrow is a day no feed stated at
+            # all — and then the log says so.
             feed_days: dict = {}
             declined_days: dict = {}
             declined_rounds: dict = {}
@@ -753,7 +778,17 @@ async def refresh_order_of_play() -> int:
             # The day the PDF is FOR, when it is to be ingested — never one the
             # feeds already hold, or the two would take turns writing it.
             pdf_date, pdf_atp, pdf_wta = None, 0, 0
-            want_pdf = ((not feed_days or bool(declined_days))
+            # A day the feeds did not state, today or tomorrow, is the
+            # sheet's to fill — see _days_the_sheet_owes. Past the last day
+            # the feeds hold it is the ordinary lag, noted at info.
+            owed_days = _days_the_sheet_owes(today, draws, feed_days)
+            unstated_days = {
+                d: "the feeds have not listed the day yet"
+                for d in owed_days
+                if feed_days and d > max(feed_days)
+                and d not in declined_days and d not in unfed_days
+                and d not in refused_days and d not in thin_days}
+            want_pdf = ((not feed_days or bool(declined_days) or bool(owed_days))
                         and (tournament.name in _SLAM_FEEDS or schedule_feeds.PDF_FALLBACK))
             try:
                 if want_pdf:
@@ -917,7 +952,7 @@ async def refresh_order_of_play() -> int:
                     if not (ingested or {}).get("skipped"):
                         level, msg, key = _pdf_fallback_note(
                             tournament, pdf_date, declined_days, unfed_days, thin_days,
-                            refused_days)
+                            refused_days, unstated_days)
                         await app_log(level, "order_of_play", msg,
                                       dedup_key=key, dedup_hours=24)
                 except Exception as exc:
