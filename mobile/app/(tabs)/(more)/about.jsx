@@ -4,7 +4,7 @@
    browser / PWA, this app) say exactly the same thing. */
 import { useState } from 'react'
 import { Stack } from 'expo-router'
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { sendContact } from '../../../api'
 import { C, S, T } from '../../../theme'
 import { leading } from '../../../fontScale.js'
@@ -212,6 +212,13 @@ export default function About() {
             what it finds. No admin intervention required.
           </Muted>
         </Card>
+        {/* THE PRIVACY POLICY, reachable inside the app — App Store guideline
+            5.1.1(i) asks for it here as well as on the listing. */}
+        <Pressable onPress={() => Linking.openURL('https://upsetalert.ca/privacy')}
+                   style={({ pressed }) => [s.legal, pressed && { opacity: 0.6 }]}
+                   accessibilityRole="link" hitSlop={8}>
+          <Text style={s.legalText}>Privacy policy</Text>
+        </Pressable>
       </Screen>
     </>
   )
@@ -222,6 +229,8 @@ const s = StyleSheet.create({
   input: { backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 12, height: 44, fontSize: 16, color: C.ink },
   area: { height: 120, paddingTop: 10 },
   sub: { ...T.smallMed, color: C.ink, marginTop: S.xs },
+  legal: { alignSelf: 'center', paddingVertical: S.sm },
+  legalText: { ...T.small, color: C.muted, textDecorationLine: 'underline' },
   li: { ...T.small, color: C.inkBody, paddingLeft: 4 },
 
   // 2:3, the shape the site's card crops to.
