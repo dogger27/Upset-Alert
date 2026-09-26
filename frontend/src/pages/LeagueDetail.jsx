@@ -504,18 +504,18 @@ export default function LeagueDetail() {
                                         className={`dt-filter-btn${poolOnly ? ' dt-filter-btn--on' : ''}`}
                                         aria-pressed={poolOnly}
                                         onClick={() => { setPoolOnly(v => !v); setPreviousVisibleCount(5) }}>
-                                  <span aria-hidden="true">💰</span> Cash pool only
+                                  <span aria-hidden="true">👥</span> Pool only
                                 </button>
                               </div>
                             )}
                             {visibleItems.length === 0 ? (
-                              <p className="muted">No cash-pool draws in this league yet.</p>
+                              <p className="muted">No pool draws in this league yet.</p>
                             ) : (
                             <div className="dt-wrap">
                               <table className="dt-table">
                                 <thead>
                                   <tr>
-                                    {showPool && <th className="dt-h-pool" aria-label="Cash pool" />}
+                                    {showPool && <th className="dt-h-pool" aria-label="Pool" />}
                                     <th className="dt-h-draw">Draw</th>
                                     <th className="dt-h-dates">Dates</th>
                                     <th className="dt-h-surface">Surface</th>
@@ -787,7 +787,7 @@ function DcStanding({ t, stand, pickerCount }) {
    the popup that sets it. It sits inside the tile's button, so it is a span
    with a role, and its own click never reaches the tile. Members who cannot
    manage the league see the state and nothing happens when they press it. */
-const POOL_TIP = 'This league is a Cash Pool. Only members who have paid the admin will be shown in the standings.'
+const POOL_TIP = 'This draw is a Pool. Only members in the pool are shown in the standings.'
 
 /* WHAT A MEMBER SEES. No switch — the pool is not theirs to set — just the
    money bag when one is on, and a word on what it means: hover from a
@@ -822,7 +822,7 @@ function CashPoolBadge() {
             onPointerEnter={(e) => { if (e.pointerType === 'mouse') show() }}
             onPointerLeave={(e) => { if (e.pointerType === 'mouse') setPos(null) }}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); show() }}>
-        <span className="dc-pool-emoji" aria-hidden="true">💰</span>
+        <span className="dc-pool-emoji" aria-hidden="true">👥</span>
       </span>
       {pos && createPortal(
         <span className="dc-pool-tip" role="tooltip"
@@ -849,12 +849,12 @@ function CashPoolSwitch({ on, manage, onOpen }) {
       className={`dc-pool dc-pool--manage${on ? ' dc-pool--on' : ''}`}
       role="switch"
       aria-checked={on}
-      aria-label={on ? 'Cash pool on' : 'Cash pool off'}
+      aria-label={on ? 'Pool on' : 'Pool off'}
       tabIndex={0}
       onClick={act}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') act(e) }}
     >
-      <span className="dc-pool-emoji" aria-hidden="true">💰</span>
+      <span className="dc-pool-emoji" aria-hidden="true">👥</span>
       <span className="dc-pool-track"><span className="dc-pool-knob" /></span>
     </span>
   )
@@ -920,7 +920,7 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
       qc.invalidateQueries({ queryKey: ['gs-totals', id] })
       onClose()
     },
-    onError: (e) => setErr(e?.response?.data?.detail || 'Could not save the cash pool'),
+    onError: (e) => setErr(e?.response?.data?.detail || 'Could not save the pool'),
   })
 
   /* COMPETING FIRST. The members with picks in this draw are the ones a pool
@@ -945,12 +945,12 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
   const backdrop = useBackdropClose(onClose)
   return (
     <div className="dm-backdrop" {...backdrop} role="presentation">
-      <div className="dm-panel cp-panel" role="dialog" aria-modal="true" aria-label="Cash pool"
+      <div className="dm-panel cp-panel" role="dialog" aria-modal="true" aria-label="Pool"
            onClick={e => e.stopPropagation()}>
         <button type="button" className="dm-close" onClick={onClose} aria-label="Close">×</button>
         <div className="dm-body cp-body">
           <div className="cp-head">
-            <h3 className="cp-title"><span aria-hidden="true">💰</span> Cash pool</h3>
+            <h3 className="cp-title"><span aria-hidden="true">👥</span> Pool</h3>
             <p className="cp-sub">{league.name} · {t?.name} {t?.year}</p>
           </div>
           {items.length > 1 && (
@@ -966,15 +966,15 @@ function CashPoolModal({ league, items, cashPools, onClose }) {
           )}
           <label className="cp-toggle-row">
             <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
-            <span>Cash pool enabled for this draw</span>
+            <span>Pool enabled for this draw</span>
           </label>
           <p className="cp-help">
-            Tick everyone who has paid in. When Cash Pool is enabled, only they appear
+            Tick everyone in the pool. When Pool is enabled, only they appear
             in this league's standings and picks for this draw.
           </p>
           <div className="cp-list-head">
             {/* The tally means nothing until the pool is on. */}
-            <span>{enabled ? `${paid.size} of ${members.length} paid` : ''}</span>
+            <span>{enabled ? `${paid.size} of ${members.length} in` : ''}</span>
             <span className="cp-list-actions">
               <button type="button" className="cp-link" onClick={all}>All</button>
               <button type="button" className="cp-link" onClick={none}>None</button>
@@ -1154,7 +1154,7 @@ function DrawRow({ tournament: t, leagueId, showGenderLabel, onOpen, showPool = 
           it stay in one column. */}
       {showPool && (
         <td className="dt-pool">
-          {pool ? <span title="This draw ran a cash pool" role="img" aria-label="Cash pool">💰</span> : null}
+          {pool ? <span title="This draw ran a pool" role="img" aria-label="Pool">👥</span> : null}
         </td>
       )}
       <td className="dt-draw">
@@ -2085,9 +2085,8 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   {entry.is_bot ? '' : `${entry.standingsRank ?? rank + 1}.`}
                 </span>
                 {/* A PODIUM LOCKED — third or better in every future, ties
-                    sharing a place — reads in gold, and carries the money
-                    when the draw runs a cash pool: that is what the place is
-                    worth. Never while scrubbing; a replay has no future. */}
+                    sharing a place — reads in gold, and carries a medal
+                    when the draw runs a pool. Never while scrubbing; a replay has no future. */}
                 <span className={`lt-progress-name${entry.user_id === user?.id ? ' lt-progress-name--me' : ''}${entry.podium_locked ? ' lt-progress-name--podium' : ''}`}
                       title={entry.podium_locked ? 'Finishes on the podium whatever happens' : undefined}>
                   {/* THE MEDAL FOLLOWS THE STANDING, NOT THE ROW. Keyed on the
@@ -2107,7 +2106,7 @@ export function RoundProgressChart({ tournament: t, pickerCount, leagueId, leagu
                   )}
                   <UserName className="lt-progress-name-text" user={{ username: entry.username, full_name: showRealName ? entry.full_name : null }} />
                   {entry.podium_locked && cashPool && (
-                    <span className="lt-cash-lock" role="img" aria-label="in the money">💰</span>
+                    <span className="lt-cash-lock" role="img" aria-label="podium locked">🏅</span>
                   )}
                 </span>
                 {/* Correct picks, beside the points they earned. The two are

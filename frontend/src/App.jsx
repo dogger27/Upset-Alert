@@ -17,6 +17,8 @@ import DrawHistory from './pages/DrawHistory'
 import HallOfFame from './pages/HallOfFame'
 import Schedule from './pages/Schedule'
 import Rules from './pages/Rules'
+import Privacy from './pages/Privacy'
+import Support from './pages/Support'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import VerifyEmail from './pages/VerifyEmail'
@@ -100,6 +102,8 @@ export default function App() {
         <Route path="/hall-of-fame" element={<RequireAuth><HallOfFame /></RequireAuth>} />
         <Route path="/schedule" element={<RequireAuth><Schedule /></RequireAuth>} />
         <Route path="/rules" element={<Rules />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/support" element={<Support />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/verify-email" element={<VerifyEmail />} />

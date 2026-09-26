@@ -255,7 +255,7 @@ export default function GlobalStandings() {
                       {view.placesDecided && rankOf.get(e.user_id) != null && rankOf.get(e.user_id) <= 3 ? ['🏆', '🥈', '🥉'][rankOf.get(e.user_id) - 1] : (rankOf.get(e.user_id) ?? '')}
                     </Text>
                     <View style={s.who}>
-                      <PlayerName name={e.podium_locked && cashPool ? `${e.username} 💰` : e.username} shrinkOnly
+                      <PlayerName name={e.podium_locked && cashPool ? `${e.username} 🏅` : e.username} shrinkOnly
                                 style={[s.name, mine && s.nameMine, e.podium_locked && s.namePodium]} />
                     </View>
                     {/* The sorted column is the lit one: white and bold, the
@@ -343,7 +343,7 @@ const s = StyleSheet.create({
   name: { color: C.ink, fontWeight: '600', fontSize: 14, lineHeight: leading(17) },
   nameMine: { color: C.clay, fontWeight: '800' },
   /* A podium place locked — third or better in every future — in gold, and
-     with the money when the draw runs a cash pool. Beats the clay of "me":
+     with a medal when the draw runs a pool. Beats the clay of "me":
      the certainty is the news. */
   namePodium: { color: C.gold, fontWeight: '800' },
   /* Centred, like the site: a label fills its cell and a number does not.

@@ -96,16 +96,16 @@ export default function LeagueDraws() {
      standings so their next-draw button walks this list (owner, 2026-09-23). */
   const currentCycle = currentGroups.flatMap(grp => grp.draws.map(g => g.items[0].tournament.id)).join(',')
   const [prevShown, setPrevShown] = useState(5)
-  /* SHOW ONLY THE EVENTS THIS LEAGUE PLAYED FOR MONEY — the site's Previous
+  /* SHOW ONLY THE EVENTS THIS LEAGUE RAN A POOL ON — the site's Previous
      filter. Most useful here, where a season's draws pile up and the question
      becomes "how did I do in the ones that counted". */
   const [poolOnly, setPoolOnly] = useState(false)
-  /* An event is a cash event when EITHER half ran a pool: a combined card is
+  /* An event is a pool event when EITHER half ran a pool: a combined card is
      one row and hiding it would hide the half that did. */
   const isPooled = g => g.items.some(x => x.cash_pool_enabled)
   const prevPooled = previous.some(isPooled)
   const prevList = poolOnly ? previous.filter(isPooled) : previous
-  // What Previous is SHOWING — the cash-pool filter and "Show more" included.
+  // What Previous is SHOWING — the pool filter and "Show more" included.
   const prevCycle = prevList.slice(0, prevShown).map(g => g.items[0].tournament.id).join(',')
   const [invite, setInvite] = useState(false)
   const [picking, setPicking] = useState(false)
@@ -284,7 +284,7 @@ export default function LeagueDraws() {
                 <Pressable onPress={() => { setPoolOnly(v => !v); setPrevShown(5) }} hitSlop={6}
                            accessibilityRole="button" accessibilityState={{ selected: poolOnly }}
                            style={({ pressed }) => [s.poolChip, poolOnly && s.poolChipOn, pressed && { opacity: 0.7 }]}>
-                  <Text style={[s.poolChipText, poolOnly && s.poolChipTextOn]}>💰 Cash pool</Text>
+                  <Text style={[s.poolChipText, poolOnly && s.poolChipTextOn]}>👥 Pool</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -434,7 +434,7 @@ function DrawRow({ items, leagueId, isGlobal = false, compact = false, cycle = '
         <View style={[s.inner, s.innerCompact]}>
           <View style={s.nameRow}>
             <Text style={[s.name, s.nameCompact]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{a.name}</Text>
-            {pooled ? <Text style={s.bag} accessibilityLabel="Cash pool">💰</Text> : null}
+            {pooled ? <Text style={s.bag} accessibilityLabel="Pool">👥</Text> : null}
           </View>
           <Text style={s.meta} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
             {[tierText, a.year].filter(Boolean).join(' · ')}
@@ -457,7 +457,7 @@ function DrawRow({ items, leagueId, isGlobal = false, compact = false, cycle = '
       <View style={s.inner}>
         <View style={s.nameRow}>
           <Text style={s.name} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>{a.name}</Text>
-          {pooled ? <Text style={s.bag} accessibilityLabel="Cash pool">💰</Text> : null}
+          {pooled ? <Text style={s.bag} accessibilityLabel="Pool">👥</Text> : null}
         </View>
         <Text style={s.meta}>
           {[tierText, a.surface, a.year].filter(Boolean).join(' · ')}

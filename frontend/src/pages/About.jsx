@@ -1,8 +1,9 @@
+import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import client from '../api/client'
 import './About.css'
 
-function ContactForm() {
+export function ContactForm() {
   const [form, setForm] = useState({ name: '', email: '', subject: '', body: '' })
   const [status, setStatus] = useState('idle') // 'idle' | 'sending' | 'sent' | 'error'
 
@@ -124,6 +125,7 @@ export default function About() {
             <h3 className="about-section-title">Contact</h3>
             <p className="about-prose">
               Please connect with me for bug fixes, feature requests, or a friendly hello!
+              What the site keeps about you is on the <Link to="/privacy">privacy page</Link>.
             </p>
             <ContactForm />
           </div>

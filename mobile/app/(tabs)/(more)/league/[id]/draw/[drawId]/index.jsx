@@ -302,7 +302,7 @@ export default function Standings() {
                       : (rankOf.get(e.user_id) ?? '')}
                   </Text>
                   <View style={s.who}>
-                    <PlayerName name={e.podium_locked && cashPool ? `${e.username} 💰` : e.username} shrinkOnly
+                    <PlayerName name={e.podium_locked && cashPool ? `${e.username} 🏅` : e.username} shrinkOnly
                                 style={[s.name, mine && s.nameMine, e.podium_locked && s.namePodium]} />
                     {showReal && e.full_name ? (
                       <PlayerName name={e.full_name} style={s.real} />
@@ -394,7 +394,7 @@ const s = StyleSheet.create({
   name: { color: C.ink, fontWeight: '600', fontSize: 14, lineHeight: leading(17) },
   nameMine: { color: C.clay, fontWeight: '800' },
   /* A podium place locked — third or better in every future — in gold, and
-     with the money when the draw runs a cash pool. Beats the clay of "me":
+     with a medal when the draw runs a pool. Beats the clay of "me":
      the certainty is the news. */
   namePodium: { color: C.gold, fontWeight: '800' },
   /* Pulled 3pt up into the username's line (owner, 2026-09-23): the two
