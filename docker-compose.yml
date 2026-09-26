@@ -98,7 +98,6 @@ services:
       # than on staging because staging's scrapers are off by design, so its
       # sheets never refresh and the comparison would decay against a frozen
       # snapshot instead of measuring the feeds.
-      - SCHEDULE_SHADOW=true
       - SOFASCORE_PROXY=${SOFASCORE_PROXY:-}
     extra_hosts:
       # So SOFASCORE_PROXY can name the docker gateway for a host-side tunnel.

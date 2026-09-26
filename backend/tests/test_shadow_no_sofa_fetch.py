@@ -44,3 +44,12 @@ def test_it_reads_what_the_ingest_offered(monkeypatch):
     t = SimpleNamespace(id=9, name="Korea Open")
     _out, sources = asyncio.run(schedule_shadow._structured(None, t, [_draw()], date(2026, 9, 26)))
     assert sources == "sofa:1"
+
+
+def test_learning_never_raises_into_the_order_of_play_job(monkeypatch):
+    async def broken(*a, **k):
+        raise RuntimeError("feed down")
+
+    monkeypatch.setattr(schedule_shadow, "compare_day", broken)
+    t = SimpleNamespace(id=9, name="Korea Open")
+    asyncio.run(schedule_shadow.learn_from_sheet(t, [_draw()], date(2026, 9, 26)))
