@@ -78,29 +78,37 @@ def shape(path: str) -> str:
     return _NUM.sub("N", (path or "").split("?")[0])
 
 
-def record(path: str, route: str, status, ms: float, size: int = 0) -> None:
-    """One request, as it came back. Called from _fetch's worker thread."""
+def record(path: str, route: str, status, ms: float, size: int = 0,
+           dir_: Optional[str] = None, caller: Optional[str] = None) -> None:
+    """One request, as it came back. Called from _fetch's worker thread.
+
+    `dir_` and `caller` are for the other sources' ledgers
+    (services/request_ledger), which share this storage: a directory of
+    their own, and a caller found by their transport rather than CALLER."""
+    d = dir_ or DIR
     now = datetime.now(timezone.utc)
     row = {"t": now.isoformat(timespec="milliseconds"), "path": path,
-           "caller": CALLER.get(), "route": route, "status": status,
+           "caller": caller or CALLER.get(), "route": route, "status": status,
            "ms": round(ms), "bytes": size}
     try:
         with _lock:
-            _recent.append(row)
-            os.makedirs(DIR, exist_ok=True)
-            with open(os.path.join(DIR, f"{now:%Y-%m-%d}.jsonl"), "a", encoding="utf-8") as fh:
+            if dir_ is None:
+                _recent.append(row)
+            os.makedirs(d, exist_ok=True)
+            with open(os.path.join(d, f"{now:%Y-%m-%d}.jsonl"), "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(row) + "\n")
     except Exception:
         pass
 
 
-def _read_since(since: datetime) -> list:
+def _read_since(since: datetime, dir_: Optional[str] = None) -> list:
     """Every row from `since`, from the files — the deque is lost on restart."""
+    d = dir_ or DIR
     rows = []
     day = since.date()
     today = datetime.now(timezone.utc).date()
     while day <= today:
-        p = os.path.join(DIR, f"{day:%Y-%m-%d}.jsonl")
+        p = os.path.join(d, f"{day:%Y-%m-%d}.jsonl")
         try:
             with open(p, encoding="utf-8") as fh:
                 for line in fh:
@@ -116,9 +124,9 @@ def _read_since(since: datetime) -> list:
     return rows
 
 
-def summary(minutes: int = 60, rows: Optional[list] = None) -> dict:
+def summary(minutes: int = 60, rows: Optional[list] = None, dir_: Optional[str] = None) -> dict:
     since = datetime.now(timezone.utc) - timedelta(minutes=minutes)
-    rows = rows if rows is not None else _read_since(since)
+    rows = rows if rows is not None else _read_since(since, dir_)
     by_caller = Counter(r.get("caller", "?") for r in rows)
     by_shape = Counter(shape(r.get("path", "")) for r in rows)
     by_status = Counter(str(r.get("status")) for r in rows)
@@ -127,6 +135,7 @@ def summary(minutes: int = 60, rows: Optional[list] = None) -> dict:
         "minutes": minutes, "requests": len(rows),
         "per_hour": round(len(rows) * 60 / max(1, minutes)),
         "busiest_minute": max(per_min.values()) if per_min else 0,
+        "busiest_10min": busiest_window(rows, 10),
         "by_caller": dict(by_caller.most_common()),
         "by_path": dict(by_shape.most_common(20)),
         "by_status": dict(by_status),
@@ -178,13 +187,13 @@ def series(rows: list, minutes: int, bucket: int) -> list:
     return out
 
 
-def last_outcomes(days: int = 14) -> dict:
+def last_outcomes(days: int = 14, dir_: Optional[str] = None) -> dict:
     """The newest answered request and the newest refusal, however long ago
     — the window may hold neither while we are blocked and barely asking."""
     found = {"ok": None, "blocked": None}
     today = datetime.now(timezone.utc).date()
     for back in range(days + 1):
-        p = os.path.join(DIR, f"{today - timedelta(days=back):%Y-%m-%d}.jsonl")
+        p = os.path.join(dir_ or DIR, f"{today - timedelta(days=back):%Y-%m-%d}.jsonl")
         try:
             with open(p, encoding="utf-8") as fh:
                 lines = fh.readlines()
@@ -204,10 +213,10 @@ def last_outcomes(days: int = 14) -> dict:
     return found
 
 
-def snapshots(limit: int = 20) -> list:
+def snapshots(limit: int = 20, dir_: Optional[str] = None) -> list:
     """The block snapshots, newest first: when, why, and the hour before."""
     out = []
-    for p in sorted(glob.glob(os.path.join(DIR, "block-*.jsonl")), reverse=True)[:limit]:
+    for p in sorted(glob.glob(os.path.join(dir_ or DIR, "block-*.jsonl")), reverse=True)[:limit]:
         try:
             with open(p, encoding="utf-8") as fh:
                 head = json.loads(fh.readline())
@@ -221,13 +230,13 @@ def snapshots(limit: int = 20) -> list:
     return out
 
 
-def snapshot(reason: str) -> Optional[str]:
+def snapshot(reason: str, dir_: Optional[str] = None) -> Optional[str]:
     """On a block: the last SNAPSHOT_HOURS of requests, copied beside the
     ledger. Returns the file's path, or None if it could not be written."""
     since = datetime.now(timezone.utc) - timedelta(hours=SNAPSHOT_HOURS)
-    rows = _read_since(since)
+    rows = _read_since(since, dir_)
     name = f"block-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}.jsonl"
-    path = os.path.join(DIR, name)
+    path = os.path.join(dir_ or DIR, name)
     try:
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(json.dumps({"reason": reason, "summary_1h": summary(60, [r for r in rows if r["t"] >= (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(timespec="milliseconds")]),
@@ -255,15 +264,38 @@ async def check() -> dict:
         await app_log("warning", "sofascore",
                       "Sofascore request rate over budget — " + "; ".join(over[:3]),
                       s, dedup_key="sofa_ledger_budget", dedup_hours=1)
-    # Prune: the ledger keeps KEEP_DAYS, block snapshots are kept for good.
+    prune()
+    return s
+
+
+def prune(dir_: Optional[str] = None) -> None:
+    """The ledger keeps KEEP_DAYS; block snapshots are kept for good."""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=KEEP_DAYS)).date()
-    for p in glob.glob(os.path.join(DIR, "????-??-??.jsonl")):
+    for p in glob.glob(os.path.join(dir_ or DIR, "????-??-??.jsonl")):
         try:
             if datetime.strptime(os.path.basename(p)[:10], "%Y-%m-%d").date() < cutoff:
                 os.remove(p)
         except (OSError, ValueError):
             pass
-    return s
+
+
+def busiest_window(rows: list, minutes: int) -> int:
+    """The most requests inside any `minutes`-long span of `rows` — the
+    figure a per-IP limit like protennislive's (about 10 in 10 minutes,
+    measured 2026-09-26) is judged by."""
+    ts = []
+    for r in rows:
+        try:
+            ts.append(datetime.fromisoformat(r["t"]))
+        except (KeyError, ValueError):
+            continue
+    ts.sort()
+    best, lo, width = 0, 0, timedelta(minutes=minutes)
+    for hi, t in enumerate(ts):
+        while t - ts[lo] >= width:
+            lo += 1
+        best = max(best, hi - lo + 1)
+    return best
 
 
 def timed() -> float:

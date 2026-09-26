@@ -3,9 +3,21 @@
    can be explained after the fact and a rate creeping toward one can be seen
    before it. This is that record as a picture: whether we are blocked now,
    the rate against its budget, who is asking, and what we sent before each
-   block. Reads /admin/sofascore-requests; sends nothing to Sofascore. */
+   block. Reads /admin/sofascore-requests; sends nothing to Sofascore.
+
+   EVERY SOURCE, ONE VIEW (owner, 2026-09-26): protennislive and Tennis
+   Explorer are recorded the same way (backend services/request_ledger), and
+   the switch at the top reads /admin/requests?source=. protennislive's limit
+   is per IP per ten minutes, so it gets a tile for its busiest ten minutes
+   against that limit. */
 import { useEffect, useMemo, useState } from 'react'
 import './AdminSofascore.css'
+
+const SOURCES = [
+  { key: 'sofascore', label: 'Sofascore' },
+  { key: 'protennislive', label: 'protennislive' },
+  { key: 'tennisexplorer', label: 'Tennis Explorer' },
+]
 
 const WINDOWS = [
   { label: '1 hour', minutes: 60 },
@@ -57,6 +69,7 @@ function snapshotTime(file) {
 }
 
 export default function SofascorePanel() {
+  const [source, setSource] = useState('sofascore')
   const [minutes, setMinutes] = useState(1440)
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
@@ -67,7 +80,7 @@ export default function SofascorePanel() {
     const load = async () => {
       try {
         const { default: client } = await import('../api/client')
-        const res = (await client.get('/admin/sofascore-requests', { params: { minutes, recent: 100 } })).data
+        const res = (await client.get('/admin/requests', { params: { source, minutes, recent: 100 } })).data
         if (live) { setData(res); setErr(''); setLoadedAt(new Date()) }
       } catch {
         if (live) setErr('Could not load the request ledger')
@@ -76,7 +89,7 @@ export default function SofascorePanel() {
     load()
     const id = setInterval(load, 60000)
     return () => { live = false; clearInterval(id) }
-  }, [minutes])
+  }, [source, minutes])
 
   const callers = useMemo(() => Object.entries(data?.summary?.by_caller || {}), [data])
   const colourOf = useMemo(() => {
@@ -88,7 +101,14 @@ export default function SofascorePanel() {
   return (
     <div className="sofa">
       <div className="sofa-head">
-        <h2>Sofascore requests</h2>
+        <h2>{SOURCES.find(x => x.key === source)?.label} requests</h2>
+        <div className="sofa-windows" role="tablist" aria-label="Source">
+          {SOURCES.map(x => (
+            <button key={x.key} type="button" role="tab" aria-selected={source === x.key}
+                    className={`sofa-window${source === x.key ? ' active' : ''}`}
+                    onClick={() => { setData(null); setSource(x.key) }}>{x.label}</button>
+          ))}
+        </div>
         <div className="sofa-windows" role="tablist" aria-label="Time window">
           {WINDOWS.map(w => (
             <button key={w.minutes} type="button" role="tab" aria-selected={minutes === w.minutes}
@@ -161,6 +181,7 @@ function Tiles({ data, minutes }) {
   const hourly = data.budgets?.hourly
   const perHour = s.per_hour
   const pct = hourly ? Math.min(100, (perHour / hourly) * 100) : 0
+  const win = data.budgets?.window
   return (
     <div className="sofa-tiles">
       <div className="sofa-tile">
@@ -169,17 +190,24 @@ function Tiles({ data, minutes }) {
       </div>
       <div className="sofa-tile">
         <span className="sofa-tile-num">{perHour.toLocaleString()}<small> / h</small></span>
-        <span className="sofa-tile-label">average rate · budget {hourly}/h</span>
-        <span className="sofa-meter"><span style={{ width: `${pct}%` }} className={pct >= 80 ? 'hot' : ''} /></span>
+        <span className="sofa-tile-label">average rate · {hourly ? `budget ${hourly}/h` : 'no known limit'}</span>
+        {hourly ? <span className="sofa-meter"><span style={{ width: `${pct}%` }} className={pct >= 80 ? 'hot' : ''} /></span> : null}
       </div>
       <div className="sofa-tile">
         <span className={`sofa-tile-num${refused ? ' sofa-danger' : ''}`}>{refused}</span>
         <span className="sofa-tile-label">refused (403 / 429)</span>
       </div>
-      <div className="sofa-tile">
-        <span className="sofa-tile-num">{s.busiest_minute}</span>
-        <span className="sofa-tile-label">in the busiest minute</span>
-      </div>
+      {win ? (
+        <div className="sofa-tile">
+          <span className={`sofa-tile-num${s.busiest_window > win.limit ? ' sofa-danger' : ''}`}>{s.busiest_window}<small> / {win.limit}</small></span>
+          <span className="sofa-tile-label">in the busiest {win.minutes} min · its limit</span>
+        </div>
+      ) : (
+        <div className="sofa-tile">
+          <span className="sofa-tile-num">{s.busiest_minute}</span>
+          <span className="sofa-tile-label">in the busiest minute</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -277,8 +305,12 @@ function CallerTable({ callers, minutes, budgets, colourOf }) {
                 <td>{n.toLocaleString()}</td>
                 <td>{rate}</td>
                 <td className="td-left">
-                  <span className="sofa-meter sofa-meter--row"><span style={{ width: `${Math.min(100, pct)}%` }} className={pct >= 80 ? 'hot' : ''} /></span>
-                  <span className="sofa-meter-text">{Math.round(pct)}% of {budget}/h</span>
+                  {budget ? (
+                    <>
+                      <span className="sofa-meter sofa-meter--row"><span style={{ width: `${Math.min(100, pct)}%` }} className={pct >= 80 ? 'hot' : ''} /></span>
+                      <span className="sofa-meter-text">{Math.round(pct)}% of {budget}/h</span>
+                    </>
+                  ) : <span className="sofa-meter-text">no budget set</span>}
                 </td>
               </tr>
             )

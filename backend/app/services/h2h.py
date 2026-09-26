@@ -216,11 +216,10 @@ def _empty(slug_a, slug_b, name_a, name_b, wins_a=0, wins_b=0) -> dict:
 # ---------------------------------------------------------------------------
 
 async def _scrape_h2h(slug_a: str, slug_b: str) -> dict:
-    import httpx
-
     url = f"https://www.tennisexplorer.com/mutual/{slug_a}/{slug_b}/"
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        from app.services import request_ledger   # every request recorded
+        async with request_ledger.client(timeout=20, follow_redirects=True) as client:
             resp = await client.get(url, headers=_HEADERS)
             resp.raise_for_status()
             html = resp.text

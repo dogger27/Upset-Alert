@@ -348,7 +348,6 @@ def _stand_down() -> None:
 async def fetch_pdf(atp_id: int, year: int) -> Optional[bytes]:
     """The sheet, from the disk cache when fresh, else one request. None when
     it is not published, not a PDF, or the source is standing down."""
-    import httpx
     url = URL.format(year=year, atp_id=atp_id)
     path = os.path.join(_CACHE_DIR, hashlib.sha1(url.encode()).hexdigest() + ".pdf")
     try:
@@ -361,7 +360,8 @@ async def fetch_pdf(atp_id: int, year: int) -> Optional[bytes]:
     if _standing_down():
         return None
     try:
-        async with httpx.AsyncClient(timeout=20, headers=HEADERS, follow_redirects=True) as client:
+        from app.services import request_ledger   # every request recorded
+        async with request_ledger.client(timeout=20, headers=HEADERS, follow_redirects=True) as client:
             r = await client.get(url)
     except Exception as exc:
         logger.info("ATP draw sheet unreachable for %s: %s", atp_id, exc)

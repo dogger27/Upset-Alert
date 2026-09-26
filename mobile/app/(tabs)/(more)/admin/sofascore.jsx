@@ -5,14 +5,23 @@
    /admin/sofascore-requests; sends nothing to Sofascore.
 
    The chart is plain Views, not SVG: react-native-svg is a native module,
-   and adding one means a new build of the app for a page only admins see. */
+   and adding one means a new build of the app for a page only admins see.
+
+   Every source, one screen (owner, 2026-09-26): protennislive and Tennis
+   Explorer are recorded the same way (backend services/request_ledger); the
+   switch at the top picks which one /admin/requests reads. */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
-import { getSofaRequests } from '../../../../api'
+import { getSourceRequests } from '../../../../api'
 import { useAuth } from '../../../../auth'
 import { C, R, S, T } from '../../../../theme'
 import { Muted, Screen } from '../../../../ui'
 
+const SOURCES = [
+  { key: 'sofascore', label: 'Sofascore' },
+  { key: 'protennislive', label: 'PTL' },
+  { key: 'tennisexplorer', label: 'TE' },
+]
 const WINDOWS = [
   { label: '1h', minutes: 60 },
   { label: '6h', minutes: 360 },
@@ -41,18 +50,19 @@ function snapshotTime(file) {
 
 export default function SofascoreAdmin() {
   const { me } = useAuth()
+  const [source, setSource] = useState('sofascore')
   const [minutes, setMinutes] = useState(1440)
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
 
   const load = useCallback(async () => {
     try {
-      setData(await getSofaRequests(minutes, 50))
+      setData(await getSourceRequests(source, minutes, 50))
       setErr('')
     } catch (e) {
       setErr(e.message || 'Could not load the request ledger')
     }
-  }, [minutes])
+  }, [source, minutes])
   useEffect(() => {
     load()
     const id = setInterval(load, 60000)
@@ -70,6 +80,15 @@ export default function SofascoreAdmin() {
 
   return (
     <Screen onRefresh={load}>
+      <View style={[s.windows, { marginBottom: S.sm }]} accessibilityRole="tablist">
+        {SOURCES.map(x => (
+          <Pressable key={x.key} onPress={() => { setData(null); setSource(x.key) }}
+                     style={[s.window, source === x.key && s.windowOn]}
+                     accessibilityRole="tab" accessibilityState={{ selected: source === x.key }}>
+            <Text style={[s.windowText, source === x.key && s.windowTextOn]}>{x.label}</Text>
+          </Pressable>
+        ))}
+      </View>
       <View style={s.windows} accessibilityRole="tablist">
         {WINDOWS.map(w => (
           <Pressable key={w.minutes} onPress={() => setMinutes(w.minutes)}
@@ -113,10 +132,12 @@ export default function SofascoreAdmin() {
                     <Text style={s.callerName}>{c}</Text>
                     <Text style={s.callerNum}>{n.toLocaleString()}</Text>
                   </View>
-                  <View style={s.meter}>
-                    <View style={[s.meterFill, { width: `${Math.min(100, pct)}%` }, pct >= 80 && s.meterHot]} />
-                  </View>
-                  <Text style={s.meterText}>{rate}/h, {Math.round(pct)}% of its {budget}/h budget</Text>
+                  {budget ? (
+                    <View style={s.meter}>
+                      <View style={[s.meterFill, { width: `${Math.min(100, pct)}%` }, pct >= 80 && s.meterHot]} />
+                    </View>
+                  ) : null}
+                  <Text style={s.meterText}>{budget ? `${rate}/h, ${Math.round(pct)}% of its ${budget}/h budget` : `${rate}/h`}</Text>
                 </View>
               )
             }) : <Muted>Nothing asked in this window.</Muted>}
@@ -201,6 +222,7 @@ function Tiles({ data }) {
   const no = (sm.by_status?.['403'] || 0) + (sm.by_status?.['429'] || 0)
   const hourly = data.budgets?.hourly
   const pct = hourly ? Math.min(100, (sm.per_hour / hourly) * 100) : 0
+  const win = data.budgets?.window
   return (
     <View style={s.tiles}>
       <View style={s.tile}>
@@ -209,17 +231,24 @@ function Tiles({ data }) {
       </View>
       <View style={s.tile}>
         <Text style={s.tileNum}>{sm.per_hour}<Text style={s.tileUnit}> /h</Text></Text>
-        <Text style={s.tileLabel}>budget {hourly}/h</Text>
-        <View style={s.meter}><View style={[s.meterFill, { width: `${pct}%` }, pct >= 80 && s.meterHot]} /></View>
+        <Text style={s.tileLabel}>{hourly ? `budget ${hourly}/h` : 'no known limit'}</Text>
+        {hourly ? <View style={s.meter}><View style={[s.meterFill, { width: `${pct}%` }, pct >= 80 && s.meterHot]} /></View> : null}
       </View>
       <View style={s.tile}>
         <Text style={[s.tileNum, no > 0 && { color: C.bad }]}>{no}</Text>
         <Text style={s.tileLabel}>refused</Text>
       </View>
-      <View style={s.tile}>
-        <Text style={s.tileNum}>{sm.busiest_minute}</Text>
-        <Text style={s.tileLabel}>busiest minute</Text>
-      </View>
+      {win ? (
+        <View style={s.tile}>
+          <Text style={[s.tileNum, sm.busiest_window > win.limit && { color: C.bad }]}>{sm.busiest_window}<Text style={s.tileUnit}> /{win.limit}</Text></Text>
+          <Text style={s.tileLabel}>busiest {win.minutes} min, its limit</Text>
+        </View>
+      ) : (
+        <View style={s.tile}>
+          <Text style={s.tileNum}>{sm.busiest_minute}</Text>
+          <Text style={s.tileLabel}>busiest minute</Text>
+        </View>
+      )}
     </View>
   )
 }

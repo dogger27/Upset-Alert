@@ -13,7 +13,7 @@ import { Muted, Screen } from '../../../../ui'
 const SITE_ADMIN = 'https://upsetalert.ca/admin'
 
 const ITEMS = [
-  { href: '/admin/sofascore', label: 'Sofascore requests', sub: 'Blocked or not, the rate against its budget, who is asking', icon: 'pulse-outline' },
+  { href: '/admin/sofascore', label: 'Data requests', sub: 'Sofascore, protennislive, Tennis Explorer: blocked or not, the rate, who is asking', icon: 'pulse-outline' },
   { href: '/admin/logs', label: 'System log', sub: 'Errors and warnings, one row per problem', icon: 'list-outline' },
   { url: SITE_ADMIN, label: 'Everything else, on the website', sub: 'Users, tournaments, players, rankings, settings', icon: 'open-outline' },
 ]

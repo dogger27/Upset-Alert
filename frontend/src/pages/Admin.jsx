@@ -23,7 +23,7 @@ const CATEGORIES = [
   'sofascore', 'sofascore_doubles',
 ]
 
-const TABS = ['Users', 'Tournaments', 'Logs', 'Sofascore', 'Info', 'Players', 'Rankings', 'Settings']
+const TABS = ['Users', 'Tournaments', 'Logs', 'Requests', 'Info', 'Players', 'Rankings', 'Settings']
 
 const CATEGORY_ORDER = { 'Grand Slam': 0, 'ATP 1000': 1, 'WTA 1000': 1, 'ATP 500': 2, 'WTA 500': 2, 'ATP 250': 3, 'WTA 250': 3 }
 const GENDER_COLORS = { M: 'var(--atp-tint)', F: 'var(--wta-tint)' }
@@ -1100,7 +1100,7 @@ export default function Admin() {
         {activeTab === 'Users'       && <UsersPanel user={user} />}
         {activeTab === 'Tournaments' && <TournamentsPanel user={user} />}
         {activeTab === 'Logs'        && <LogsPanel user={user} />}
-        {activeTab === 'Sofascore'   && <SofascorePanel />}
+        {activeTab === 'Requests'    && <SofascorePanel />}
         {activeTab === 'Info'        && <InfoPanel />}
         {activeTab === 'Players'     && <PlayersPanel user={user} />}
         {activeTab === 'Rankings'    && <RankingsPanel user={user} />}

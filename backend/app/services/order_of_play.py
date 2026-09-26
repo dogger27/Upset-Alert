@@ -757,7 +757,8 @@ async def refresh_order_of_play() -> int:
                         and (tournament.name in _SLAM_FEEDS or schedule_feeds.PDF_FALLBACK))
             try:
                 if want_pdf:
-                    async with httpx.AsyncClient(timeout=30, headers=_HEADERS) as client:
+                    from app.services import request_ledger   # every request recorded
+                    async with request_ledger.client(timeout=30, headers=_HEADERS) as client:
                         resp = await client.get(url)
                 if resp is not None and resp.status_code == 200:
                     pdf_date, pdf_atp, pdf_wta = _parse_oop(resp.content)
