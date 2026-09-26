@@ -155,7 +155,11 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   const TAB_PAD = 4
   const TAB_RULE = 1.5
   const TAB_MAX = 18 * FONT_SCALE
-  const tabUnit = tabs.map(([, l]) => drawnWidth(l, 'Archivo_700Bold', 1))
+  /* NO CELL NARROWER THAN "Picks" (owner, 2026-09-26): "Bio" in a cell its
+     own width was a sliver beside the rest. A shorter word is counted as
+     Picks' width, so its cell is Picks' cell — word plus the same share. */
+  const TAB_MIN_UNIT = drawnWidth('Picks', 'Archivo_700Bold', 1)
+  const tabUnit = tabs.map(([, l]) => Math.max(TAB_MIN_UNIT, drawnWidth(l, 'Archivo_700Bold', 1)))
   const tabSizeRaw = (() => {
     if (!tabsW) return 13 * FONT_SCALE
     const room = tabsW - 1 - tabs.length * 2 * TAB_PAD - (tabs.length - 1) * TAB_RULE   // padding, rules
