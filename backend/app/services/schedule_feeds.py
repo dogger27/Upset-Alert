@@ -232,6 +232,9 @@ async def _sofa_parts(draw, day: date, venue_tz: Optional[str], tour: str,
             evs = await sofa_schedule.fetch_events(tid, sid, "next", pages=1)
             evs += await sofa_schedule.fetch_events(tid, sid, "last", pages=1)
             _events[key] = evs
+            # The shadow learns court names from these; it fetches none itself.
+            from app.services.schedule_shadow import offer_events
+            offer_events(tid, sid, evs)
         sdoc = sofa_schedule.normalize_day(_events[key], day, venue_tz)
         if json.loads(sdoc):
             part = {"disc": disc, "tour": tour, "doc": sdoc.decode("utf-8")}

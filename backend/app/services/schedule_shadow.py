@@ -25,7 +25,6 @@ from sqlalchemy import select
 from app.database import AsyncSessionLocal
 from app.models.schedule import ScheduleEntry, ScheduleEntryPlayer
 from app.services.schedule import _fold
-from app.services.system_log import app_log
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +78,33 @@ def _remember(key, value):
     import time
     _CACHE[key] = (time.monotonic(), value)
     return value
+
+
+# THE SHADOW ASKS SOFASCORE NOTHING OF ITS OWN (owner, 2026-09-26: "is there a
+# reason we still do this?"). Since 2026-09-18 the feeds ARE the schedule, so
+# its feed-vs-sheet score answers a question already settled — but it went on
+# fetching the same tournaments' event pages every 30 minutes, uncached and
+# twice as deep as the real ingest, beside the ingest's own fetch of them:
+# pure extra load on the one source whose ban takes the site's live scores
+# with it. What it still does that nothing else does is LEARN COURT NAMES
+# (Sofascore's "Court 2" is Korea's sheet "GRANDSTAND"), and for that the
+# ingest's own pages are enough: schedule_feeds offers each fetch here.
+_OFFERED: dict = {}
+_OFFERED_TTL = 45 * 60.0     # the ingest runs every 15 min; the shadow every 30
+
+
+def offer_events(tid, sid, events) -> None:
+    """The ingest's Sofascore events for one tournament, for the shadow to reuse."""
+    import time
+    _OFFERED[(tid, sid)] = (time.monotonic(), events)
+
+
+def _offered(tid, sid):
+    import time
+    hit = _OFFERED.get((tid, sid))
+    if hit and time.monotonic() - hit[0] < _OFFERED_TTL:
+        return hit[1]
+    return None
 WTA_EVENT_SETTING = "wta_event"         # + ":{tournament_id}"
 
 
@@ -249,16 +275,10 @@ async def _structured(db, tournament, draws, day: date):
                 # tomorrow are on the first page or two. The routine tick looks
                 # at today +/- 1 and pays for two pages; a backfill of a
                 # finished tournament pays for eight.
-                from datetime import date as _d
-                old_day = (_d.today() - day).days > 2
-                key = (tid, sid, old_day)
-                evs = _cached(key)
+                # Only what the ingest already fetched — see offer_events.
+                evs = _offered(tid, sid)
                 if evs is None:
-                    evs = await sofa_schedule.fetch_events(
-                        tid, sid, "next", pages=4 if old_day else 2)
-                    evs += await sofa_schedule.fetch_events(
-                        tid, sid, "last", pages=8 if old_day else 2)
-                    _remember(key, evs)
+                    continue
                 ms, _meta = sofa_schedule.parse_sofa_day(
                     sofa_schedule.normalize_day(evs, day, tz),
                     venue_tz=tz, discipline=disc)
@@ -406,10 +426,9 @@ async def run_shadow(db, tournament, draws, day: date) -> Optional[dict]:
     if report["court_votes"]:
         await learn_courts(db, tournament.id, report["court_votes"])
     agree = report["matched"] / report["sheet"] if report["sheet"] else 0
-    await app_log(
-        "info", "schedule_shadow",
-        f"{tournament.name} {report['day']}: feed matched "
-        f"{report['matched']}/{report['sheet']} of the sheet",
-        detail=report,
-        dedup_key=f"shadow_{tournament.id}_{report['day']}", dedup_hours=6)
+    # No longer an app_log row: the agreement figure was the case for making
+    # the feeds the schedule, made on 2026-09-18 — 33 rows a day of it in the
+    # admin log told nobody anything. The process log keeps the line.
+    logger.info("shadow %s %s: feed matched %s/%s of the sheet",
+                tournament.name, report["day"], report["matched"], report["sheet"])
     return report | {"agreement": round(agree, 3)}
