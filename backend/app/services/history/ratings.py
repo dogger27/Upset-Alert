@@ -255,6 +255,10 @@ def recompute(conn, cfg: Optional[dict] = None, as_of: Optional[str] = None) -> 
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", out)
         hdb.set_meta(conn, "ratings_as_of", as_of)
         hdb.set_meta(conn, "ratings_rows", walked)
+        # When the pass RAN (as_of is the newest match it rated) — the startup
+        # sync reads it to skip a rebuild the nightly job already did.
+        from datetime import datetime, timezone
+        hdb.set_meta(conn, "ratings_computed_at", datetime.now(timezone.utc).isoformat())
     return {"players": len(out), "matches": walked, "tours": tours, "as_of": as_of}
 
 

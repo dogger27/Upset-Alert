@@ -23,9 +23,6 @@ CHANGE = {"kind": "replaced", "old_name": "Arthur Fils", "new_name": "Zizou Berg
 DRAWS = [{"name": "Cincinnati Open", "gender": "M", "category": "ATP 1000",
           "id": 1, "closes_at": None, "changes": [CHANGE]}]
 
-PICK = {"winner": "Zizou Bergs", "loser": "Taylor Fritz",
-        "draw_name": "Cincinnati Open", "gender": "M", "category": "ATP 1000",
-        "correct_count": 2, "participant_count": 11, "draw_id": 1, "match_id": 7}
 
 CASES = {
     "draw_release (1)": lambda: pc.draw_release(DRAWS[:1], "this week"),
@@ -38,7 +35,6 @@ CASES = {
     "qualifiers (1)": lambda: pc.qualifiers_added(DRAWS, True),
     "qualifiers (many)": lambda: pc.qualifiers_added(DRAWS * 4, True),
     "league_join": lambda: pc.league_join("dwightcharles", "BetaTesters", 3),
-    "standout": lambda: pc.standout_pick([PICK]),
 }
 
 
@@ -50,7 +46,7 @@ def test_title_fits(name):
 
 SAMPLE_KEYS = [
     "draw_released", "round_standings", "tournament_end", "league_member_joined",
-    "draw_changed", "qualifiers_added", "standout_pick",
+    "draw_changed", "qualifiers_added",
 ]
 
 

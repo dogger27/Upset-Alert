@@ -106,25 +106,20 @@ class Settings(BaseSettings):
     # between tournaments. Never set it in production.
     sofascore_live_force: bool = False
 
-    # Sweep finished matches into the sofa_* SHADOW columns. Reads nothing back
-    # and changes nothing a user can see — it exists so ESPN and Sofascore can be
-    # diffed over a real tournament before Sofascore is allowed to own a result.
+    # Sweep finished matches from Sofascore. Since 2026-08-23 (app_settings
+    # sofa_authoritative) these are the RESULTS OF RECORD: the sweep writes
+    # the sofa_* columns and promotes them into winner_id / scores_json.
     # Separate from the live flag because the two answer different questions and
     # one may want turning off without the other.
     sofascore_results_enabled: bool = False
 
     # Treat Sofascore as the SOURCE OF RECORD rather than a second opinion.
     #
-    # Applied at the READ layer, not by changing who writes: the sofa_* columns
-    # keep being written beside ESPN's, and this decides which set the API
-    # serves. That makes the cutover reversible by restarting with the flag off,
-    # with no data to migrate back — as opposed to swapping espn_monitor's
-    # writes, which would be a one-way door.
-    #
-    # Evidence before enabling (scripts/sofa_diff.py): 174 winners agreed, zero
+    # Only the DEFAULT: the stored app_settings row sofa_authoritative (set
+    # 2026-08-23) overrides it, so production runs with Sofascore in charge
+    # whatever this says. Evidence at the handover: 174 winners agreed, zero
     # mismatched; 172 of 174 scorelines identical; no retirement or walkover
-    # marker lost. Staging runs with it on and no ESPN scraper at all, which is
-    # the only honest test of "could Sofascore carry this alone".
+    # marker lost.
     sofascore_authoritative: bool = False
 
     # Score the DOUBLES rows on the order of play. They have no draw and no

@@ -40,9 +40,10 @@ LOCK_MODES = (LOCK_AT_DRAW_START, LOCK_PROGRESSIVE_R1)
 # "0" = ESPN keeps them and Sofascore stays in its shadow columns.
 # Absent  = defer to SOFASCORE_AUTHORITATIVE in the environment.
 #
-# Stored rather than left to the env var because the cutover is automatic (see
-# services/sofa_cutover.py) and a decision the app makes about itself has to
-# survive the next restart. An env var can only be changed by a deploy, which
+# Stored rather than left to the env var because the cutover was automatic
+# (the sofa_cutover job, retired 2026-09-26 once the handover of 2026-08-23 had
+# held for a month) and a decision the app made about itself had to survive the
+# next restart. An env var can only be changed by a deploy, which
 # is exactly the human step the automation exists to remove — and the same step
 # that would be needed at 3am to undo it.
 SOFA_AUTHORITATIVE = "sofa_authoritative"

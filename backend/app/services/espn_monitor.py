@@ -563,14 +563,19 @@ class ESPNMonitor:
         pick locking, closing times, naming qualifier slots — is not scoring
         and carries on regardless."""
         if self._active is None:
-            # The stored setting, not the env default. The cutover watch loads
-            # it too, but later than this monitor's first cycle — and the env
-            # default is False, so every boot began with one cycle of ESPN
-            # writing before the setting had been read.
+            # The stored setting, not the env default — the env default is
+            # False, so every boot began with one cycle of ESPN writing before
+            # the setting had been read.
             async with AsyncSessionLocal() as db:
                 await load_sofa_authoritative(db)
         active = not (sofa_authoritative() and live_feed_healthy())
-        if active != self._active:
+        if active != self._active and self._active is None:
+            # THE FIRST READING OF A PROCESS IS NOT A CHANGE (owner, 2026-09-26:
+            # 224 "standing by" rows, one per restart). The process log has it;
+            # the admin log hears only real handovers.
+            logger.info("ESPN scoring %s at start", "ACTIVE" if active else "standing by")
+            self._active = active
+        elif active != self._active:
             if active:
                 # INFO: the failover is the handling, not the fault. Whatever
                 # stopped Sofascore raised its own alarm (the 403 breaker, the

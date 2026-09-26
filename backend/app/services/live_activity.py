@@ -744,7 +744,7 @@ async def reap() -> int:
             # SQLite hands back NAIVE datetimes regardless of what was written,
             # so comparing one to an aware `cutoff` raises and takes the whole
             # reaper round with it. Same helper and same convention as
-            # sofa_compare._aware — stored times are UTC, they just lose the
+            # the rest of the app — stored times are UTC, they just lose the
             # tzinfo on the way through the driver.
             return None if dt is None else (dt if dt.tzinfo
                                             else dt.replace(tzinfo=timezone.utc))

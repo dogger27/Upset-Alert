@@ -163,12 +163,12 @@ def test_the_first_pass_that_slots_him_does_not_warn(monkeypatch):
     assert rows["Martin Damm"].sofa_player_id == 51345
     assert rows["Martin Damm"].sofa_name == "Martin Damm Jr"
     assert report["shape_matched"] == 4
-    assert report["shape_disagreement"] is None
     assert [m for lvl, m in said if lvl == "warning"] == []
 
 
-def test_the_comparison_still_happens(monkeypatch):
-    """Moving it must not quietly turn it off — it is the evidence the
-    decision to demote Wikipedia is being built on."""
-    report, _, _ = _run(monkeypatch)
-    assert "shape_matched" in report and "shape_disagreement" in report
+def test_the_fill_still_runs_after_resolution(monkeypatch):
+    """The "disagrees with Wikipedia" watch is retired (2026-09-26); the seed
+    and entry-type fill that shares its pass must not go with it."""
+    report, said, _ = _run(monkeypatch)
+    assert "shape_matched" in report
+    assert not any("disagrees with Wikipedia" in m for _, m in said)

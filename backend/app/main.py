@@ -108,9 +108,6 @@ async def lifespan(app: FastAPI):
         from app.services import sofa_resolver
         asyncio.create_task(sofa_resolver.start())
 
-    # Shadow results sweep. Independent of the live flag: it answers a different
-    # question (who won) on a different cadence, and writes only sofa_* columns
-    # that nothing reads except scripts/sofa_diff.
     # The order of play on its own, for an instance running without the full
     # scheduler. A no-op when the scheduler is running, which already owns it.
     oop_only = settings.order_of_play_enabled and not scrapers_on
@@ -134,14 +131,16 @@ async def lifespan(app: FastAPI):
     if results_on:
         from app.services.sofascore_results import monitor as sofa_results_monitor
         sofa_results_monitor.start()
-        logging.getLogger("app").info(
-            "Sofascore results sweep ENABLED (shadow columns only)")
-        # And the thing that decides when "shadow" stops being true. It holds
-        # the gate shut until the evidence is there, opens it once, and puts
-        # ESPN back in charge if a winner ever disagrees afterwards.
-        from app.services import sofa_cutover
-        asyncio.create_task(sofa_cutover.start())
-    else:
+        # The results sweep writes the real result columns: Sofascore has been
+        # the source of record since 2026-08-23 (app_settings
+        # sofa_authoritative), with ESPN standing by only while Sofascore's
+        # live feed is unhealthy (espn_monitor). The hourly cutover job that
+        # measured the two against each other is retired (owner, 2026-09-26):
+        # after the handover it compared Sofascore with itself.
+        logging.getLogger("app").info("Sofascore results sweep ENABLED")
+    # Said on its own branch — it used to hang off the results flag, so it
+    # printed on production whenever results were off and never on staging.
+    if not scrapers_on:
         logging.getLogger("app").info(
             "Scrapers/scheduler DISABLED (environment=%s). Set ENVIRONMENT=production to enable.",
             settings.environment,

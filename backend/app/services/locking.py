@@ -46,8 +46,8 @@ def match_in_play(m: Match) -> bool:
     is not a question about scoring — it is about whether a ball has been
     struck, and a match ESPN happens to have missed is no less under way for it.
     Gating the lock on whoever currently owns the scoring would leave a real,
-    observed match editable, and the cutover moves that ownership on its own
-    (see sofa_cutover). Locking takes the union; authority decides the score.
+    observed match editable, and ownership can move (espn_monitor's standby).
+    Locking takes the union; authority decides the score.
     """
     return (
         m.winner_id is not None
