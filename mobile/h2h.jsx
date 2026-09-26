@@ -62,7 +62,7 @@ const MARK_W = 26 * FONT_SCALE + 6
 /* THE MATCH SHEET (owner, 2026-09-24): one header for the match — its score
    as the title, the arrows, both players with their flags, and on the inside
    of each name the result's tick or cross and the reader's 🤞 — over three
-   tabs: Bio (the comparison and form), Meetings (their head-to-head) and
+   tabs: Bio (the comparison and form), H2H (their meetings) and
    Prediction (who called it, where the match is a bracket match).
 
    `status` is { line, winner, live } from score.statusLine; `pickSide` 0/1
@@ -141,7 +141,7 @@ export function H2HSheet({ visible, onClose, a, b, surface, drawId, onPrev, onNe
   const [meetOnSurface, setMeetOnSurface] = useState(false)
   const surfaceWord = surface ? String(surface).charAt(0).toUpperCase() + String(surface).slice(1).toLowerCase() : null
   const shownMeetings = (view?.meetings || []).filter(m => !meetOnSurface || meetingOnSurface(m, surface))
-  const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `Meetings (${nMeet})` : 'Meetings'],
+  const tabs = [['bio', 'Bio'], ['meetings', nMeet ? `H2H (${nMeet})` : 'H2H'],
                 ...(predictMatch ? [['prediction', 'Predictions']] : []),
                 ...(played ? [['history', 'Points'], ['stats', 'Stats']] : [])]
 
