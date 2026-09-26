@@ -1741,8 +1741,12 @@ async def _check_rankings_health() -> None:
 
 
 async def _sofa_ledger_check() -> None:
-    from app.services import sofa_ledger
+    from app.services import request_ledger, sofa_ledger
     await sofa_ledger.check()
+    # The other sources' ledgers (protennislive, Tennis Explorer) keep the
+    # same 30 days. No budget watch of their own: the admin view shows their
+    # rate against the limit, and a refusal writes its own snapshot.
+    request_ledger.prune()
 
 
 async def _sync_email_suppressions() -> None:

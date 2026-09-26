@@ -217,8 +217,8 @@ async def _get(path: str) -> str:
                 return fh.read()
     except OSError:
         pass
-    import httpx
-    async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client:
+    from app.services import request_ledger   # every request recorded
+    async with request_ledger.client(timeout=TIMEOUT, follow_redirects=True) as client:
         resp = await client.get(f"{BASE}{path}", headers=HEADERS)
         resp.raise_for_status()
         page = resp.text

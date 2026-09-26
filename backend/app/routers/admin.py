@@ -352,6 +352,36 @@ async def sofascore_requests(
             "recent": rows[-max(0, min(recent, 1000)):]}
 
 
+@router.get("/requests")
+async def source_requests(
+    source: str = "sofascore", minutes: int = 60, recent: int = 50,
+    current_user: User = Depends(get_current_user),
+):
+    """Every request we have sent one data source (services/request_ledger):
+    Sofascore, protennislive or Tennis Explorer — the same view for each."""
+    if not current_user.is_admin:
+        raise HTTPException(403, "Admin only")
+    import asyncio
+    import time
+    from app.services import request_ledger
+    if source not in request_ledger.SOURCES:
+        raise HTTPException(400, f"Unknown source {source!r}")
+    minutes = max(1, min(minutes, 60 * 24 * 7))
+    out = await asyncio.to_thread(request_ledger.view, source, minutes, recent)
+    # Whether we are holding off it right now, and for how long.
+    if source == "sofascore":
+        from app.services import sofascore
+        blocked_for = sofascore.blocked_for()
+    elif source == "protennislive":
+        from app.services import atp_pdf_draw
+        blocked_for = (max(0.0, atp_pdf_draw._blocked_until - time.time())
+                       if atp_pdf_draw._standing_down() else 0.0)
+    else:
+        blocked_for = 0.0
+    out["breaker"] = {"blocked_for_s": round(blocked_for)}
+    return out
+
+
 @router.get("/market-odds")
 async def market_odds_status(
     db: AsyncSession = Depends(get_db),

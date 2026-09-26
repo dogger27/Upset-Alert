@@ -554,13 +554,13 @@ async def _scrape_te(gender: str, week_date: Optional[date] = None, log_errors: 
     Pass week_date to scrape historical rankings for a specific date.
     Pass log_errors=False to suppress app_log entries (e.g. best-effort weekly check).
     """
-    import httpx
 
     url = _TE_URLS[gender]
     results: list[tuple[str, int, Optional[str], Optional[int]]] = []
     last_full = False
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        from app.services import request_ledger   # every request recorded
+        async with request_ledger.client(timeout=30, follow_redirects=True) as client:
             page = 1
             while True:
                 params = _te_params(week_date, doubles, page)
@@ -1101,11 +1101,11 @@ async def _fetch_te_player_profile(te_slug: str) -> tuple[Optional[date], Option
     Scrape DOB, display name, and nationality from a TE player profile page.
     Returns (dob, name_display, nationality) — any may be None on parse failure.
     """
-    import httpx
 
     url = f"https://www.tennisexplorer.com/player/{te_slug}/"
     try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        from app.services import request_ledger   # every request recorded
+        async with request_ledger.client(timeout=15, follow_redirects=True) as client:
             resp = await client.get(url, headers=_TE_HEADERS)
             resp.raise_for_status()
             html = resp.text
@@ -1176,7 +1176,6 @@ async def _search_te_list(
     Returns (te_slug, name_raw_te) with name_raw_te in TE "Surname First" format,
     or (None, None) if not found.
     """
-    import httpx
 
     if len(_norm(display_name).split()) < 2:
         return None, None
@@ -1200,7 +1199,8 @@ async def _search_te_list(
             letters_tried.add(letter)
             letters.append(letter)
 
-    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+    from app.services import request_ledger   # every request recorded
+    async with request_ledger.client(timeout=15, follow_redirects=True) as client:
         for letter in letters:
             try:
                 resp = await client.get(
@@ -1252,7 +1252,6 @@ async def _find_te_player(
 
     Returns (te_slug, name_display, dob, first_name, last_name, nationality).
     """
-    import httpx
 
     tokens_norm = _norm(display_name).split()
     disp_tokens = display_name.split()
@@ -1280,7 +1279,8 @@ async def _find_te_player(
     if slug_b != slug_a:
         candidates.append((slug_b, "last"))
 
-    async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+    from app.services import request_ledger   # every request recorded
+    async with request_ledger.client(timeout=10, follow_redirects=True) as client:
         for slug_cand, mode in candidates:
             try:
                 resp = await client.get(
