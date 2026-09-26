@@ -59,10 +59,12 @@ export default function AdminLogs() {
                          accessibilityRole="button" accessibilityState={{ expanded: shown }}>
                 <View style={s.rowHead}>
                   <Text style={[s.levelTag, { color: TONE[g.level] || C.faint }]}>{g.level}</Text>
-                  <Text style={s.cat}>{g.category}</Text>
                   {g.count > 1 ? <Text style={s.count}>×{g.count}</Text> : null}
-                  <Text style={s.time}>{when(g.last_seen)}</Text>
+                  <Text style={[s.time, s.timeEnd]}>{when(g.last_seen)}</Text>
                 </View>
+                {/* Its own line: squeezed into the head row, "schedule_shadow"
+                    broke mid-word (owner, 2026-09-26). */}
+                <Text style={s.cat}>{g.category}</Text>
                 <Text style={s.msg}>{g.message}</Text>
                 {shown ? (
                   <View style={s.occ}>
@@ -99,7 +101,8 @@ const s = StyleSheet.create({
   row: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderLeftWidth: 3, borderRadius: R.sm, padding: S.md, gap: 4 },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: S.sm },
   levelTag: { ...T.tiny, fontFamily: 'Archivo_700Bold', textTransform: 'uppercase', letterSpacing: 0.6 },
-  cat: { ...T.tiny, color: C.muted, flex: 1 },
+  cat: { ...T.tiny, color: C.muted },
+  timeEnd: { marginLeft: 'auto' },
   count: { ...T.tiny, color: C.ink, fontFamily: 'Archivo_700Bold' },
   time: { ...T.tiny, color: C.faint },
   msg: { ...T.small, color: C.inkBody },
