@@ -50,6 +50,7 @@ def test_a_refusal_writes_one_snapshot_an_hour(tmp_path, monkeypatch):
         async with httpx.AsyncClient(transport=RL._LedgerTransport(_fake(429))) as c:
             for _ in range(3):
                 await c.get("https://www.tennisexplorer.com/mutual/a/b/")
+        await asyncio.sleep(0.2)   # the snapshot is written off the loop
     asyncio.run(go())
     assert len(_rows(tmp_path, "tennisexplorer")) == 3
     snaps = list((tmp_path / "tennisexplorer").glob("block-*.jsonl"))
